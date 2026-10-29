@@ -1,3 +1,4 @@
+import {sameProject,mergeProjectSnapshot} from './Projects/project-snapshot';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isRegionAccessDenied } from "../components/loading/region-loading-policy";
 import { useNavigate } from "react-router";
@@ -14,7 +15,7 @@ import {
   useSession,
   type MaonoProject,
   type MaonoUser,
-} from "../auth/session";
+} from "../auth/session.ts";
 import {
   LoadingOverlay,
   useCompleteLoadingHandoff,
@@ -223,68 +224,6 @@ function canProject(
   project: MaonoProject,
 ) {
   return canUser(user, permission, buildProjectContext(user, project));
-}
-
-function sameProject(
-  project: ProjectListItem,
-  updatedProject: ProjectListItem,
-) {
-  if (
-    project.id !== null &&
-    project.id !== undefined &&
-    updatedProject.id !== null &&
-    updatedProject.id !== undefined
-  ) {
-    return String(project.id) === String(updatedProject.id);
-  }
-
-  return project.slug === updatedProject.slug;
-}
-
-export function mergeProjectSnapshot(
-  projects: ProjectListItem[],
-  updatedProject: ProjectListItem,
-) {
-  return projects.map((project) => {
-    if (!sameProject(project, updatedProject)) {
-      return project;
-    }
-
-    const favorite =
-      updatedProject.favorite ??
-      updatedProject.favorited ??
-      project.favorite ??
-      project.favorited;
-
-    return {
-      ...project,
-      ...updatedProject,
-      favorite,
-      favorited: favorite,
-      thumbnailUrl:
-        updatedProject.thumbnailUrl ??
-        updatedProject.thumbnail_url ??
-        project.thumbnailUrl ??
-        project.thumbnail_url,
-      thumbnail_url:
-        updatedProject.thumbnail_url ??
-        updatedProject.thumbnailUrl ??
-        project.thumbnail_url ??
-        project.thumbnailUrl,
-      accessLevel:
-        updatedProject.accessLevel ??
-        updatedProject.access_level ??
-        project.accessLevel,
-      access_level:
-        updatedProject.access_level ??
-        updatedProject.accessLevel ??
-        project.access_level ??
-        project.accessLevel,
-      permissions: updatedProject.permissions ?? project.permissions,
-      deniedPermissions:
-        updatedProject.deniedPermissions ?? project.deniedPermissions,
-    };
-  });
 }
 
 function RestrictedSection({

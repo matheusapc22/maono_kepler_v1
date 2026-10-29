@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Provider } from "react-redux";
 import { createStore } from "redux";
 import { MemoryRouter, Route, Routes } from "react-router";
-import { MapPanelContextProvider } from "../../../src/pages/Kepler/map-panel/MapPanelContext";
+import { MapPanelContextProvider } from "../../../src/pages/Kepler/map-panel/MapPanelContext.ts";
 import PanelSaveAction from "../../../src/pages/Kepler/components/maono-layer-panel/PanelSaveAction";
 import MaonoSaveButton from "../../../src/pages/Kepler/components/maono-save-button";
 

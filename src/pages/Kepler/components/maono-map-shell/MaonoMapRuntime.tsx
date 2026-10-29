@@ -10,12 +10,12 @@ import { useNavigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
 import { toggleModal, wrapTo } from "@kepler.gl/actions";
 
-import { useSession } from "../../../../auth/session";
+import { useSession } from "../../../../auth/session.ts";
 import PointFromPinWorkflow from "../../change-requests/PointFromPinWorkflow";
 import { useMaonoBasemapController } from "../../engine-adapter/basemap-controller.ts";
 import { useKeplerEngineAdapter } from "../../engine-adapter";
 import "../../engine-adapter/map-flight.css";
-import { useMapPanel } from "../../map-panel/MapPanelContext";
+import { useMapPanel } from "../../map-panel/MapPanelContext.ts";
 import MaonoLayerPanelErrorBoundary from "../maono-layer-panel/ErrorBoundary";
 import MaonoLayerPanel from "../maono-layer-panel/MaonoLayerPanel";
 import MaonoGeometryFilterRuntime from "../map-overlay/MaonoGeometryFilterRuntime";

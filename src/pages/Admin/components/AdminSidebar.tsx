@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import type { MaonoUser } from "../../../auth/session";
+import type { MaonoUser } from "../../../auth/session.ts";
 import Logo from "../../../assets/images/Logo_Maono.png";
 import { StaticLoadingText } from "../../../components/loading";
 import AdminIcon, { type AdminIconName } from "./AdminIcon";

@@ -1,5 +1,5 @@
 import type { PointClusterLayerPolicy } from "../../clustering/point-cluster-policy";
-import { usePointClusterController } from "../../clustering/point-cluster-controller-bridge";
+import { usePointClusterController } from "../../clustering/point-cluster-controller-bridge.ts";
 import PanelHint from "./PanelHint";
 import "./point-spatial-grouping.css";
 

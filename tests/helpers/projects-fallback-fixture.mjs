@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 export const legacySelector = '#root > main:not(.maono-login-page)';
 export const scopedSelector = '#root > main:not(.maono-login-page, .mm-projects-page, .maono-admin-workspace)';
 export const widths = [320, 390, 768, 1024, 1280, 1440, 1920];
-export const fallbackSource = readFileSync(new URL('../../src/fallback-ui-styles.ts', import.meta.url), 'utf8');
+// Compare the canonical Git representation, independently of checkout line endings.
+export const fallbackSource = readFileSync(new URL('../../src/fallback-ui-styles.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const cssMatch = /const fallbackCss = `([\s\S]*?)`;/.exec(fallbackSource);
 assert.ok(cssMatch, 'Fallback stylesheet must remain inspectable');
 export const fallbackCss = cssMatch[1];

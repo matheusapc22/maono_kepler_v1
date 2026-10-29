@@ -3,7 +3,7 @@ import React, { lazy, Suspense, useEffect } from "react";
 import { Navigate, Routes, Route, useLocation, useParams } from "react-router";
 
 import { normalizeRole } from "./access-control/roles";
-import { useSession } from "./auth/session";
+import { useSession } from "./auth/session.ts";
 import { LoadingOverlay } from "./components/loading";
 import LoginPage from "./pages/Login.tsx";
 import { routeModules } from "./route-modules";

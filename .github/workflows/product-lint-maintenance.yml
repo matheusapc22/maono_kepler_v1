@@ -1,0 +1,69 @@
+name: Product Lint Maintenance
+
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  product-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - run: npm run lint
+
+  preserved-module-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROJECT_PAGES_REQUIRE_BASELINE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Record installed SDK versions
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          console.log('Node', process.version);
+          for (const name of ['@kepler.gl/duckdb', '@kepler.gl/utils', '@loaders.gl/schema', 'apache-arrow', 'typescript']) {
+            const pkg = JSON.parse(fs.readFileSync(`node_modules/${name}/package.json`, 'utf8'));
+            console.log(name, pkg.version);
+          }
+          NODE
+      - name: TypeScript with unchanged compiler options
+        run: node --max-old-space-size=4096 node_modules/typescript/bin/tsc -b
+      - name: Extraction, provider and ingestion contracts
+        run: >-
+          node --experimental-strip-types --test --test-concurrency=1
+          tests/lint-module-extraction.test.mjs
+          tests/lint-public-entrypoints.test.mjs
+          tests/projects-section-loading.test.mjs
+          tests/admin-progressive-loading.test.mjs
+          tests/project-pages-contract.test.mjs
+          tests/maono-layer-workflow-placement.test.mjs
+          tests/maono-map-legend.test.mjs
+          tests/password-management.test.mjs
+          tests/project-header-preservation.test.mjs
+          tests/projects-fallback-scope.test.mjs
+          tests/roadmap-loading.test.mjs
+          tests/ticket-document-progressive-loading.test.mjs
+          tests/ticket-optional-progressive-loading.test.mjs
+          tests/dropbox-provider-login.test.mjs
+          tests/foursquare-provider-contract.test.mjs
+          tests/carto-provider-contract.test.mjs
+          tests/legacy-ingestion-contract.test.mjs
+          tests/maono-select-migration.test.mjs
+          tests/map-add-data-sidebar.test.mjs

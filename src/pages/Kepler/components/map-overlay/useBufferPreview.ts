@@ -15,7 +15,7 @@ import {
   requestBuffer,
   type BufferUnit,
 } from "../../map-panel/buffer-api";
-import { useMapPanel } from "../../map-panel/MapPanelContext";
+import { useMapPanel } from "../../map-panel/MapPanelContext.ts";
 import { emitMapPanelTelemetry } from "../../map-panel/map-panel-telemetry";
 import {
   appendBufferSessionResult,

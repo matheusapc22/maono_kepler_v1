@@ -86,7 +86,8 @@ function normalizedMaonoConfig(
   includePointClustering: boolean,
 ) {
   const maono = isRecord(rawMaono) ? rawMaono : {};
-  const { pointClustering: _legacyPointClustering, ...passthrough } = maono;
+  const passthrough = { ...maono };
+  delete passthrough.pointClustering;
 
   return includePointClustering
     ? { ...passthrough, pointClustering: extension }
@@ -189,7 +190,8 @@ export function prepareSavedConfigForPointClustering(
   );
   const migrated = removedClusterLayerIds.length > 0;
 
-  const { maono: _rawMaono, ...savedConfigWithoutMaono } = savedConfig;
+  const savedConfigWithoutMaono = { ...savedConfig };
+  delete savedConfigWithoutMaono.maono;
 
   return {
     savedConfig: {

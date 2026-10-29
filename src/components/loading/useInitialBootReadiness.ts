@@ -1,6 +1,6 @@
 import { useLayoutEffect } from "react";
 
-import { useLoading } from "./LoadingProvider";
+import { useLoading } from "./LoadingProvider.ts";
 
 export function useInitialBootReadiness(ready: boolean) {
   const { completeInitialBootLoading } = useLoading();

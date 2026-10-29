@@ -1,5 +1,9 @@
 # Keep SQL migrations stable across Windows/macOS/Linux checkouts.
 migrations/*.sql text eol=lf
+schema.sql text eol=lf
+
+# Preserve the literal CSS bytes used by historical and runtime parity checks.
+src/fallback-ui-styles.ts text eol=lf
 
 # PDF fixtures contain significant xref whitespace and are binary assets.
 tests/fixtures/document-preview/*.pdf binary

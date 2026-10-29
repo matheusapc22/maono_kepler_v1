@@ -1,0 +1,711 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-10-27T20:01:20.249628+00:00",
+  "prior_head": "eba159e36df831550b5567523b38d6cc20f80a49",
+  "base_sha": "e47deac18888195b945a244dadb9e27c5902638f",
+  "branch": "chore/product-lint-maintenance",
+  "source_snapshot": "Reviewed working tree before follow-up commit; source hashes below identify tested files.",
+  "ci_failure": {
+    "run": 40567944366,
+    "job": 122414126587,
+    "head": "eba159e36df831550b5567523b38d6cc20f80a49",
+    "node": "22.23.3",
+    "npm": "10.9.9",
+    "install": "npm install --legacy-peer-deps --no-audit --no-fund",
+    "build_exit": 2,
+    "browser_ran": false,
+    "diagnostics": [
+      "TS2307: @kepler.gl/duckdb/components not found",
+      "TS2571: Arrow data is unknown"
+    ]
+  },
+  "independent_ci_failures": {
+    "users_access": {
+      "job": 122414125167,
+      "passed": 121,
+      "failed": 1,
+      "reason": "OrganizationPermissionManager preservation reader omitted the exact lint extraction inverse."
+    },
+    "project_pages": {
+      "job": 122414127210,
+      "passed": 349,
+      "failed": 3,
+      "reason": "Same preservation reader and two source-form assertions in import UI."
+    },
+    "save_contract": {
+      "job": 122414126098,
+      "reason": "Same TS2307 and TS2571 compilation diagnostics."
+    }
+  },
+  "clean_resolution": {
+    "folder": "task-4/lint-ci-clean",
+    "node": "24.15.0",
+    "npm": "11.12.1",
+    "input_yarn_sha256": "5e0076905a88e73bb23dcc410241c707d4f141b81b8e62fcd94cdc37972f5d11",
+    "generated_package_lock_sha256": "6b838d209ac0588f5448f920efcecc6bea035f5b1a02c2f12f9776a7ea85c050",
+    "resolution_command": "npm install --package-lock-only --ignore-scripts --legacy-peer-deps --no-audit --no-fund --maxsockets=1 --prefer-offline",
+    "materialization_command": "npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund --maxsockets=1 --prefer-offline",
+    "install": {
+      "file": "lint-ci-clean-install.log",
+      "bytes": 3276,
+      "sha256": "37bd3a90a35db71457b8b777b4626f044d0c4a03013fb19c2b5be63ae3b08172",
+      "exit_code": 0,
+      "packages": 1541
+    },
+    "package_versions": {
+      "@kepler.gl/duckdb": "3.2.0",
+      "@kepler.gl/utils": "3.2.0",
+      "@kepler.gl/deckgl-layers": "3.2.0",
+      "@loaders.gl/schema": "4.3.4",
+      "@deck.gl/core": "8.9.27",
+      "@deck.gl/aggregation-layers": "8.9.36",
+      "apache-arrow": "21.0.0",
+      "typescript": "5.8.3",
+      "eslint": "9.35.0"
+    },
+    "previous_local_versions": {
+      "@kepler.gl/duckdb": "3.2.6",
+      "@kepler.gl/utils": "3.2.6",
+      "@kepler.gl/deckgl-layers": "3.2.6",
+      "@loaders.gl/schema": "4.5.4",
+      "@deck.gl/core": "8.9.36",
+      "@deck.gl/aggregation-layers": "8.9.36",
+      "apache-arrow": "21.2.0",
+      "typescript": "5.8.3",
+      "eslint": "9.39.5"
+    },
+    "limitation": "Windows Node/npm differ from Linux CI; two CI errors reproduced, plus three cluster declaration errors in this layout. No claim of identical environments.",
+    "generated_files_committed": false
+  },
+  "corrected_contracts": [
+    "Restore SqlPanel root export published by locked Kepler 3.2.0.",
+    "Validate unknown Arrow data and return the original batches array; malformed data rejected before plugin/task invocation.",
+    "Use actual CompositeLayer base props/state/construction in the existing native cluster declaration adapter; runtime constructor unchanged.",
+    "Retain original selector consumer hashes and exact extraction fixtures; normalize line endings and compose the existing inverse.",
+    "Execute installed native modal factory to verify upload dependency identity; retain file selector/click/keyboard assertions with optional erased type syntax.",
+    "Log installed SDK versions and include the previously failing contract files in the always-on maintenance workflow."
+  ],
+  "local_validation": {
+    "before": {
+      "file": "lint-ci-types-before.log",
+      "bytes": 657,
+      "sha256": "f4186bd9265e9ca9740b2d90741c50e1e608b5b716710014fadbf23bb3ace461",
+      "exit_code": 2,
+      "diagnostics": [
+        "src/pages/Kepler/clustering/point-cluster-adaptive-layer.ts(292,43): error TS2339: Property 'props' does not exist on type 'MaonoCountedDeckClusterLayer'.",
+        "src/pages/Kepler/clustering/point-cluster-adaptive-layer.ts(294,12): error TS2339: Property 'state' does not exist on type 'MaonoCountedDeckClusterLayer'.",
+        "src/pages/Kepler/clustering/point-cluster-adaptive-layer.ts(338,27): error TS2554: Expected 0 arguments, but got 1.",
+        "src/pages/Kepler/index.tsx(34,26): error TS2307: Cannot find module '@kepler.gl/duckdb/components' or its corresponding type declarations.",
+        "src/pages/Kepler/reducers/index.ts(242,27): error TS2571: Object is of type 'unknown'."
+      ]
+    },
+    "app_after": {
+      "file": "lint-ci-types-after.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit_code": 0,
+      "carto_original_suppression_present": true
+    },
+    "node_after": {
+      "file": "lint-ci-types-node-after.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit_code": 0
+    },
+    "contracts": {
+      "file": "lint-ci-targeted-contracts.tap",
+      "bytes": 12903,
+      "sha256": "5a7945751d9d340290cc221932e33fc05836f090ebe66049905ff085810313f7",
+      "passed": 122,
+      "failed": 0,
+      "skipped": 0,
+      "concurrency": 1
+    },
+    "lint": {
+      "file": "lint-ci-global-lint.json",
+      "bytes": 832766,
+      "sha256": "45bbc5570a2241a51a4ca2d3e9bfb53420f237fb24fde2329f4b0083df0a9d78",
+      "exit_code": 1,
+      "errors": 1,
+      "warnings": 29
+    },
+    "strict_error_audit": {
+      "file": "lint-ci-error-audit.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit_code": 0
+    },
+    "build": "not_run_local_window_reserved",
+    "browser": "not_run_local_window_reserved"
+  },
+  "cloudflare": {
+    "check_run": 122423118649,
+    "deployment": "b0b75b3d-c720-4b9b-ac30-b120d024f98b",
+    "status": "failure",
+    "observed_summary": "Build failed",
+    "detailed_log": "blocked_by_login_in_isolated_browser_tab",
+    "root_cause": "unknown; not inferred from GitHub Actions",
+    "tab_closed": true,
+    "authentication_performed": false
+  },
+  "carto": {
+    "status": "unchanged_pending_specific_authorization",
+    "denied_patch_applied": false,
+    "retried": false
+  },
+  "unchanged_controls": [
+    {
+      "path": "package.json",
+      "unchanged": true,
+      "normalized_lf_sha256": "5f43410bda50d07762513e563f81bef00c14610c88f2764aefeca3a636aec381"
+    },
+    {
+      "path": "yarn.lock",
+      "unchanged": true,
+      "normalized_lf_sha256": "5e0076905a88e73bb23dcc410241c707d4f141b81b8e62fcd94cdc37972f5d11"
+    },
+    {
+      "path": "eslint.config.js",
+      "unchanged": true,
+      "normalized_lf_sha256": "943730fa8663d8333ad3365397d209e98eda1e299edaea00695393ca40eb9bf0"
+    },
+    {
+      "path": "tsconfig.json",
+      "unchanged": true,
+      "normalized_lf_sha256": "770b4140bbb581e2dfd9ea9946ffc9c75a1d86ba7d2db5f77c83e37cbdf9d808"
+    },
+    {
+      "path": "tsconfig.app.json",
+      "unchanged": true,
+      "normalized_lf_sha256": "7852d040a820ba680aae219f3cfe771e7ad33bb26e9d1578e3ee21c70fad5acc"
+    },
+    {
+      "path": "tsconfig.node.json",
+      "unchanged": true,
+      "normalized_lf_sha256": "dbece770acebd1448ab84fbdae194dc23670ee2e91ebcb1b534cace99cd0bea6"
+    },
+    {
+      "path": "scripts/user-error-sink-baseline.json",
+      "unchanged": true,
+      "normalized_lf_sha256": "f8b61fbc4f7f7b9ed0fc71fde1728a93c1c004ac5b977630468b677fb292e5ad"
+    }
+  ],
+  "file_count": 102,
+  "files": [
+    {
+      "path": ".github/workflows/product-lint-maintenance.yml",
+      "status": "present",
+      "sha256": "9fca7c43d7f87e8d6b6b5e778dfaf0d07ccc8d71cbda7bb249014bc708423a31"
+    },
+    {
+      "path": "docs/ops/product-lint-carto-proposal.md",
+      "status": "present",
+      "sha256": "1f27845169ca1c94e32038d3bd1a883ce42e924d89247a5c9c9dec9ed547fcd0"
+    },
+    {
+      "path": "docs/ops/product-lint-ci-compatibility.json",
+      "status": "self",
+      "sha256": null
+    },
+    {
+      "path": "docs/ops/product-lint-maintenance-validation.json",
+      "status": "present",
+      "sha256": "a50644080d498ed5341d6da5e33df39c93318f88ae52bd7f77cb745baf1675e7"
+    },
+    {
+      "path": "docs/ops/product-lint-maintenance.md",
+      "status": "present",
+      "sha256": "2c3757f2ff375c2e6e6748a4c2dabb7a60a5954ee40565f3223a3abfe1ac5804"
+    },
+    {
+      "path": "scripts/central-chamados/command-ui-harness.tsx",
+      "status": "present",
+      "sha256": "a68605d9e037d2f667853caa198c5e74f13fec0e49702f4814266f76ed37c746"
+    },
+    {
+      "path": "scripts/central-chamados/flow-ui-harness.tsx",
+      "status": "present",
+      "sha256": "1e194841a5303ffd3c633d8061cc0961c26caa2649d621bc16ed547e06012db8"
+    },
+    {
+      "path": "scripts/central-chamados/triage-ui-harness.tsx",
+      "status": "present",
+      "sha256": "7770b60569c6bad97040b1cc977ac048b595b2d2ed3bf4735fb422067b225217"
+    },
+    {
+      "path": "src/auth/session-context.ts",
+      "status": "present",
+      "sha256": "8d8fc21079794c8680e9e7b5e633f82ba291938403dee5ed300ea5a83cf9ce61"
+    },
+    {
+      "path": "src/auth/session-types.ts",
+      "status": "present",
+      "sha256": "028ca7ceca22fd5b3b1dcd29d26bde2db78c9a68c6ff4a4513063a4a030ba84c"
+    },
+    {
+      "path": "src/auth/session.ts",
+      "status": "present",
+      "sha256": "6c04c1382161167e8a441d0e3c06e6a8f7e0327027e07cd29b7c2491471afed8"
+    },
+    {
+      "path": "src/auth/session.tsx",
+      "status": "present",
+      "sha256": "277d00c0ec6302da9fd482ed3e91ce7bb996cd8e721b046b38c9c77863cce900"
+    },
+    {
+      "path": "src/components/access/OrganizationPermissionManager.ts",
+      "status": "present",
+      "sha256": "c9d0b7d37ffee34fb2563fb60cb70b51e7151d9dbd8806750c602cb441c8de51"
+    },
+    {
+      "path": "src/components/access/OrganizationPermissionManager.tsx",
+      "status": "present",
+      "sha256": "64afbfbfd740368b6f538eb5a0a351154ee63e9f60393eae5c7e719e29ea6f6c"
+    },
+    {
+      "path": "src/components/access/access-governance.ts",
+      "status": "present",
+      "sha256": "4d201fb7eab0fe02148daeee3dda427d982a4c4423ef87a77a07122871425dfe"
+    },
+    {
+      "path": "src/components/loading/LoadingProvider.ts",
+      "status": "present",
+      "sha256": "c4e0d8313bd1910b2e169177b853e4dea103e9d98c4156e18c68d6cebcad7c1e"
+    },
+    {
+      "path": "src/components/loading/LoadingProvider.tsx",
+      "status": "present",
+      "sha256": "7baa5cd67aad603f2074cb9a77455a917cf9c5c4d7330bb336398c7bb8313258"
+    },
+    {
+      "path": "src/components/loading/loading-context.ts",
+      "status": "present",
+      "sha256": "55f52066269520c1f882e50077f5c4d7e994939ddb4f10fcb67d024356926757"
+    },
+    {
+      "path": "src/main.tsx",
+      "status": "present",
+      "sha256": "3abc83050fab7e1a45215dfcfa9115a64b685fd8d7efcad1636ff25c48735cda"
+    },
+    {
+      "path": "src/pages/AdminFiles.tsx",
+      "status": "present",
+      "sha256": "34da64ed9dacdba8b9020e434cd7118a99d9371ec71577a378550946aaef14e2"
+    },
+    {
+      "path": "src/pages/Kepler/actions.ts",
+      "status": "present",
+      "sha256": "ca57ca206efa8c03f0db15bf4139d815ad78ac5cbf04356683a32d4aff6b34a0"
+    },
+    {
+      "path": "src/pages/Kepler/change-requests/viewer-working-copy.ts",
+      "status": "present",
+      "sha256": "9546d0f591fd90c32cf33ac9cc45d6ad5c2912a8a6d2cc468d3f50f02e760f9f"
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+      "status": "present",
+      "sha256": "b7dd0e3186b05ce8dbdbcbdda45e8f80794ace1cb194692643d952f1f6a277d9"
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/dropbox/dropbox-error-modal.tsx",
+      "status": "deleted",
+      "sha256": null
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider-legacy.ts",
+      "status": "deleted",
+      "sha256": null
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider.ts",
+      "status": "present",
+      "sha256": "cf3a7477d4804554dc2ab77b1ccba3c3ebcaea4834810b30118ae0c313352ee0"
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/foursquare/foursquare-provider.ts",
+      "status": "present",
+      "sha256": "873233baed48f9d8f04c734ae8595b4e04c81f7439b32c9ca1b71f6fbf064aa2"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-adaptive-layer.ts",
+      "status": "present",
+      "sha256": "705d6d1eef92db8fb6f16efa6afd49d1298083368714636c8c55c5a95ca9e880"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-controller-bridge.ts",
+      "status": "present",
+      "sha256": "fb608513c772f5cf46a88c96d008ce0786a4a858a5595039c436d7da8770e3b8"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-controller-bridge.tsx",
+      "status": "present",
+      "sha256": "28db509931c85f6907826bd889a645c76860c14b2470979caba0d12b82c2b381"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-controller-store.ts",
+      "status": "present",
+      "sha256": "a54c9caa96b670773aa09850812b4e9da9113837730ba5190e6cdc4f6b0976b6"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-controller.ts",
+      "status": "present",
+      "sha256": "c0bdce62a78951275ba22817a65fde0a058ce4c0b21c876fc1264384eb42ac7b"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-policy.ts",
+      "status": "present",
+      "sha256": "d187773ac4ac93d315d5da9762b5d142d0bfd7167d28dbdbae6e905835aabe68"
+    },
+    {
+      "path": "src/pages/Kepler/components/announcement.tsx",
+      "status": "present",
+      "sha256": "a32ec4612d754147855d95745ba6400bb443d0e6a92b9944e19dff293732165f"
+    },
+    {
+      "path": "src/pages/Kepler/components/banner.tsx",
+      "status": "present",
+      "sha256": "3fffa68645cddab61f707461eb8ca60d0966559b0bc8f8bd9d892898ee7dc280"
+    },
+    {
+      "path": "src/pages/Kepler/components/load-data-modal/data-import-messages.ts",
+      "status": "present",
+      "sha256": "71c0854bb335090beb4dff153935d4682f3c3371f861d7934c078c78774a6f31"
+    },
+    {
+      "path": "src/pages/Kepler/components/load-data-modal/load-remote-map.tsx",
+      "status": "present",
+      "sha256": "d94a3800031f4a8e19dd946e0b1344567cf3cf97dae72f2fac015f8a1d6a0c62"
+    },
+    {
+      "path": "src/pages/Kepler/components/load-data-modal/sample-data-viewer.tsx",
+      "status": "present",
+      "sha256": "6119c241241ac9d144d09546c2fa08ffc509e6c1d639ca07348e6cf03f413af5"
+    },
+    {
+      "path": "src/pages/Kepler/components/load-data-modal/sample-maps-tab.tsx",
+      "status": "present",
+      "sha256": "82aa449d014754a357dd79f5ea6786e19f46e74370f17e630ba12fd44d2aeffb"
+    },
+    {
+      "path": "src/pages/Kepler/components/map-control/map-control.tsx",
+      "status": "present",
+      "sha256": "c5a9e33dc1e1455503a01fc5be731b8bf130c65f66720800b9dc7b8468cb298c"
+    },
+    {
+      "path": "src/pages/Kepler/components/map-control/sql-panel-control.tsx",
+      "status": "present",
+      "sha256": "9d562f21d1b57a467601d84d04bfbe647eed675035557cd3f613005d3a2a044e"
+    },
+    {
+      "path": "src/pages/Kepler/components/point-cluster-settings-panel.tsx",
+      "status": "present",
+      "sha256": "e61f4327e4327cde65ba04ea253f9beb49491898e99315068d38e513c50680a9"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.ts",
+      "status": "present",
+      "sha256": "92eb180ef817276d25ba353b0cf8150726eb182646114ac8a27f631d4c5c8dae"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+      "status": "present",
+      "sha256": "137281ff841d4806de3556e427e16ccd543c0d04c32ce391e3ec2ba472e87e2b"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/dataset-csv-export.ts",
+      "status": "present",
+      "sha256": "e83fadc1452112af101962f80c99e5bdf7bc52b8bed67421998e67560e1809ab"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/kepler-engine-adapter-context.ts",
+      "status": "present",
+      "sha256": "9dda9f52bd7f180502d831fc0be49007dcea5ae2eb707cbefc0726d6140a0ce6"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/multibuffer-dataset-updater.ts",
+      "status": "present",
+      "sha256": "5facde15a570824b9cb3f16448f9892032c88eaca88cc622dc7701de84238d4d"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/usePointDatasetCommand.ts",
+      "status": "present",
+      "sha256": "4567c2939efceeef29d8115538a782343d703a59d9781f70c0288662f9b7e4e2"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/useViewerAwareKeplerEngineAdapter.ts",
+      "status": "present",
+      "sha256": "a5eb5e8ba5fb8b34f51b984cc44d6e8e7fc12b048664e350e7de8685f8362555"
+    },
+    {
+      "path": "src/pages/Kepler/factories/dataset-section.tsx",
+      "status": "present",
+      "sha256": "f2ec1d782a48cbaedb5bbccc85f0b1ed8403aa45757377c4c1ad22954e882759"
+    },
+    {
+      "path": "src/pages/Kepler/factories/layer-configurator.ts",
+      "status": "present",
+      "sha256": "634c1ac8af17f1cdd0729866e55ab0b0e7a9910cd3d4a911535234b8f1cfe5c7"
+    },
+    {
+      "path": "src/pages/Kepler/factories/layer-configurator.tsx",
+      "status": "present",
+      "sha256": "5bbaa586d33a437beb5f2a5b50fbc949450a396bffcbe25cdfce348eaf631363"
+    },
+    {
+      "path": "src/pages/Kepler/factories/load-data-modal.ts",
+      "status": "present",
+      "sha256": "5dac0f7e9e4d5dfd08af557582c32ba5cfde678442106f806375b2afaddf07b4"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-legend-format.ts",
+      "status": "present",
+      "sha256": "ec508d5715d49e36d25ed6d1e702c8aef53b859d5cea255e7678aea4a4042f09"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-legend-row.ts",
+      "status": "present",
+      "sha256": "5adf664638820e4036ed208f24b020d03344279149eeac7e90dcf60ce5bb0244"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-legend-row.tsx",
+      "status": "present",
+      "sha256": "13b1fee100d9f83905154330da7c211ec67d0ec89d82a587a100f50888662f34"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-map-legend-panel.ts",
+      "status": "present",
+      "sha256": "f8a5412b61238adacd65785dfcb705f8705e2398f117ff55417ba16e8a083916"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-map-legend-panel.tsx",
+      "status": "present",
+      "sha256": "5d2788c68a0e0a08569f61af02d6c79d3676578d720ea52b8d3663a649a98eaf"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-map-popover.ts",
+      "status": "present",
+      "sha256": "0c491596416af1be787ad472d8d8147577b7fdb4e70b783dfb7cb82515e10058"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-map-popover.tsx",
+      "status": "present",
+      "sha256": "0e0258960a830d781174b05455eff4808f84e77bb883c5afe1023055aff3bf90"
+    },
+    {
+      "path": "src/pages/Kepler/factories/map-control.ts",
+      "status": "present",
+      "sha256": "a4da077cc43453096556e2e4328a821361ac0f3d6f1d2cdd4b738c3977d62c71"
+    },
+    {
+      "path": "src/pages/Kepler/factories/map-control.tsx",
+      "status": "present",
+      "sha256": "c244071c29be16e9b7993150edbd7af0feed957ea236487495f4f7f54bbde289"
+    },
+    {
+      "path": "src/pages/Kepler/factories/panel-header.ts",
+      "status": "present",
+      "sha256": "4e9616fdbca6d177c34bb6329699307ca91fe2a8be76e80351fbd61d0052632b"
+    },
+    {
+      "path": "src/pages/Kepler/factories/panel-header.tsx",
+      "status": "present",
+      "sha256": "a0271bc131144722fff1ad5b4f8505225f2da22fe396cae3d2ff67c81123da54"
+    },
+    {
+      "path": "src/pages/Kepler/factories/side-panel.ts",
+      "status": "present",
+      "sha256": "1ed4624271555ea41e8ae5ab58f7a9c01d1fb18ea30d272cd2305c9a4d7a60b2"
+    },
+    {
+      "path": "src/pages/Kepler/factories/side-panel.tsx",
+      "status": "present",
+      "sha256": "10b397285d3126f051c1a72c5ba45b78bed65af636ed07834e0959c776855e2a"
+    },
+    {
+      "path": "src/pages/Kepler/hooks/use-point-clustering.ts",
+      "status": "present",
+      "sha256": "ad59cdd3619bc65a1090d60673a9884398a069d3e6226625d202c5cb014ce1dd"
+    },
+    {
+      "path": "src/pages/Kepler/index.tsx",
+      "status": "present",
+      "sha256": "b21421bc25dc858111c1ead2953cb700621badb10248df51d26498fabdc6d1be"
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/MapPanelContext.ts",
+      "status": "present",
+      "sha256": "6b7c98f28dd0b0b7415e7e190514d7630d49109443c71040367e067a5a802fa9"
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/MapPanelContext.tsx",
+      "status": "present",
+      "sha256": "871e42592e038faf3f76ad18177d5c6427621a6360e7dbb2643c267a23270a4f"
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/map-panel-context.ts",
+      "status": "present",
+      "sha256": "06dc6b067092fb987aa1adde9ec599b5ba90cce51bc40069a9328e823ab94b38"
+    },
+    {
+      "path": "src/pages/Kepler/reducers/index.ts",
+      "status": "present",
+      "sha256": "49f1e74ac779e6158a424c5e88bfde724a70c994cdf91981e01a40ebafe48518"
+    },
+    {
+      "path": "src/pages/Projects.ts",
+      "status": "present",
+      "sha256": "e93a40f4b7af3e5aa5135d0edfd16278c34400844c8018fca4cc29bf0de42c4c"
+    },
+    {
+      "path": "src/pages/Projects.tsx",
+      "status": "present",
+      "sha256": "8a286bcd024b07aefa434b4ef33bf71862316289a8f4e5bea92aeb6fc49d4ec4"
+    },
+    {
+      "path": "src/pages/Projects/project-snapshot.ts",
+      "status": "present",
+      "sha256": "4a389958c4611737750a9417e1a3fcb806b82e7cec42d8b3ce50d064d160a80d"
+    },
+    {
+      "path": "src/store.ts",
+      "status": "present",
+      "sha256": "80ab90fe4ee5829805111dc9fd48dcbe77508a4afd79162b3701730bd70ccbe7"
+    },
+    {
+      "path": "src/types/legacy-runtime-modules.d.ts",
+      "status": "present",
+      "sha256": "19424026edc056421d5f73ef04f2702623e327a5e481c56f01723266f94b27c1"
+    },
+    {
+      "path": "tests/browser/durable-save-recovery.spec.ts",
+      "status": "present",
+      "sha256": "bfb2bbc13f6187a826dc089809ccee9ec20d75d2a71d73526cea81a5fd634844"
+    },
+    {
+      "path": "tests/browser/fixtures/reliability-ux.tsx",
+      "status": "present",
+      "sha256": "a5d77654572a91d519ac08cde0f5e8eff37bd3bf505235aa8b1be64e9e0cc729"
+    },
+    {
+      "path": "tests/browser/fixtures/save-local-runtime.tsx",
+      "status": "present",
+      "sha256": "34f8c7aa884e8c2e0c52747115a75145ddc4fce6ee9fd099d6029e1616502cf2"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-accessibility.tsx",
+      "status": "present",
+      "sha256": "33fa7fe4fa72d3b263d549fd18fc449c62b3ce97dfd0089ffb581385bb473495"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-cases.tsx",
+      "status": "present",
+      "sha256": "2f8b0270841bfd8296baaad686bc4589dbe2b5f3a23018b6954cf504d60730fe"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-exports.tsx",
+      "status": "present",
+      "sha256": "e0b4431605d788067641ed36a4b2ded861ca30c1a25e5ea4d90933e2049163e6"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-feedback.tsx",
+      "status": "present",
+      "sha256": "6ef58b9786d1fe94cf7db245120a6e2e56d9cda213b47ce7a6d68e96590f2f88"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-knowledge.tsx",
+      "status": "present",
+      "sha256": "7af90f630e7f4e8bbfd8899413d2c53aba27c729edf520cc245dbab28ea675b8"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-metrics.tsx",
+      "status": "present",
+      "sha256": "ebd8c8b8beec959f6c13d23d62d321a2b8a9194c24206c481c308ab668cc9ffe"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-notifications.tsx",
+      "status": "present",
+      "sha256": "cbc6c70ec7b356631280b465d584ca29ebc00348e10c5c8115db854bb66fec37"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-sla.tsx",
+      "status": "present",
+      "sha256": "0fc27c9e178dd22aa2a57677259699421eba09f829a258e07f42667ac75107a0"
+    },
+    {
+      "path": "tests/browser/ticket-changes.spec.ts",
+      "status": "present",
+      "sha256": "00b69da48c0cbb1bf0926293373897a028c314e9fb4ccba25228a0eeb8259571"
+    },
+    {
+      "path": "tests/dropbox-provider-login.test.mjs",
+      "status": "present",
+      "sha256": "63f1639f5e4a62394735e75e6dc9dd407fb216a895fbe172779db2e7bd779871"
+    },
+    {
+      "path": "tests/fixtures/lint-extracted-definitions.json",
+      "status": "present",
+      "sha256": "06e809dd591c6948368f437e7efcca0f3603f860ba944750009bb608dbcaa532"
+    },
+    {
+      "path": "tests/fixtures/lint-module-extraction-preservation.json",
+      "status": "present",
+      "sha256": "49c2757211d6f69f837dc83285f6225c03a7cd66bca821bae405150d79372869"
+    },
+    {
+      "path": "tests/foursquare-provider-contract.test.mjs",
+      "status": "present",
+      "sha256": "42a87ef844a486b862b32c245611c091e4eaa9fb395979d9fcc7718334f3f0c0"
+    },
+    {
+      "path": "tests/helpers/lint-module-extraction-preservation.mjs",
+      "status": "present",
+      "sha256": "7f9fa6be7f654b5eeb6202eb7a320b1925abf3756cccd6aa11b9990a69ee9583"
+    },
+    {
+      "path": "tests/legacy-ingestion-contract.test.mjs",
+      "status": "present",
+      "sha256": "761473eb753c546d3a989692732d1d935ec854d0da3173cc0d87f0220606a3fb"
+    },
+    {
+      "path": "tests/lint-module-extraction.test.mjs",
+      "status": "present",
+      "sha256": "76efd2faea8d80ce8dbb59d33c9c195a3f452e95cba9ff429d11a4741ab639bb"
+    },
+    {
+      "path": "tests/maono-native-overlays.test.mjs",
+      "status": "present",
+      "sha256": "ecf7563b4b08ff02da6b88b7b6aa171a575e606651f8dd07b8a5b43ce74b1923"
+    },
+    {
+      "path": "tests/maono-select-migration.test.mjs",
+      "status": "present",
+      "sha256": "5d5805ae9bcf6bd900b875fc9068765f744b96e313f908ae517a34dbae9d694b"
+    },
+    {
+      "path": "tests/map-add-data-sidebar.test.mjs",
+      "status": "present",
+      "sha256": "7482f280b1faf767b93f19420dbbef6df73c268b6ba27676fa7e741236f8fdf1"
+    },
+    {
+      "path": "tests/organization-switcher-redesign.test.mjs",
+      "status": "present",
+      "sha256": "2e486aea04926ad91264fe358b2969ae0a340c26b05d14118f2062016965f2d0"
+    },
+    {
+      "path": "tests/session-resilience.test.mjs",
+      "status": "present",
+      "sha256": "ea1f61878d05f5e36efe59737e6f7edafeb2e1079f55bb140202deaf533f78f3"
+    },
+    {
+      "path": "tests/users-access-preservation.test.mjs",
+      "status": "present",
+      "sha256": "0f58a1b21c25b9e25607dc70f0241e6e62bb73e898bf73d1f23420b4910fe4e0"
+    }
+  ],
+  "restrictions": [
+    "No merge or auto-merge",
+    "No remote migration, flags or Production action",
+    "No cancellation of CI runs"
+  ]
+}

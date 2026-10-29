@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import TicketFeedbackPanel from "../../../src/pages/Projects/components/TicketFeedbackPanel";
-function Fixture() {
+export function Fixture() {
   const [org, setOrg] = useState(1),
     [open, setOpen] = useState(0);
   return (

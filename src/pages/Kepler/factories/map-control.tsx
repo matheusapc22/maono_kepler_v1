@@ -1,5 +1,5 @@
+import type { ComponentProps } from "react";
 // SPDX-License-Identifier: MIT
-// @ts-nocheck
 
 import styled from "styled-components";
 
@@ -38,11 +38,11 @@ const NativeControlHost = styled.div`
 
 CustomMapControlFactory.deps = MapControlFactory.deps;
 
-function CustomMapControlFactory(...deps) {
+export function CustomMapControlFactory(...deps: Parameters<typeof MapControlFactory>) {
   const MapControl = MapControlFactory(...deps);
   const MapLegendPanel = deps[3];
 
-  const CustomMapControl = (props) => (
+  const CustomMapControl = (props: ComponentProps<ReturnType<typeof MapControlFactory>>) => (
     <NativeControlHost data-maono-kepler-controls="hidden">
       <MapControl
         {...props}
@@ -54,8 +54,4 @@ function CustomMapControlFactory(...deps) {
 
   CustomMapControl.displayName = "MaonoHiddenNativeMapControls";
   return CustomMapControl;
-}
-
-export function replaceMapControl() {
-  return [MapControlFactory, CustomMapControlFactory];
 }

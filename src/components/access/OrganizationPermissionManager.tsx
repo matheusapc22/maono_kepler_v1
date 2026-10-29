@@ -1,3 +1,5 @@
+import {loadAccessGovernance,type AccessGovernanceCapabilities} from './access-governance';
+export type {AccessGovernanceCapabilities} from './access-governance';
 import { MaonoSelect } from "../selection/MaonoSelect";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -11,7 +13,6 @@ import {
   accessFromCode,
   profileFromTechnical,
 } from "../../pages/Projects/components/user-access-commercial";
-import { requestJson } from "../../lib/api-transport";
 import { normalizeUserError } from "../../lib/user-error-catalog";
 import "./OrganizationPermissionManager.css";
 
@@ -53,45 +54,6 @@ const ADMIN_OWNER_NATIVE_ACCESS_CODES = new Set([
   "limits.view",
   "limits.increase_request",
 ]);
-
-export type AccessGovernanceCapabilities = {
-  mode: "super_admin" | "organization";
-  organizationId: ApiId;
-  canManageAdditionalAccesses: boolean;
-  canGrant: boolean;
-  canRevoke: boolean;
-  allowedPermissions: string[];
-  grantPermissions: string[];
-  revokePermissions: string[];
-  allowedTargetLevels: string[];
-  delegation?: {
-    enabled?: boolean;
-    expired?: boolean;
-    expiresAt?: string | null;
-    version?: number;
-  } | null;
-  reason: string;
-};
-
-export async function loadAccessGovernance(
-  organizationId: ApiId,
-): Promise<AccessGovernanceCapabilities> {
-  const data = await requestJson<{
-    ok?: boolean;
-    capabilities?: AccessGovernanceCapabilities;
-  }>(
-    "/api/organizations/" +
-      encodeURIComponent(String(organizationId)) +
-      "/access-governance",
-    { cache: "no-store" },
-  );
-
-  if (data?.ok === false || !data?.capabilities) {
-    throw new Error("Não foi possível carregar a governança de acessos.");
-  }
-
-  return data.capabilities;
-}
 
 function errorText(error: unknown): string {
   return normalizeUserError(error).message;

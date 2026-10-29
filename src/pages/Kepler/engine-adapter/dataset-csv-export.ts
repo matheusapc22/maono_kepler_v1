@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useStore } from "react-redux";
 
-import { useMapPanel } from "../map-panel/MapPanelContext.tsx";
+import { useMapPanel } from "../map-panel/map-panel-context.ts";
 import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry.ts";
 import { buildFilteredDatasetCsv } from "./dataset-csv-serializer.ts";
 

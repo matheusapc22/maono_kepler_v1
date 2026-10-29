@@ -5,7 +5,7 @@ import { useDispatch, useStore } from "react-redux";
 
 import { authorizeMapPanelCommand } from "../map-panel/map-panel-capabilities.ts";
 import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry.ts";
-import { useMapPanel } from "../map-panel/MapPanelContext.tsx";
+import { useMapPanel } from "../map-panel/map-panel-context.ts";
 import {
   KEPLER_MAP_ID,
   findRawDataset,

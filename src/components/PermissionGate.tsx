@@ -6,7 +6,7 @@ import {
   type PermissionContext,
 } from "../access-control/can";
 import type { Permission } from "../access-control/permissions";
-import { useSession } from "../auth/session";
+import { useSession } from "../auth/session.ts";
 
 export interface PermissionGateProps {
   action: Permission;

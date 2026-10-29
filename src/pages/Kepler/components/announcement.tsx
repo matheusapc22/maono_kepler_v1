@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
-import React from "react";
+import type { MouseEventHandler } from "react";
 import styled from "styled-components";
 
 const StyledText = styled.div`
@@ -29,7 +28,7 @@ const DisableBanner = styled.div`
 // previous banners can see this one because we check localstorage key
 export const FormLink = "https://shan990829.typeform.com/to/RbCAXt";
 
-const Announcement = ({ onDisable }) => (
+const Announcement = ({ onDisable }: { onDisable?: MouseEventHandler<HTMLAnchorElement> }) => (
   <StyledText>
     <span>
       Maõno turns two years old! Help our open source community by taking

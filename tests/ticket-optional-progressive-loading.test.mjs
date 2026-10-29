@@ -6,14 +6,15 @@ import { readFileSync } from 'node:fs';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
 import { runInNewContext } from 'node:vm';
+import { fileURLToPath } from 'node:url';
 const root = new URL('../', import.meta.url);
-const read = name => readFileSync(new URL('src/pages/Projects/components/' + name, root), 'utf8');
+const read = name => readFileSync(new URL('src/pages/Projects/components/' + name, root), 'utf8').replace(/\r\n/g, '\n');
 
 test('all optional modules require server-confirmed availability before exposing ready controls', async () => {
   const source = `import { renderToStaticMarkup } from 'react-dom/server';
 ${['Knowledge','Cases','Feedback','Metrics','Exports'].map(name => `import ${name} from './src/pages/Projects/components/Ticket${name}Panel';`).join('\n')}
 export const html = [${['Knowledge','Cases','Feedback','Metrics','Exports'].map(name => `renderToStaticMarkup(<${name} organizationId={1} canManage canCreate canDownload onOpen={() => {}} />)`).join(',')}];`;
-  const result = await build({ stdin: { contents: source, loader: 'tsx', resolveDir: new URL('../', import.meta.url).pathname }, bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', packages: 'external', loader: { '.css': 'empty', '.png': 'dataurl' } });
+  const result = await build({ stdin: { contents: source, loader: 'tsx', resolveDir: fileURLToPath(new URL('../', import.meta.url)) }, bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', packages: 'external', loader: { '.css': 'empty', '.png': 'dataurl' } });
   const context = { module: { exports: {} }, require: createRequire(import.meta.url), console, URL, TextEncoder, TextDecoder };
   runInNewContext(result.outputFiles[0].text, context);
   const { html } = context.module.exports;

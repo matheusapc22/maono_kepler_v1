@@ -4,7 +4,7 @@ import { mapStyleChange, wrapTo } from "@kepler.gl/actions";
 import { getApplicationConfig } from "@kepler.gl/utils";
 
 import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry";
-import { useMapPanel } from "../map-panel/MapPanelContext";
+import { useMapPanel } from "../map-panel/MapPanelContext.ts";
 import {
   KEPLER_MAP_ID,
   readValue,

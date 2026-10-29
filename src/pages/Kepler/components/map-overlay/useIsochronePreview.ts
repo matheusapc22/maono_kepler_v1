@@ -9,7 +9,7 @@ import { useParams } from "react-router";
 import { requestViewerAnalysisOperation } from "../../change-requests/viewer-analysis-operation";
 import { useKeplerEngineAdapter } from "../../engine-adapter";
 import { emitMapPanelTelemetry } from "../../map-panel/map-panel-telemetry";
-import { useMapPanel } from "../../map-panel/MapPanelContext";
+import { useMapPanel } from "../../map-panel/MapPanelContext.ts";
 import {
   isIsochroneAbortError,
   isochroneErrorMessage,

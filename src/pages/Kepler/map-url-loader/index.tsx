@@ -15,7 +15,7 @@ import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
 import { loadReviewBaseProjectConfig } from "../change-requests/review-base-config-client";
 import { cacheProjectChangeReviewProjection } from "../change-requests/review-api";
 import { materializeProjectChangeReviewProjections } from "../change-requests/review-operation-projection";
-import { useMapPanel } from "../map-panel/MapPanelContext";
+import { useMapPanel } from "../map-panel/MapPanelContext.ts";
 import {
   failActiveMapLoadTrace,
   getActiveMapLoadTrace,

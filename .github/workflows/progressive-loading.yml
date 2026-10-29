@@ -32,7 +32,9 @@ permissions:
 jobs:
   progressive-loading:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # Setup/build plus the complete serial three-engine suite must fit this job.
+    # Per-test/expectation timeouts remain in playwright.progressive-loading.config.ts.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:

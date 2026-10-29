@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
-import { useEffect } from "react";
+import { useEffect, type MouseEventHandler } from "react";
 import PropTypes from "prop-types";
 import styled from "styled-components";
 import { format } from "d3-format";
@@ -73,7 +72,9 @@ const StyledError = styled.div`
   margin-bottom: 16px;
 `;
 
-const SampleMap = ({ id, sample, onClick }) => (
+export type SampleMapDescriptor = { id: string; label: string; size: number; description: string; detail?: string; visible?: boolean; imageUrl?: string; dataUrl?: string; remoteDatasetConfigUrl?: string; configUrl?: string; };
+
+const SampleMap = ({ id, sample, onClick }: { id: string; sample: SampleMapDescriptor; onClick: MouseEventHandler<HTMLDivElement>; locale?: string }) => (
   <StyledSampleMap id={id} className="sample-map-gallery__item">
     <div className="sample-map">
       <div className="sample-map__image" onClick={onClick}>
@@ -100,7 +101,7 @@ const SampleMapGallery = ({
   isMapLoading,
   locale,
   loadSampleConfigurations,
-}) => {
+}: { sampleMaps: SampleMapDescriptor[]; onLoadSample: (sample: SampleMapDescriptor) => void; error?: unknown; isMapLoading?: boolean; locale?: string; loadSampleConfigurations: () => void }) => {
   useEffect(() => {
     if (!sampleMaps.length) {
       loadSampleConfigurations();

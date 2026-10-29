@@ -22,7 +22,7 @@ const ticket: Ticket = {
   category: "support",
   attachmentsCount: 0,
 };
-function Fixture() {
+export function Fixture() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [open, setOpen] = useState(false),
     [tick, setTick] = useState(0),
