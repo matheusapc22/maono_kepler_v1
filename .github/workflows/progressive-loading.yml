@@ -30,7 +30,11 @@ on:
 permissions:
   contents: read
 jobs:
-  progressive-loading:
+  progressive-loading-engines:
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, firefox, webkit]
     runs-on: ubuntu-latest
     # Setup/build plus the complete serial three-engine suite must fit this job.
     # Per-test/expectation timeouts remain in playwright.progressive-loading.config.ts.
@@ -59,6 +63,7 @@ jobs:
           src/components/loading/useInitialLoadingPresentation.ts src/pages/Admin.tsx
           src/pages/Admin/components/AdminSidebar.tsx src/pages/Admin/components/AdminOverview.tsx
           src/pages/Admin/components/AdminIcon.tsx
+          src/pages/Admin/components/admin-overview-model.ts
           src/pages/Projects/components/ProjectCard.tsx src/pages/Projects/components/ProjectPagesUi.tsx
           src/pages/Projects/components/ProjectsSection.tsx src/pages/Projects/components/ProjectSectionSkeletons.tsx
           src/pages/Projects/components/TicketLoadingSkeletons.tsx
@@ -71,6 +76,7 @@ jobs:
           src/pages/Projects/components/DocumentsUi.tsx
           tests/browser/*progressive-loading.spec.ts playwright.progressive-loading.config.ts
           tests/browser/admin-workspace.spec.ts tests/browser/fixtures/admin-workspace.ts
+          tests/admin-overview-progressive.test.mjs tests/helpers/admin-overview-preservation.mjs
       - name: Compile actual application
         env:
           VITE_MAONO_MAP_SHELL_V1: "true"
@@ -82,12 +88,12 @@ jobs:
       - name: Three-engine compiled fixture coverage
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: progressive-loading-results.json
-        run: npx playwright test --config=playwright.progressive-loading.config.ts --reporter=list,json
+        run: npx playwright test --config=playwright.progressive-loading.config.ts --project=${{ matrix.engine }} --reporter=list,json
       - name: Preserve browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: progressive-loading-${{ github.sha }}
+          name: progressive-loading-${{ github.sha }}-${{ matrix.engine }}
           path: |
             test-results/progressive-loading/
             progressive-loading-results.json
@@ -97,3 +103,15 @@ jobs:
             tests/browser/fixtures/admin-workspace.ts
           if-no-files-found: warn
           retention-days: 14
+
+  # Retain the original required gate name and require every engine result.
+  progressive-loading:
+    if: ${{ always() }}
+    needs: progressive-loading-engines
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every browser engine
+        env:
+          ENGINE_RESULT: ${{ needs.progressive-loading-engines.result }}
+        run: test "$ENGINE_RESULT" = "success"
