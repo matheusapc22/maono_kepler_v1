@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./maono-design-tokens.css";
@@ -19,13 +18,15 @@ import App from "./App.tsx";
 import { Provider } from "react-redux";
 import store from "./store";
 import { BrowserRouter } from "react-router";
-import { SessionProvider } from "./auth/session";
+import { SessionProvider } from "./auth/session.ts";
 import { LoadingProvider } from "./components/loading";
 import {
   acknowledgeInitialBootRuntime,
   completeInitialBootLoader,
 } from "./components/loading/initial-boot-loader";
 import { installMapLoadObservability } from "./pages/Kepler/observability/map-load-runtime";
+
+declare global { interface Window { __MAONO_WEBGL_READBACK_PATCHED__?: boolean; } }
 
 function enableWebglScreenshotReadback() {
   if (typeof window === "undefined") return;
@@ -36,7 +37,7 @@ function enableWebglScreenshotReadback() {
 
   const originalGetContext = window.HTMLCanvasElement.prototype.getContext;
 
-  window.HTMLCanvasElement.prototype.getContext = function patchedGetContext(type, attributes) {
+  window.HTMLCanvasElement.prototype.getContext = function patchedGetContext(this: HTMLCanvasElement, type: string, attributes?: WebGLContextAttributes) {
     const contextType = String(type || "").toLowerCase();
 
     if (["webgl", "webgl2", "experimental-webgl"].includes(contextType)) {
@@ -47,7 +48,7 @@ function enableWebglScreenshotReadback() {
     }
 
     return originalGetContext.call(this, type, attributes);
-  };
+  } as typeof originalGetContext;
 }
 
 // A geração de preview PNG precisa ler o conteúdo do canvas WebGL.

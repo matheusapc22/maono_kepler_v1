@@ -38,13 +38,7 @@ const [
   shellRuntime,
   keplerIndex,
 ] = await Promise.all([
-  readFile(
-    new URL(
-      "../src/pages/Kepler/factories/maono-map-legend-panel.tsx",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
+  Promise.all(["../src/pages/Kepler/factories/maono-map-legend-panel.tsx", "../src/pages/Kepler/factories/maono-map-legend-panel.ts"].map(path => readFile(new URL(path, import.meta.url), "utf8"))).then(parts => parts.join("\n")),
   readFile(
     new URL(
       "../src/pages/Kepler/factories/maono-map-popover.tsx",

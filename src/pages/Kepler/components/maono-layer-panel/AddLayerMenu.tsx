@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { MaonoDatasetSnapshot } from "../../integration/keplerBridge";
-import { useMapPanel } from "../../map-panel/MapPanelContext";
+import { useMapPanel } from "../../map-panel/MapPanelContext.ts";
 import LayerPanelIcon from "./LayerPanelIcon";
 
 type Props = {

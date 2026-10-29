@@ -12,7 +12,7 @@ const params = new URLSearchParams(location.search);
 const manage = params.get('manage') !== '0';
 const people = [{ id: 7, name: 'Atendente QA' }];
 
-function Harness() {
+export function Harness() {
   const [open, setOpen] = useState(true);
   const [detail, setDetail] = useState<TicketDetailResponse | null>(null);
   const [loading, setLoading] = useState(false);

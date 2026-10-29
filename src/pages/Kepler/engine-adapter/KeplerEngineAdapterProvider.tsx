@@ -1,7 +1,5 @@
 import React, {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -15,7 +13,7 @@ import {
   mapSaveResultFromEvent,
 } from "../map-panel/map-save-events.ts";
 import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry.ts";
-import { useMapPanel } from "../map-panel/MapPanelContext.tsx";
+import { useMapPanel } from "../map-panel/map-panel-context.ts";
 import { EMPTY_MAP_CAPABILITIES } from "../map-panel/types.ts";
 import { createAnalysisLayerCommands } from "./analysis-layer-commands.ts";
 import { createKeplerEngineCommands } from "./commands.ts";
@@ -40,15 +38,13 @@ import {
 import { hashKeplerRevision } from "./serialization.ts";
 import type {
   KeplerCommandResult,
-  KeplerEngineAdapterValue,
   KeplerEngineState,
   MapBounds,
   MapSaveStatus,
   MapViewportSummary,
 } from "./types.ts";
 
-const KeplerEngineAdapterContext =
-  createContext<KeplerEngineAdapterValue | null>(null);
+import { KeplerEngineAdapterContext } from "./kepler-engine-adapter-context";
 
 type SaveRuntimeState = {
   status: Exclude<MapSaveStatus, "read-only">;
@@ -647,16 +643,4 @@ export function KeplerEngineAdapterProvider({
       {children}
     </KeplerEngineAdapterContext.Provider>
   );
-}
-
-export function useKeplerEngineAdapter() {
-  const value = useContext(KeplerEngineAdapterContext);
-
-  if (!value) {
-    throw new Error(
-      "useKeplerEngineAdapter deve ser usado dentro de KeplerEngineAdapterProvider.",
-    );
-  }
-
-  return value;
 }

@@ -1,0 +1,2397 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-10-27T19:15:28.576409+00:00",
+  "base_sha": "e47deac18888195b945a244dadb9e27c5902638f",
+  "branch": "chore/product-lint-maintenance",
+  "evidence_scope": "Working tree source hashes before the checkpoint commit; no candidate commit is inferred.",
+  "previous_committed_head": "67427390f868cc1df92d373907309a43f3d95377",
+  "functional_organizations_pr": {
+    "number": 254,
+    "head": "270b3dd9aae8aeb36d26e6c236774ff259b553b2",
+    "unchanged": true,
+    "checks": {
+      "pass_count": 39,
+      "fail_count": 1,
+      "failed_gate": "global lint"
+    }
+  },
+  "baseline": {
+    "errors": 109,
+    "warnings": 44,
+    "by_rule": {
+      "@typescript-eslint/ban-ts-comment": 29,
+      "@typescript-eslint/no-unused-expressions": 1,
+      "@typescript-eslint/no-unused-vars": 38,
+      "no-async-promise-executor": 1,
+      "no-useless-escape": 4,
+      "prefer-const": 3,
+      "react-hooks/exhaustive-deps": 39,
+      "react-refresh/only-export-components": 33,
+      "unnamed_diagnostic": 5
+    },
+    "files": 68,
+    "occurrences": [
+      {
+        "file": "scripts/central-chamados/command-ui-harness.tsx",
+        "line": 15,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "scripts/central-chamados/flow-ui-harness.tsx",
+        "line": 7,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "scripts/central-chamados/triage-ui-harness.tsx",
+        "line": 20,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "src/auth/session.tsx",
+        "line": 933,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/components/access/OrganizationPermissionManager.tsx",
+        "line": 76,
+        "column": 23,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/components/loading/LoadingProvider.tsx",
+        "line": 373,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/main.tsx",
+        "line": 1,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/AdminFiles.tsx",
+        "line": 343,
+        "column": 5,
+        "severity": 1,
+        "rule": null,
+        "message": "Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps').",
+        "fixable": true
+      },
+      {
+        "file": "src/pages/AdminFiles.tsx",
+        "line": 427,
+        "column": 43,
+        "severity": 2,
+        "rule": "no-useless-escape",
+        "message": "Unnecessary escape character: \\\".",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/AdminFiles.tsx",
+        "line": 427,
+        "column": 65,
+        "severity": 2,
+        "rule": "no-useless-escape",
+        "message": "Unnecessary escape character: \\\".",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/AdminFiles.tsx",
+        "line": 532,
+        "column": 70,
+        "severity": 2,
+        "rule": "no-useless-escape",
+        "message": "Unnecessary escape character: \\\".",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/AdminFiles.tsx",
+        "line": 532,
+        "column": 88,
+        "severity": 2,
+        "rule": "no-useless-escape",
+        "message": "Unnecessary escape character: \\\".",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/actions.ts",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/ChangeRequestReviewPage.tsx",
+        "line": 686,
+        "column": 9,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The 'operations' logical expression could make the dependencies of useEffect Hook (at line 709) change on every render. To fix this, wrap the initialization of 'operations' in its own useMemo() Hook.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/ViewerPersistentMutationRuntime.tsx",
+        "line": 225,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'state'. Either include it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/ViewerPersistentMutationRuntime.tsx",
+        "line": 490,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'state'. Either include it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/ViewerWorkingCopyRuntimeLegacy.tsx",
+        "line": 766,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'workingCopy'. Either include it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/viewer-working-copy.ts",
+        "line": 689,
+        "column": 9,
+        "severity": 2,
+        "rule": "prefer-const",
+        "message": "'operations' is never reassigned. Use 'const' instead.",
+        "fixable": true
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+        "line": 50,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-expressions",
+        "message": "Expected an assignment or function call and instead saw an expression.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+        "line": 352,
+        "column": 3,
+        "severity": 1,
+        "rule": null,
+        "message": "Unused eslint-disable directive (no problems were reported from 'complexity').",
+        "fixable": true
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/dropbox/dropbox-error-modal.tsx",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider-legacy.ts",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider.ts",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider.ts",
+        "line": 74,
+        "column": 10,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'isConfigFile' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider.ts",
+        "line": 115,
+        "column": 29,
+        "severity": 2,
+        "rule": "no-async-promise-executor",
+        "message": "Promise executor functions should not be async.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/foursquare/foursquare-provider.ts",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/foursquare/foursquare-provider.ts",
+        "line": 199,
+        "column": 15,
+        "severity": 2,
+        "rule": "prefer-const",
+        "message": "'path' is never reassigned. Use 'const' instead.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/clustering/point-cluster-adaptive-layer.ts",
+        "line": 1,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/clustering/point-cluster-controller-bridge.tsx",
+        "line": 49,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/clustering/point-cluster-controller.ts",
+        "line": 89,
+        "column": 28,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_legacyPointClustering' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/clustering/point-cluster-controller.ts",
+        "line": 192,
+        "column": 18,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_rawMaono' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/announcement.tsx",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/banner.tsx",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/load-data-modal/load-remote-map.tsx",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/load-data-modal/sample-data-viewer.tsx",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/load-data-modal/sample-maps-tab.tsx",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/map-control/map-control.tsx",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/map-control/map-control.tsx",
+        "line": 172,
+        "column": 22,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'setShowBanner' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/map-control/sql-panel-control.tsx",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/GeometryFilterMenu.tsx",
+        "line": 95,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'filterableLayerIds'. Either include it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/MaonoGeometryFilterRuntime.tsx",
+        "line": 81,
+        "column": 5,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useMemo has an unnecessary dependency: 'rawFilters'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
+        "line": 205,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has missing dependencies: 'buffer' and 'isochrone'. Either include them or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/components/point-cluster-settings-panel.tsx",
+        "line": 1,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+        "line": 181,
+        "column": 5,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useMemo has unnecessary dependencies: 'baseState.datasets', 'baseState.filters', and 'baseState.layers'. Either exclude them or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+        "line": 613,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useMemo has unnecessary dependencies: 'baselineVersion', 'lastFlightCancelReason', and 'transientVersion'. Either exclude them or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+        "line": 633,
+        "column": 5,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'state'. Either include it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+        "line": 652,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/dataset-section.tsx",
+        "line": 8,
+        "column": 3,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Use \"@ts-expect-error\" instead of \"@ts-ignore\", as \"@ts-ignore\" will do nothing if the following line is error-free.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/layer-configurator.tsx",
+        "line": 1,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/layer-configurator.tsx",
+        "line": 72,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/load-data-modal.ts",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/maono-legend-row.tsx",
+        "line": 2,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/maono-legend-row.tsx",
+        "line": 37,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/maono-legend-row.tsx",
+        "line": 68,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/maono-legend-row.tsx",
+        "line": 124,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/maono-legend-row.tsx",
+        "line": 149,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/maono-map-legend-panel.tsx",
+        "line": 2,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/maono-map-legend-panel.tsx",
+        "line": 191,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/maono-map-popover.tsx",
+        "line": 2,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/maono-map-popover.tsx",
+        "line": 184,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/map-control.tsx",
+        "line": 2,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/map-control.tsx",
+        "line": 41,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/panel-header.tsx",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/panel-header.tsx",
+        "line": 58,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/side-panel.tsx",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/factories/side-panel.tsx",
+        "line": 34,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/hooks/use-point-clustering.ts",
+        "line": 1,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/hooks/use-point-clustering.ts",
+        "line": 70,
+        "column": 9,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The 'layers' logical expression could make the dependencies of useEffect Hook (at line 86) change on every render. To fix this, wrap the initialization of 'layers' in its own useMemo() Hook.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/hooks/use-point-clustering.ts",
+        "line": 70,
+        "column": 9,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The 'layers' logical expression could make the dependencies of useMemo Hook (at line 117) change on every render. To fix this, wrap the initialization of 'layers' in its own useMemo() Hook.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/hooks/use-point-clustering.ts",
+        "line": 71,
+        "column": 9,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The 'datasets' logical expression could make the dependencies of useMemo Hook (at line 117) change on every render. Move it inside the useMemo callback. Alternatively, wrap the initialization of 'datasets' in its own useMemo() Hook.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 18,
+        "column": 8,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'cloneDeep' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 68,
+        "column": 3,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'replaceDataInMap' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 74,
+        "column": 1,
+        "severity": 1,
+        "rule": null,
+        "message": "Unused eslint-disable directive (no problems were reported from 'no-unused-vars').",
+        "fixable": true
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 75,
+        "column": 8,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'sampleTripData' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 76,
+        "column": 3,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'testCsvData' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 77,
+        "column": 3,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'sampleTripDataConfig' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 79,
+        "column": 8,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'sampleGeojsonConfig' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 80,
+        "column": 8,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'sampleH3Data' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 80,
+        "column": 34,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'h3MapConfig' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 81,
+        "column": 8,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'sampleS2Data' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 82,
+        "column": 13,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'s2MapConfig' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 83,
+        "column": 13,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'s2DataId' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 85,
+        "column": 8,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'sampleAnimateTrip' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 86,
+        "column": 3,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'pointData' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 87,
+        "column": 3,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'pointDataId' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 88,
+        "column": 3,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'animateTripDataId' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 89,
+        "column": 3,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'replacePointData' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 90,
+        "column": 13,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'syncedTripConfig' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 92,
+        "column": 8,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'sampleIconCsv' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 93,
+        "column": 8,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'sampleGpsData' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 96,
+        "column": 3,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'processCsvData' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 97,
+        "column": 3,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'processGeojson' is defined but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 618,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_loadRowData' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 622,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_loadVectorTileData' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 622,
+        "column": 53,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 623,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_loadPointData' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 623,
+        "column": 48,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 624,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_loadScenegraphLayer' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 624,
+        "column": 54,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 625,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_loadIconData' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 625,
+        "column": 47,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 626,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_loadTripGeoJson' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 626,
+        "column": 50,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 627,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_loadGeojsonData' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 627,
+        "column": 50,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 628,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_loadSyncedFilterWTripLayer' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 628,
+        "column": 61,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 629,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_replaceSyncedFilterWTripLayer' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 629,
+        "column": 64,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 630,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_replaceData' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 630,
+        "column": 46,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 631,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_loadH3HexagonData' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 631,
+        "column": 52,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 632,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_loadS2Data' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 632,
+        "column": 45,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 633,
+        "column": 9,
+        "severity": 2,
+        "rule": "@typescript-eslint/no-unused-vars",
+        "message": "'_loadGpsData' is assigned a value but never used.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 633,
+        "column": 46,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useCallback has an unnecessary dependency: 'dispatch'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/map-panel/MapPanelContext.tsx",
+        "line": 34,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/map-panel/MapPanelContext.tsx",
+        "line": 44,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/map-panel/MapPanelContext.tsx",
+        "line": 48,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Kepler/reducers/index.ts",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects.tsx",
+        "line": 244,
+        "column": 17,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/RoadmapSection.tsx",
+        "line": 83,
+        "column": 212,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has missing dependencies: 'bundle.roadmap.id', 'initial', 'organizationId', and 'task'. Either include them or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketAttachmentList.tsx",
+        "line": 100,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'refreshPendingUploads'. Either include it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketCasesPanel.tsx",
+        "line": 200,
+        "column": 18,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketConversationPanel.tsx",
+        "line": 201,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has missing dependencies: 'busyUploadId' and 'uploading'. Either include them or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketConversationPanel.tsx",
+        "line": 326,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'refreshPendingUploads'. Either include it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketConversationPanel.tsx",
+        "line": 405,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'persistCurrentDraft'. Either include it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketConversationPanel.tsx",
+        "line": 771,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useMemo has an unnecessary dependency: 'body'. Either exclude it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketExportsPanel.tsx",
+        "line": 102,
+        "column": 18,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketFeedbackPanel.tsx",
+        "line": 229,
+        "column": 18,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketFeedbackPanel.tsx",
+        "line": 231,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketKnowledgePanel.tsx",
+        "line": 81,
+        "column": 18,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketMetricsPanel.tsx",
+        "line": 104,
+        "column": 111,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketMetricsPanel.tsx",
+        "line": 104,
+        "column": 128,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array.",
+        "fixable": false
+      },
+      {
+        "file": "src/pages/Projects/components/TicketSlaPanel.tsx",
+        "line": 113,
+        "column": 185,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function.",
+        "fixable": false
+      },
+      {
+        "file": "src/store.ts",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors.",
+        "fixable": false
+      },
+      {
+        "file": "src/store.ts",
+        "line": 11,
+        "column": 1,
+        "severity": 1,
+        "rule": null,
+        "message": "Unused eslint-disable directive (no problems were reported from 'no-unused-vars').",
+        "fixable": true
+      },
+      {
+        "file": "src/store.ts",
+        "line": 37,
+        "column": 1,
+        "severity": 1,
+        "rule": null,
+        "message": "Unused eslint-disable directive (no problems were reported from 'prefer-const').",
+        "fixable": true
+      },
+      {
+        "file": "tests/browser/fixtures/reliability-ux.tsx",
+        "line": 12,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "tests/browser/fixtures/reliability-ux.tsx",
+        "line": 22,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "tests/browser/fixtures/save-local-runtime.tsx",
+        "line": 25,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "tests/browser/fixtures/ticket-accessibility.tsx",
+        "line": 25,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "tests/browser/fixtures/ticket-cases.tsx",
+        "line": 4,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "tests/browser/fixtures/ticket-exports.tsx",
+        "line": 4,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "tests/browser/fixtures/ticket-feedback.tsx",
+        "line": 4,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "tests/browser/fixtures/ticket-knowledge.tsx",
+        "line": 6,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "tests/browser/fixtures/ticket-metrics.tsx",
+        "line": 4,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "tests/browser/fixtures/ticket-notifications.tsx",
+        "line": 4,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "tests/browser/fixtures/ticket-sla.tsx",
+        "line": 2,
+        "column": 10,
+        "severity": 2,
+        "rule": "react-refresh/only-export-components",
+        "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+        "fixable": false
+      },
+      {
+        "file": "tests/browser/ticket-changes.spec.ts",
+        "line": 59,
+        "column": 7,
+        "severity": 2,
+        "rule": "prefer-const",
+        "message": "'success' is never reassigned. Use 'const' instead.",
+        "fixable": true
+      }
+    ]
+  },
+  "candidate": {
+    "errors": 1,
+    "warnings": 29,
+    "by_rule": {
+      "@typescript-eslint/ban-ts-comment": 1,
+      "react-hooks/exhaustive-deps": 27,
+      "unnamed_diagnostic": 2
+    },
+    "files": 19,
+    "occurrences": [
+      {
+        "file": "src/pages/AdminFiles.tsx",
+        "line": 343,
+        "column": 5,
+        "severity": 1,
+        "rule": null,
+        "message": "Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')."
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/ChangeRequestReviewPage.tsx",
+        "line": 686,
+        "column": 9,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The 'operations' logical expression could make the dependencies of useEffect Hook (at line 709) change on every render. To fix this, wrap the initialization of 'operations' in its own useMemo() Hook."
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/ViewerPersistentMutationRuntime.tsx",
+        "line": 225,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'state'. Either include it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/ViewerPersistentMutationRuntime.tsx",
+        "line": 490,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'state'. Either include it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/ViewerWorkingCopyRuntimeLegacy.tsx",
+        "line": 766,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'workingCopy'. Either include it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+        "line": 3,
+        "column": 1,
+        "severity": 2,
+        "rule": "@typescript-eslint/ban-ts-comment",
+        "message": "Do not use \"@ts-nocheck\" because it alters compilation errors."
+      },
+      {
+        "file": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+        "line": 352,
+        "column": 3,
+        "severity": 1,
+        "rule": null,
+        "message": "Unused eslint-disable directive (no problems were reported from 'complexity')."
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/GeometryFilterMenu.tsx",
+        "line": 95,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'filterableLayerIds'. Either include it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/MaonoGeometryFilterRuntime.tsx",
+        "line": 81,
+        "column": 5,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useMemo has an unnecessary dependency: 'rawFilters'. Either exclude it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
+        "line": 205,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has missing dependencies: 'buffer' and 'isochrone'. Either include them or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+        "line": 177,
+        "column": 5,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useMemo has unnecessary dependencies: 'baseState.datasets', 'baseState.filters', and 'baseState.layers'. Either exclude them or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+        "line": 609,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useMemo has unnecessary dependencies: 'baselineVersion', 'lastFlightCancelReason', and 'transientVersion'. Either exclude them or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+        "line": 629,
+        "column": 5,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'state'. Either include it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Kepler/hooks/use-point-clustering.ts",
+        "line": 77,
+        "column": 9,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The 'layers' logical expression could make the dependencies of useEffect Hook (at line 93) change on every render. To fix this, wrap the initialization of 'layers' in its own useMemo() Hook."
+      },
+      {
+        "file": "src/pages/Kepler/hooks/use-point-clustering.ts",
+        "line": 77,
+        "column": 9,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The 'layers' logical expression could make the dependencies of useMemo Hook (at line 124) change on every render. To fix this, wrap the initialization of 'layers' in its own useMemo() Hook."
+      },
+      {
+        "file": "src/pages/Kepler/hooks/use-point-clustering.ts",
+        "line": 78,
+        "column": 9,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The 'datasets' logical expression could make the dependencies of useMemo Hook (at line 124) change on every render. Move it inside the useMemo callback. Alternatively, wrap the initialization of 'datasets' in its own useMemo() Hook."
+      },
+      {
+        "file": "src/pages/Projects/components/RoadmapSection.tsx",
+        "line": 83,
+        "column": 212,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has missing dependencies: 'bundle.roadmap.id', 'initial', 'organizationId', and 'task'. Either include them or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketAttachmentList.tsx",
+        "line": 100,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'refreshPendingUploads'. Either include it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketCasesPanel.tsx",
+        "line": 200,
+        "column": 18,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketConversationPanel.tsx",
+        "line": 201,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has missing dependencies: 'busyUploadId' and 'uploading'. Either include them or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketConversationPanel.tsx",
+        "line": 326,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'refreshPendingUploads'. Either include it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketConversationPanel.tsx",
+        "line": 405,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'persistCurrentDraft'. Either include it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketConversationPanel.tsx",
+        "line": 771,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useMemo has an unnecessary dependency: 'body'. Either exclude it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketExportsPanel.tsx",
+        "line": 102,
+        "column": 18,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketFeedbackPanel.tsx",
+        "line": 229,
+        "column": 18,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketFeedbackPanel.tsx",
+        "line": 231,
+        "column": 6,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketKnowledgePanel.tsx",
+        "line": 81,
+        "column": 18,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketMetricsPanel.tsx",
+        "line": 104,
+        "column": 111,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketMetricsPanel.tsx",
+        "line": 104,
+        "column": 128,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array."
+      },
+      {
+        "file": "src/pages/Projects/components/TicketSlaPanel.tsx",
+        "line": 113,
+        "column": 185,
+        "severity": 1,
+        "rule": "react-hooks/exhaustive-deps",
+        "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function."
+      }
+    ]
+  },
+  "unchanged_controls": [
+    {
+      "path": "eslint.config.js",
+      "unchanged": true,
+      "normalized_lf_sha256": "943730fa8663d8333ad3365397d209e98eda1e299edaea00695393ca40eb9bf0"
+    },
+    {
+      "path": "tsconfig.json",
+      "unchanged": true,
+      "normalized_lf_sha256": "770b4140bbb581e2dfd9ea9946ffc9c75a1d86ba7d2db5f77c83e37cbdf9d808"
+    },
+    {
+      "path": "tsconfig.app.json",
+      "unchanged": true,
+      "normalized_lf_sha256": "7852d040a820ba680aae219f3cfe771e7ad33bb26e9d1578e3ee21c70fad5acc"
+    },
+    {
+      "path": "tsconfig.node.json",
+      "unchanged": true,
+      "normalized_lf_sha256": "dbece770acebd1448ab84fbdae194dc23670ee2e91ebcb1b534cace99cd0bea6"
+    },
+    {
+      "path": "scripts/user-error-sink-baseline.json",
+      "unchanged": true,
+      "normalized_lf_sha256": "f8b61fbc4f7f7b9ed0fc71fde1728a93c1c004ac5b977630468b677fb292e5ad"
+    }
+  ],
+  "local_validation": {
+    "contracts": {
+      "status": "pass",
+      "local_log": "lint-maintenance-final-contracts.tap",
+      "bytes": 25707,
+      "sha256": "c74b3014761f201b8bd9eb742cdc6654fb36928f917fcaf7c7516f89adea5eee",
+      "passed": 265,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 83189.2202,
+      "concurrency": 1,
+      "files": [
+        "tests/lint-module-extraction.test.mjs",
+        "tests/dropbox-provider-login.test.mjs",
+        "tests/foursquare-provider-contract.test.mjs",
+        "tests/legacy-ingestion-contract.test.mjs",
+        "tests/access-delegation.test.mjs",
+        "tests/session-resilience.test.mjs",
+        "tests/universal-loader-contract.test.mjs",
+        "tests/residual-loading-contract.test.mjs",
+        "tests/loading-final-acceptance.test.mjs",
+        "tests/kepler-engine-adapter.test.mjs",
+        "tests/maono-native-overlays.test.mjs",
+        "tests/users-access-preservation.test.mjs",
+        "tests/organization-switcher-redesign.test.mjs",
+        "tests/data-import-localization.test.mjs",
+        "tests/point-clustering-policy.test.mjs",
+        "tests/point-clustering-zoom.test.mjs",
+        "tests/point-cluster-single-layer.test.mjs",
+        "tests/point-cluster-fidelity.test.mjs",
+        "tests/point-clustering-integration.test.mjs",
+        "tests/point-cluster-capture-provenance.test.mjs"
+      ]
+    },
+    "typescript_app": {
+      "status": "pass",
+      "local_log": "lint-final-types-app.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit_code": 0,
+      "carto_existing_suppression_present": true
+    },
+    "typescript_node": {
+      "status": "pass",
+      "local_log": "lint-final-types-node.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit_code": 0
+    },
+    "strict_error_sink_audit": {
+      "status": "pass",
+      "local_log": "lint-error-sinks-audit.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit_code": 0
+    },
+    "lint": {
+      "status": "fail",
+      "local_log": "lint-maintenance-round7.json",
+      "bytes": 845955,
+      "sha256": "be20d6ac3e07c4c13b04b39b71dc002f66ab43234411c95da1bcdc20a8b20cee",
+      "exit_code": 1,
+      "errors": 1,
+      "warnings": 29
+    },
+    "workflow_yaml": {
+      "status": "pass",
+      "parser": "installed js-yaml",
+      "checks": [
+        "all product PRs",
+        "two independent jobs",
+        "no path filters",
+        "no conditional skip",
+        "no continue-on-error"
+      ]
+    },
+    "diff_check": {
+      "status": "pass"
+    },
+    "build": {
+      "status": "not_run",
+      "reason": "Local heavy execution window allocated to other Admin worktrees."
+    },
+    "browser": {
+      "status": "not_run",
+      "reason": "Local heavy execution window allocated to other Admin worktrees."
+    }
+  },
+  "ci": {
+    "status": "not_run_at_recording",
+    "reason": "Maintenance checkpoint not pushed at recording time; use PR checks for subsequent results."
+  },
+  "blocker": {
+    "status": "denied_not_executed",
+    "action": "Create task-4/type-lint-carto.py to apply an expanded Carto provider patch.",
+    "target": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+    "reason": "Automatic approval review rejected semantic changes to login/logout, overwrite/error behavior and provider contracts beyond the authorized minimal type repair.",
+    "helper_created": false,
+    "patch_applied": false,
+    "retried": false,
+    "approval": "Specific behavioral proposal submitted; no approval received at recording time.",
+    "proposal": "docs/ops/product-lint-carto-proposal.md"
+  },
+  "limitations": [
+    "No all-green or ready claim: Carto lint error remains.",
+    "Provider tests use controlled boundaries, not real OAuth/storage acceptance.",
+    "Build and browser validation pending coordinated window.",
+    "Existing warning-only hook dependencies were not changed mechanically.",
+    "No merge, auto-merge, migrations, remote flags or Production operations."
+  ],
+  "file_count": 99,
+  "files": [
+    {
+      "path": ".github/workflows/product-lint-maintenance.yml",
+      "status": "present",
+      "bytes": 1173,
+      "sha256": "406500242c767d3e2bfd90a9af601308dc6482993aca7cd07fd197e781a46bfa"
+    },
+    {
+      "path": "docs/ops/product-lint-carto-proposal.md",
+      "status": "present",
+      "bytes": 2783,
+      "sha256": "1f27845169ca1c94e32038d3bd1a883ce42e924d89247a5c9c9dec9ed547fcd0"
+    },
+    {
+      "path": "docs/ops/product-lint-maintenance-validation.json",
+      "status": "evidence",
+      "sha256": null,
+      "note": "Self hash omitted to avoid recursion."
+    },
+    {
+      "path": "docs/ops/product-lint-maintenance.md",
+      "status": "present",
+      "bytes": 5138,
+      "sha256": "3aaca4614aaf52c6a9d8327b9492c25fc57d600a57546759952d4ace8ae9ab45"
+    },
+    {
+      "path": "scripts/central-chamados/command-ui-harness.tsx",
+      "status": "present",
+      "bytes": 3405,
+      "sha256": "a68605d9e037d2f667853caa198c5e74f13fec0e49702f4814266f76ed37c746"
+    },
+    {
+      "path": "scripts/central-chamados/flow-ui-harness.tsx",
+      "status": "present",
+      "bytes": 833,
+      "sha256": "1e194841a5303ffd3c633d8061cc0961c26caa2649d621bc16ed547e06012db8"
+    },
+    {
+      "path": "scripts/central-chamados/triage-ui-harness.tsx",
+      "status": "present",
+      "bytes": 2945,
+      "sha256": "7770b60569c6bad97040b1cc977ac048b595b2d2ed3bf4735fb422067b225217"
+    },
+    {
+      "path": "src/auth/session-context.ts",
+      "status": "present",
+      "bytes": 370,
+      "sha256": "8d8fc21079794c8680e9e7b5e633f82ba291938403dee5ed300ea5a83cf9ce61"
+    },
+    {
+      "path": "src/auth/session-types.ts",
+      "status": "present",
+      "bytes": 3348,
+      "sha256": "028ca7ceca22fd5b3b1dcd29d26bde2db78c9a68c6ff4a4513063a4a030ba84c"
+    },
+    {
+      "path": "src/auth/session.ts",
+      "status": "present",
+      "bytes": 453,
+      "sha256": "6c04c1382161167e8a441d0e3c06e6a8f7e0327027e07cd29b7c2491471afed8"
+    },
+    {
+      "path": "src/auth/session.tsx",
+      "status": "present",
+      "bytes": 22629,
+      "sha256": "277d00c0ec6302da9fd482ed3e91ce7bb996cd8e721b046b38c9c77863cce900"
+    },
+    {
+      "path": "src/components/access/OrganizationPermissionManager.ts",
+      "status": "present",
+      "bytes": 262,
+      "sha256": "c9d0b7d37ffee34fb2563fb60cb70b51e7151d9dbd8806750c602cb441c8de51"
+    },
+    {
+      "path": "src/components/access/OrganizationPermissionManager.tsx",
+      "status": "present",
+      "bytes": 17326,
+      "sha256": "64afbfbfd740368b6f538eb5a0a351154ee63e9f60393eae5c7e719e29ea6f6c"
+    },
+    {
+      "path": "src/components/access/access-governance.ts",
+      "status": "present",
+      "bytes": 1074,
+      "sha256": "4d201fb7eab0fe02148daeee3dda427d982a4c4423ef87a77a07122871425dfe"
+    },
+    {
+      "path": "src/components/loading/LoadingProvider.ts",
+      "status": "present",
+      "bytes": 156,
+      "sha256": "c4e0d8313bd1910b2e169177b853e4dea103e9d98c4156e18c68d6cebcad7c1e"
+    },
+    {
+      "path": "src/components/loading/LoadingProvider.tsx",
+      "status": "present",
+      "bytes": 8388,
+      "sha256": "7baa5cd67aad603f2074cb9a77455a917cf9c5c4d7330bb336398c7bb8313258"
+    },
+    {
+      "path": "src/components/loading/loading-context.ts",
+      "status": "present",
+      "bytes": 1261,
+      "sha256": "55f52066269520c1f882e50077f5c4d7e994939ddb4f10fcb67d024356926757"
+    },
+    {
+      "path": "src/main.tsx",
+      "status": "present",
+      "bytes": 3028,
+      "sha256": "3abc83050fab7e1a45215dfcfa9115a64b685fd8d7efcad1636ff25c48735cda"
+    },
+    {
+      "path": "src/pages/AdminFiles.tsx",
+      "status": "present",
+      "bytes": 46052,
+      "sha256": "34da64ed9dacdba8b9020e434cd7118a99d9371ec71577a378550946aaef14e2"
+    },
+    {
+      "path": "src/pages/Kepler/actions.ts",
+      "status": "present",
+      "bytes": 12123,
+      "sha256": "ca57ca206efa8c03f0db15bf4139d815ad78ac5cbf04356683a32d4aff6b34a0"
+    },
+    {
+      "path": "src/pages/Kepler/change-requests/viewer-working-copy.ts",
+      "status": "present",
+      "bytes": 24801,
+      "sha256": "9546d0f591fd90c32cf33ac9cc45d6ad5c2912a8a6d2cc468d3f50f02e760f9f"
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+      "status": "present",
+      "bytes": 11613,
+      "sha256": "b7dd0e3186b05ce8dbdbcbdda45e8f80794ace1cb194692643d952f1f6a277d9"
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/dropbox/dropbox-error-modal.tsx",
+      "status": "deleted",
+      "sha256": null
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider-legacy.ts",
+      "status": "deleted",
+      "sha256": null
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider.ts",
+      "status": "present",
+      "bytes": 19288,
+      "sha256": "cf3a7477d4804554dc2ab77b1ccba3c3ebcaea4834810b30118ae0c313352ee0"
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/foursquare/foursquare-provider.ts",
+      "status": "present",
+      "bytes": 8876,
+      "sha256": "873233baed48f9d8f04c734ae8595b4e04c81f7439b32c9ca1b71f6fbf064aa2"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-adaptive-layer.ts",
+      "status": "present",
+      "bytes": 14560,
+      "sha256": "17d322175d1b773b3aafc01df4785ea3e80fd08809d6c070997fb26cd3ccd30e"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-controller-bridge.ts",
+      "status": "present",
+      "bytes": 196,
+      "sha256": "fb608513c772f5cf46a88c96d008ce0786a4a858a5595039c436d7da8770e3b8"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-controller-bridge.tsx",
+      "status": "present",
+      "bytes": 413,
+      "sha256": "28db509931c85f6907826bd889a645c76860c14b2470979caba0d12b82c2b381"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-controller-store.ts",
+      "status": "present",
+      "bytes": 1044,
+      "sha256": "a54c9caa96b670773aa09850812b4e9da9113837730ba5190e6cdc4f6b0976b6"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-controller.ts",
+      "status": "present",
+      "bytes": 8181,
+      "sha256": "c0bdce62a78951275ba22817a65fde0a058ce4c0b21c876fc1264384eb42ac7b"
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-policy.ts",
+      "status": "present",
+      "bytes": 5201,
+      "sha256": "d187773ac4ac93d315d5da9762b5d142d0bfd7167d28dbdbae6e905835aabe68"
+    },
+    {
+      "path": "src/pages/Kepler/components/announcement.tsx",
+      "status": "present",
+      "bytes": 1387,
+      "sha256": "a32ec4612d754147855d95745ba6400bb443d0e6a92b9944e19dff293732165f"
+    },
+    {
+      "path": "src/pages/Kepler/components/banner.tsx",
+      "status": "present",
+      "bytes": 1255,
+      "sha256": "3fffa68645cddab61f707461eb8ca60d0966559b0bc8f8bd9d892898ee7dc280"
+    },
+    {
+      "path": "src/pages/Kepler/components/load-data-modal/data-import-messages.ts",
+      "status": "present",
+      "bytes": 2381,
+      "sha256": "71c0854bb335090beb4dff153935d4682f3c3371f861d7934c078c78774a6f31"
+    },
+    {
+      "path": "src/pages/Kepler/components/load-data-modal/load-remote-map.tsx",
+      "status": "present",
+      "bytes": 5076,
+      "sha256": "d94a3800031f4a8e19dd946e0b1344567cf3cf97dae72f2fac015f8a1d6a0c62"
+    },
+    {
+      "path": "src/pages/Kepler/components/load-data-modal/sample-data-viewer.tsx",
+      "status": "present",
+      "bytes": 4010,
+      "sha256": "6119c241241ac9d144d09546c2fa08ffc509e6c1d639ca07348e6cf03f413af5"
+    },
+    {
+      "path": "src/pages/Kepler/components/load-data-modal/sample-maps-tab.tsx",
+      "status": "present",
+      "bytes": 2274,
+      "sha256": "82aa449d014754a357dd79f5ea6786e19f46e74370f17e630ba12fd44d2aeffb"
+    },
+    {
+      "path": "src/pages/Kepler/components/map-control/map-control.tsx",
+      "status": "present",
+      "bytes": 5557,
+      "sha256": "c5a9e33dc1e1455503a01fc5be731b8bf130c65f66720800b9dc7b8468cb298c"
+    },
+    {
+      "path": "src/pages/Kepler/components/map-control/sql-panel-control.tsx",
+      "status": "present",
+      "bytes": 1583,
+      "sha256": "9d562f21d1b57a467601d84d04bfbe647eed675035557cd3f613005d3a2a044e"
+    },
+    {
+      "path": "src/pages/Kepler/components/point-cluster-settings-panel.tsx",
+      "status": "present",
+      "bytes": 342,
+      "sha256": "e61f4327e4327cde65ba04ea253f9beb49491898e99315068d38e513c50680a9"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.ts",
+      "status": "present",
+      "bytes": 155,
+      "sha256": "92eb180ef817276d25ba353b0cf8150726eb182646114ac8a27f631d4c5c8dae"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+      "status": "present",
+      "bytes": 19590,
+      "sha256": "137281ff841d4806de3556e427e16ccd543c0d04c32ce391e3ec2ba472e87e2b"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/dataset-csv-export.ts",
+      "status": "present",
+      "bytes": 1977,
+      "sha256": "e83fadc1452112af101962f80c99e5bdf7bc52b8bed67421998e67560e1809ab"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/kepler-engine-adapter-context.ts",
+      "status": "present",
+      "bytes": 459,
+      "sha256": "9dda9f52bd7f180502d831fc0be49007dcea5ae2eb707cbefc0726d6140a0ce6"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/multibuffer-dataset-updater.ts",
+      "status": "present",
+      "bytes": 3614,
+      "sha256": "5facde15a570824b9cb3f16448f9892032c88eaca88cc622dc7701de84238d4d"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/usePointDatasetCommand.ts",
+      "status": "present",
+      "bytes": 10371,
+      "sha256": "4567c2939efceeef29d8115538a782343d703a59d9781f70c0288662f9b7e4e2"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/useViewerAwareKeplerEngineAdapter.ts",
+      "status": "present",
+      "bytes": 587,
+      "sha256": "a5eb5e8ba5fb8b34f51b984cc44d6e8e7fc12b048664e350e7de8685f8362555"
+    },
+    {
+      "path": "src/pages/Kepler/factories/dataset-section.tsx",
+      "status": "present",
+      "bytes": 1258,
+      "sha256": "f2ec1d782a48cbaedb5bbccc85f0b1ed8403aa45757377c4c1ad22954e882759"
+    },
+    {
+      "path": "src/pages/Kepler/factories/layer-configurator.ts",
+      "status": "present",
+      "bytes": 304,
+      "sha256": "634c1ac8af17f1cdd0729866e55ab0b0e7a9910cd3d4a911535234b8f1cfe5c7"
+    },
+    {
+      "path": "src/pages/Kepler/factories/layer-configurator.tsx",
+      "status": "present",
+      "bytes": 2564,
+      "sha256": "5bbaa586d33a437beb5f2a5b50fbc949450a396bffcbe25cdfce348eaf631363"
+    },
+    {
+      "path": "src/pages/Kepler/factories/load-data-modal.ts",
+      "status": "present",
+      "bytes": 4786,
+      "sha256": "5dac0f7e9e4d5dfd08af557582c32ba5cfde678442106f806375b2afaddf07b4"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-legend-format.ts",
+      "status": "present",
+      "bytes": 4051,
+      "sha256": "ec508d5715d49e36d25ed6d1e702c8aef53b859d5cea255e7678aea4a4042f09"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-legend-row.ts",
+      "status": "present",
+      "bytes": 365,
+      "sha256": "5adf664638820e4036ed208f24b020d03344279149eeac7e90dcf60ce5bb0244"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-legend-row.tsx",
+      "status": "present",
+      "bytes": 685,
+      "sha256": "13b1fee100d9f83905154330da7c211ec67d0ec89d82a587a100f50888662f34"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-map-legend-panel.ts",
+      "status": "present",
+      "bytes": 287,
+      "sha256": "f8a5412b61238adacd65785dfcb705f8705e2398f117ff55417ba16e8a083916"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-map-legend-panel.tsx",
+      "status": "present",
+      "bytes": 6317,
+      "sha256": "5d2788c68a0e0a08569f61af02d6c79d3676578d720ea52b8d3663a649a98eaf"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-map-popover.ts",
+      "status": "present",
+      "bytes": 258,
+      "sha256": "0c491596416af1be787ad472d8d8147577b7fdb4e70b783dfb7cb82515e10058"
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-map-popover.tsx",
+      "status": "present",
+      "bytes": 6055,
+      "sha256": "0e0258960a830d781174b05455eff4808f84e77bb883c5afe1023055aff3bf90"
+    },
+    {
+      "path": "src/pages/Kepler/factories/map-control.ts",
+      "status": "present",
+      "bytes": 255,
+      "sha256": "a4da077cc43453096556e2e4328a821361ac0f3d6f1d2cdd4b738c3977d62c71"
+    },
+    {
+      "path": "src/pages/Kepler/factories/map-control.tsx",
+      "status": "present",
+      "bytes": 1525,
+      "sha256": "c244071c29be16e9b7993150edbd7af0feed957ea236487495f4f7f54bbde289"
+    },
+    {
+      "path": "src/pages/Kepler/factories/panel-header.ts",
+      "status": "present",
+      "bytes": 262,
+      "sha256": "4e9616fdbca6d177c34bb6329699307ca91fe2a8be76e80351fbd61d0052632b"
+    },
+    {
+      "path": "src/pages/Kepler/factories/panel-header.tsx",
+      "status": "present",
+      "bytes": 1924,
+      "sha256": "a0271bc131144722fff1ad5b4f8505225f2da22fe396cae3d2ff67c81123da54"
+    },
+    {
+      "path": "src/pages/Kepler/factories/side-panel.ts",
+      "status": "present",
+      "bytes": 248,
+      "sha256": "1ed4624271555ea41e8ae5ab58f7a9c01d1fb18ea30d272cd2305c9a4d7a60b2"
+    },
+    {
+      "path": "src/pages/Kepler/factories/side-panel.tsx",
+      "status": "present",
+      "bytes": 987,
+      "sha256": "10b397285d3126f051c1a72c5ba45b78bed65af636ed07834e0959c776855e2a"
+    },
+    {
+      "path": "src/pages/Kepler/hooks/use-point-clustering.ts",
+      "status": "present",
+      "bytes": 6950,
+      "sha256": "ad59cdd3619bc65a1090d60673a9884398a069d3e6226625d202c5cb014ce1dd"
+    },
+    {
+      "path": "src/pages/Kepler/index.tsx",
+      "status": "present",
+      "bytes": 25646,
+      "sha256": "cb2d071ac3e5c3cc58e7b4f6a6ee459f59457e3238a8796c208af8cb10f9a5ed"
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/MapPanelContext.ts",
+      "status": "present",
+      "bytes": 287,
+      "sha256": "6b7c98f28dd0b0b7415e7e190514d7630d49109443c71040367e067a5a802fa9"
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/MapPanelContext.tsx",
+      "status": "present",
+      "bytes": 421,
+      "sha256": "871e42592e038faf3f76ad18177d5c6427621a6360e7dbb2643c267a23270a4f"
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/map-panel-context.ts",
+      "status": "present",
+      "bytes": 1005,
+      "sha256": "06dc6b067092fb987aa1adde9ec599b5ba90cce51bc40069a9328e823ab94b38"
+    },
+    {
+      "path": "src/pages/Kepler/reducers/index.ts",
+      "status": "present",
+      "bytes": 12685,
+      "sha256": "b76e7a20d3a72f8dc446d84a8f10076e8b3e220620f22ab5216b92cbdfe6d7c7"
+    },
+    {
+      "path": "src/pages/Projects.ts",
+      "status": "present",
+      "bytes": 163,
+      "sha256": "e93a40f4b7af3e5aa5135d0edfd16278c34400844c8018fca4cc29bf0de42c4c"
+    },
+    {
+      "path": "src/pages/Projects.tsx",
+      "status": "present",
+      "bytes": 33742,
+      "sha256": "8a286bcd024b07aefa434b4ef33bf71862316289a8f4e5bea92aeb6fc49d4ec4"
+    },
+    {
+      "path": "src/pages/Projects/project-snapshot.ts",
+      "status": "present",
+      "bytes": 1659,
+      "sha256": "4a389958c4611737750a9417e1a3fcb806b82e7cec42d8b3ce50d064d160a80d"
+    },
+    {
+      "path": "src/store.ts",
+      "status": "present",
+      "bytes": 2063,
+      "sha256": "80ab90fe4ee5829805111dc9fd48dcbe77508a4afd79162b3701730bd70ccbe7"
+    },
+    {
+      "path": "src/types/legacy-runtime-modules.d.ts",
+      "status": "present",
+      "bytes": 1576,
+      "sha256": "19424026edc056421d5f73ef04f2702623e327a5e481c56f01723266f94b27c1"
+    },
+    {
+      "path": "tests/browser/durable-save-recovery.spec.ts",
+      "status": "present",
+      "bytes": 21083,
+      "sha256": "bfb2bbc13f6187a826dc089809ccee9ec20d75d2a71d73526cea81a5fd634844"
+    },
+    {
+      "path": "tests/browser/fixtures/reliability-ux.tsx",
+      "status": "present",
+      "bytes": 1665,
+      "sha256": "a5d77654572a91d519ac08cde0f5e8eff37bd3bf505235aa8b1be64e9e0cc729"
+    },
+    {
+      "path": "tests/browser/fixtures/save-local-runtime.tsx",
+      "status": "present",
+      "bytes": 2728,
+      "sha256": "34f8c7aa884e8c2e0c52747115a75145ddc4fce6ee9fd099d6029e1616502cf2"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-accessibility.tsx",
+      "status": "present",
+      "bytes": 3311,
+      "sha256": "33fa7fe4fa72d3b263d549fd18fc449c62b3ce97dfd0089ffb581385bb473495"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-cases.tsx",
+      "status": "present",
+      "bytes": 618,
+      "sha256": "2f8b0270841bfd8296baaad686bc4589dbe2b5f3a23018b6954cf504d60730fe"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-exports.tsx",
+      "status": "present",
+      "bytes": 538,
+      "sha256": "e0b4431605d788067641ed36a4b2ded861ca30c1a25e5ea4d90933e2049163e6"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-feedback.tsx",
+      "status": "present",
+      "bytes": 741,
+      "sha256": "6ef58b9786d1fe94cf7db245120a6e2e56d9cda213b47ce7a6d68e96590f2f88"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-knowledge.tsx",
+      "status": "present",
+      "bytes": 1005,
+      "sha256": "7af90f630e7f4e8bbfd8899413d2c53aba27c729edf520cc245dbab28ea675b8"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-metrics.tsx",
+      "status": "present",
+      "bytes": 555,
+      "sha256": "ebd8c8b8beec959f6c13d23d62d321a2b8a9194c24206c481c308ab668cc9ffe"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-notifications.tsx",
+      "status": "present",
+      "bytes": 512,
+      "sha256": "cbc6c70ec7b356631280b465d584ca29ebc00348e10c5c8115db854bb66fec37"
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-sla.tsx",
+      "status": "present",
+      "bytes": 545,
+      "sha256": "0fc27c9e178dd22aa2a57677259699421eba09f829a258e07f42667ac75107a0"
+    },
+    {
+      "path": "tests/browser/ticket-changes.spec.ts",
+      "status": "present",
+      "bytes": 2611,
+      "sha256": "00b69da48c0cbb1bf0926293373897a028c314e9fb4ccba25228a0eeb8259571"
+    },
+    {
+      "path": "tests/dropbox-provider-login.test.mjs",
+      "status": "present",
+      "bytes": 3599,
+      "sha256": "63f1639f5e4a62394735e75e6dc9dd407fb216a895fbe172779db2e7bd779871"
+    },
+    {
+      "path": "tests/fixtures/lint-extracted-definitions.json",
+      "status": "present",
+      "bytes": 7191,
+      "sha256": "06e809dd591c6948368f437e7efcca0f3603f860ba944750009bb608dbcaa532"
+    },
+    {
+      "path": "tests/fixtures/lint-module-extraction-preservation.json",
+      "status": "present",
+      "bytes": 11874,
+      "sha256": "49c2757211d6f69f837dc83285f6225c03a7cd66bca821bae405150d79372869"
+    },
+    {
+      "path": "tests/foursquare-provider-contract.test.mjs",
+      "status": "present",
+      "bytes": 3913,
+      "sha256": "42a87ef844a486b862b32c245611c091e4eaa9fb395979d9fcc7718334f3f0c0"
+    },
+    {
+      "path": "tests/helpers/lint-module-extraction-preservation.mjs",
+      "status": "present",
+      "bytes": 838,
+      "sha256": "7f9fa6be7f654b5eeb6202eb7a320b1925abf3756cccd6aa11b9990a69ee9583"
+    },
+    {
+      "path": "tests/legacy-ingestion-contract.test.mjs",
+      "status": "present",
+      "bytes": 8618,
+      "sha256": "089db38be60e5f37e49183f8e6aaf38f6d6602db4dcc98fa7432a84f91784c0e"
+    },
+    {
+      "path": "tests/lint-module-extraction.test.mjs",
+      "status": "present",
+      "bytes": 3197,
+      "sha256": "76efd2faea8d80ce8dbb59d33c9c195a3f452e95cba9ff429d11a4741ab639bb"
+    },
+    {
+      "path": "tests/maono-native-overlays.test.mjs",
+      "status": "present",
+      "bytes": 29437,
+      "sha256": "ecf7563b4b08ff02da6b88b7b6aa171a575e606651f8dd07b8a5b43ce74b1923"
+    },
+    {
+      "path": "tests/organization-switcher-redesign.test.mjs",
+      "status": "present",
+      "bytes": 12337,
+      "sha256": "2e486aea04926ad91264fe358b2969ae0a340c26b05d14118f2062016965f2d0"
+    },
+    {
+      "path": "tests/session-resilience.test.mjs",
+      "status": "present",
+      "bytes": 11976,
+      "sha256": "ea1f61878d05f5e36efe59737e6f7edafeb2e1079f55bb140202deaf533f78f3"
+    },
+    {
+      "path": "tests/users-access-preservation.test.mjs",
+      "status": "present",
+      "bytes": 33229,
+      "sha256": "0f58a1b21c25b9e25607dc70f0241e6e62bb73e898bf73d1f23420b4910fe4e0"
+    }
+  ]
+}

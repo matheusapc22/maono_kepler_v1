@@ -2,7 +2,7 @@ import {StaticLoadingText} from '../../../components/loading/Skeleton';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Link,useNavigate,useSearchParams} from 'react-router';
-import {useSession} from '../../../auth/session';
+import {useSession} from '../../../auth/session.ts';
 import {MaonoSelect} from '../../../components/selection/MaonoSelect';
 import AdminIcon from '../components/AdminIcon';
 import {api,denied,download,errorText,dateLabel,safeCell,storageLabel} from './organizations-api';

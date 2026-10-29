@@ -1,4 +1,3 @@
-// @ts-nocheck
 
 import {
   useCallback,
@@ -8,6 +7,10 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import type { KeplerGlState } from "@kepler.gl/reducers";
+import type { VisState } from "@kepler.gl/schemas";
+import type { Layer } from "@kepler.gl/layers";
+import type { PointClusterMode } from "../clustering/point-cluster-policy.ts";
 import { updateMap } from "@kepler.gl/actions";
 
 import {
@@ -34,12 +37,16 @@ const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(
     import.meta.env.VITE_POINT_CLUSTERING_V1,
   );
-const LOGICAL_POINT_LAYER_TYPES = new Set([
+const LOGICAL_POINT_LAYER_TYPES = new Set<string | null>([
   "point",
   "geojson",
 ]);
 
-function datasetForLayer(datasets, layer) {
+type ClusterRootState = {
+  demo?: { keplerGl?: { map?: Partial<KeplerGlState> }; app?: { isMapLoading?: boolean } };
+};
+
+function datasetForLayer(datasets: VisState["datasets"], layer: Layer) {
   const dataId = layer?.config?.dataId;
   if (Array.isArray(dataId)) {
     return datasets?.[dataId[0]];
@@ -47,7 +54,7 @@ function datasetForLayer(datasets, layer) {
   return datasets?.[dataId];
 }
 
-function clickedDeckLayerId(clicked) {
+function clickedDeckLayerId(clicked: { layer?: { id?: string }; sourceLayer?: { id?: string } } | null | undefined) {
   return clicked?.layer?.id ?? clicked?.sourceLayer?.id;
 }
 
@@ -59,19 +66,19 @@ export function usePointClustering() {
     getPointClusterSnapshot,
   );
   const mapState = useSelector(
-    (state) => state?.demo?.keplerGl?.map?.mapState ?? {},
+    (state: ClusterRootState): Partial<KeplerGlState["mapState"]> => state?.demo?.keplerGl?.map?.mapState ?? {},
   );
   const visState = useSelector(
-    (state) => state?.demo?.keplerGl?.map?.visState ?? {},
+    (state: ClusterRootState): Partial<VisState> => state?.demo?.keplerGl?.map?.visState ?? {},
   );
   const isMapLoading = useSelector(
-    (state) => state?.demo?.app?.isMapLoading === true,
+    (state: ClusterRootState) => state?.demo?.app?.isMapLoading === true,
   );
   const layers = visState.layers ?? [];
   const datasets = visState.datasets ?? {};
   const clicked = visState.clicked;
-  const previousModesRef = useRef(new Map());
-  const handledClickRef = useRef(null);
+  const previousModesRef = useRef(new Map<string, PointClusterMode>());
+  const handledClickRef = useRef<VisState["clicked"]>(null);
 
   useEffect(() => {
     if (isMapLoading || layers.length === 0) {
@@ -212,7 +219,11 @@ export function usePointClustering() {
   ]);
 
   const updateLayerPolicy = useCallback(
-    (pointLayerId, patch, pointCount) => {
+    (
+      pointLayerId: Parameters<typeof updatePointClusterLayerPolicy>[0],
+      patch: Parameters<typeof updatePointClusterLayerPolicy>[1],
+      pointCount?: Parameters<typeof updatePointClusterLayerPolicy>[2],
+    ) => {
       updatePointClusterLayerPolicy(
         pointLayerId,
         patch,

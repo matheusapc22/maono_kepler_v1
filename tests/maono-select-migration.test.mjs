@@ -8,8 +8,9 @@ import { createHash } from "node:crypto";
 import { restoreLimitsPlansLoading } from "./helpers/projects-loading-preservation.mjs";
 import { restoreMaonoSelect, maonoSelectDeclarations } from "./helpers/maono-select-preservation.mjs";
 import { assertUsersAccessPreserved } from "./helpers/users-access-preservation.mjs";
+import { restoreLintModuleExtraction } from "./helpers/lint-module-extraction-preservation.mjs";
 const root = new URL("../", import.meta.url);
-const read = path => readFileSync(new URL(path, root), "utf8");
+const read = path => readFileSync(new URL(path, root), "utf8").replace(/\r\n/g, "\n");
 // These consumers were migrated mechanically from merged PR #221, be531dea.
 // Hashing the reversed presentation extraction protects all option/API/permission
 // logic, rather than accepting altered business logic as a visual change.
@@ -136,7 +137,7 @@ const consumers = {
 };
 for (const [path, contract] of Object.entries(consumers)) {
   test(`shared selector preserves all consumer logic: ${path}`, () => {
-    const source = restoreAdminProjectsProgressiveLoading(path, restoreTicketDocumentsProgressiveLoading(path, restoreTicketOptionalProgressiveLoading(path, read(path))));
+    const source = restoreAdminProjectsProgressiveLoading(path, restoreTicketDocumentsProgressiveLoading(path, restoreTicketOptionalProgressiveLoading(path, restoreLintModuleExtraction(path, read(path)))));
     assert.equal((source.match(/<MaonoSelect\b/g) || []).length, contract.controls);
     if (contract.selectorsSha256) assert.equal(createHash("sha256").update(maonoSelectDeclarations(source)).digest("hex"), contract.selectorsSha256);
     if (contract.preserve) contract.preserve(source);

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
 import { combineReducers, createStore, applyMiddleware, compose } from "redux";
 import { createLogger } from "redux-logger";
@@ -8,7 +7,6 @@ import thunk from "redux-thunk";
 
 import { enhanceReduxMiddleware } from "@kepler.gl/reducers";
 
-// eslint-disable-next-line no-unused-vars
 import Window from "global/window";
 
 import demoReducer from "./pages/Kepler/reducers/index";
@@ -30,11 +28,16 @@ if (import.meta.env.DEV) {
   middlewares.push(logger);
 }
 
-export const enhancers = [applyMiddleware(...middlewares)];
+export const enhancers = [applyMiddleware(...middlewares)] as const;
+
+declare global {
+  interface Window {
+    __REDUX_DEVTOOLS_EXTENSION_COMPOSE__?: (options: { actionsBlacklist: string[] }) => typeof compose;
+  }
+}
 
 const initialState = {};
 
-// eslint-disable-next-line prefer-const
 let composeEnhancers = compose;
 
 /**
@@ -60,6 +63,12 @@ const store = createStore(
 );
 
 export type AppStore = typeof store;
-export type AppDispatch = AppStore["dispatch"];
+export type AppThunk<Result = void> = (dispatch: AppDispatch, getState: () => RootState) => Result;
+// react-palm's task middleware returns a promise for ordinary actions; thunk
+// returns the invoked function's result. Keep Redux's overload for consumers.
+export type AppDispatch = {
+  (action: import("redux").AnyAction): Promise<unknown>;
+  <Result>(action: AppThunk<Result>): Result;
+} & AppStore["dispatch"];
 
 export default store;

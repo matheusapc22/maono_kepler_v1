@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
-import { useSession, type MaonoUser } from "../auth/session";
+import { useSession, type MaonoUser } from "../auth/session.ts";
 import { StaticLoadingText, useInitialLoadingPresentation } from "../components/loading";
 import { AdminPageSkeleton, LoadingStatus, Skeleton } from "../components/loading/Skeleton";
 import { isRegionAccessDenied, isRegionAuthenticationError } from "../components/loading/region-loading-policy";

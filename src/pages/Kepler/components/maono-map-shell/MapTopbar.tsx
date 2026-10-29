@@ -6,7 +6,7 @@ import {
 } from "react";
 import { Link } from "react-router";
 
-import type { useSession } from "../../../../auth/session";
+import type { useSession } from "../../../../auth/session.ts";
 import type { MapPanelContextValue } from "../../map-panel/types";
 import MapShellIcon from "./MapShellIcon";
 import NoticeBoard from "../../../../components/notices/NoticeBoard";

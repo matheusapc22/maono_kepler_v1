@@ -52,7 +52,13 @@ function ScopedNoticeBoard({userId,organizationId,canView,suspended=false}:Props
     if(open){const rect=button.current?.getBoundingClientRect();element.style.top=`${Math.min((rect?.bottom ?? 48)+8,Math.max(8,window.innerHeight-320))}px`;element.style.left=`${Math.max(8,Math.min(rect?.left ?? 8,window.innerWidth-392))}px`;element.showModal();}
     else if(element.open)element.close();
   },[open]);
-  function close(){setOpen(false);button.current?.focus();}
+  function close(){
+    // Outside controls remain inert until the native modal leaves the top layer.
+    // Close it before restoring focus, including pointer-opened dialogs in Safari.
+    dialog.current?.close();
+    setOpen(false);
+    button.current?.focus();
+  }
   async function act(item:Notice,action:'read'|'dismiss'|'restore'){
     if(mutating.current||blockedRef.current||!valid)return;
     mutating.current=true;const current=++sequence.current;request.current?.abort();const controller=new AbortController();request.current=controller;

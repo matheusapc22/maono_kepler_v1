@@ -56,7 +56,7 @@ test("CC08 unlink sends expected version and reuses idempotency key on ambiguous
   page,
 }) => {
   const keys: string[] = [];
-  let success = false;
+  const success = false;
   await page.route("**/api/**", async (r) => {
     if (r.request().method() === "POST") {
       keys.push(r.request().headers()["idempotency-key"]);

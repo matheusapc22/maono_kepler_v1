@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router";
 
 import LoginPageBackground from "../assets/images/login-background-maono.webp";
 import Logo from "../assets/images/Logo_Maono.png";
-import { useSession } from "../auth/session";
+import { useSession } from "../auth/session.ts";
 import {
   useInitialBootReadiness,
   useLoading,

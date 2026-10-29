@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSelector, useStore } from "react-redux";
 import { useNavigate, useParams } from "react-router";
-import { useSession } from "../../../auth/session";
+import { useSession } from "../../../auth/session.ts";
 import { buildApiError } from "../../../lib/api-transport";
 import { normalizeUserError } from "../../../lib/user-error-catalog";
 import { can } from "../../../access-control/can";
@@ -14,7 +14,7 @@ import { isPreviewSessionCurrent } from "../thumbnail/preview-recovery";
 import { ownsPreviewMessage, previewSnapshotWithoutPayload, type PreviewMessageOwner } from "../thumbnail/preview-message-owner";
 import ProjectCreatePanel, { type ProjectCreateInput, type ProjectCreationStage } from "./project-create-panel";
 import { useKeplerEngineAdapter } from "../engine-adapter";
-import { useMapPanel } from "../map-panel/MapPanelContext";
+import { useMapPanel } from "../map-panel/MapPanelContext.ts";
 import { emitMapSaveResult, MAONO_MAP_SAVE_REQUEST_EVENT, mapSaveRequestFromEvent, mapSaveSourceAnalysisKind, type MapSaveRequestDetail, type MapSaveResultStatus } from "../map-panel/map-save-events";
 import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry";
 import { beginClientSaveAttempt, clientSaveTotalDurationMs } from "../save-observability";

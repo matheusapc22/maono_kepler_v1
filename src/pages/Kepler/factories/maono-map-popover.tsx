@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
-// @ts-nocheck
 
-import React, { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -15,11 +14,11 @@ import "./maono-map-popover.css";
 import "../components/map-overlay/geometry-filter-ui.css";
 import "../components/map-overlay/geometry-filter-runtime.css";
 
-function clamp(value, minimum, maximum) {
+function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
-function tooltipPosition({ x, y, container, expanded }) {
+function tooltipPosition({ x, y, container, expanded }: Pick<ComponentProps<ReturnType<typeof MapPopoverFactory>>, "x" | "y" | "container"> & { expanded: boolean }) {
   const bounds = container?.getBoundingClientRect?.();
   const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1280;
   const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 800;
@@ -45,7 +44,7 @@ function tooltipPosition({ x, y, container, expanded }) {
   };
 }
 
-function layerName(layerHoverProp) {
+function layerName(layerHoverProp: ComponentProps<ReturnType<typeof MapPopoverFactory>>["layerHoverProp"]) {
   return String(
     layerHoverProp?.layer?.config?.label ??
       layerHoverProp?.layer?.id ??
@@ -78,7 +77,7 @@ MaonoMapPopoverFactory.deps = MapPopoverFactory.deps;
  * A filtragem espacial fica recolhida até o usuário acionar explicitamente
  * "Filtrar por geometria".
  */
-export function MaonoMapPopoverFactory(MapPopoverContent) {
+export function MaonoMapPopoverFactory(MapPopoverContent: Parameters<typeof MapPopoverFactory>[0]) {
   const MaonoMapPopover = ({
     x,
     y,
@@ -89,7 +88,7 @@ export function MaonoMapPopoverFactory(MapPopoverContent) {
     zoom,
     container,
     onClose,
-  }) => {
+  }: ComponentProps<ReturnType<typeof MapPopoverFactory>>) => {
     const [filterMenuOpen, setFilterMenuOpen] = useState(false);
     const feature = useMemo(
       () => (frozen ? getSelectedFeature(layerHoverProp) : null),
@@ -156,7 +155,7 @@ export function MaonoMapPopoverFactory(MapPopoverContent) {
                 <b aria-hidden="true">{filterMenuOpen ? "⌃" : "⌄"}</b>
               </button>
 
-              {filterMenuOpen ? (
+              {filterMenuOpen && feature ? (
                 <div
                   className="maono-map-tooltip__geometry-dropdown"
                   role="menu"
@@ -179,8 +178,4 @@ export function MaonoMapPopoverFactory(MapPopoverContent) {
 
   MaonoMapPopover.displayName = "MaonoMapPopover";
   return MaonoMapPopover;
-}
-
-export function replaceMapPopover() {
-  return [MapPopoverFactory, MaonoMapPopoverFactory];
 }

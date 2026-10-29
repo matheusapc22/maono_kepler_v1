@@ -1,0 +1,149 @@
+{
+  "observed_at_utc": "2026-10-28T00:23:05.393263+00:00",
+  "original_failure": {
+    "run": "windows-webkit-after-disconnect",
+    "pass": 63,
+    "fail": 2,
+    "skip": 0,
+    "assertion": "toBeFocused after a programmatic focus followed by mouse click",
+    "instrumented_reproduction": "same two failures, original assertions/timeouts intact"
+  },
+  "cause": "Windows WebKit moved native focus from the button to its focusable section ancestor during mousedown, before React onClick. The existing hook correctly does not restore focus that was absent at initiation. The test combined keyboard focus setup with pointer activation.",
+  "timeline": [
+    {
+      "test": "confirmed feedback availability keeps refresh mounted, open and focused",
+      "last_events": [
+        {
+          "type": "mousedown",
+          "target": "BUTTON|",
+          "active": "BUTTON|",
+          "time_ms": 8274
+        },
+        {
+          "type": "blur",
+          "target": "BUTTON|",
+          "active": "BODY|",
+          "time_ms": 8274
+        },
+        {
+          "type": "focusin",
+          "target": "SECTION|Conteúdo da seção",
+          "active": "SECTION|Conteúdo da seção",
+          "time_ms": 8276
+        },
+        {
+          "type": "click",
+          "target": "BUTTON|",
+          "active": "SECTION|Conteúdo da seção",
+          "time_ms": 8367
+        }
+      ]
+    },
+    {
+      "test": "confirmed metrics availability keeps refresh mounted, open and focused",
+      "last_events": [
+        {
+          "type": "mousedown",
+          "target": "BUTTON|",
+          "active": "BUTTON|",
+          "time_ms": 7892
+        },
+        {
+          "type": "blur",
+          "target": "BUTTON|",
+          "active": "BODY|",
+          "time_ms": 7893
+        },
+        {
+          "type": "focusin",
+          "target": "SECTION|Conteúdo da seção",
+          "active": "SECTION|Conteúdo da seção",
+          "time_ms": 7894
+        },
+        {
+          "type": "click",
+          "target": "BUTTON|",
+          "active": "SECTION|Conteúdo da seção",
+          "time_ms": 7902
+        }
+      ]
+    }
+  ],
+  "comparison": {
+    "src/pages/Projects/components/useManualRefreshFocus.ts": {
+      "baseline_lf_sha256": "14ebb9bb37d570c26ef0164b33d4038d5eb5db7708e615d3b7446ebebb820610",
+      "previous_candidate_lf_sha256": "14ebb9bb37d570c26ef0164b33d4038d5eb5db7708e615d3b7446ebebb820610",
+      "unchanged_before_harness_fix": true
+    },
+    "src/pages/Projects/components/TicketFeedbackPanel.tsx": {
+      "baseline_lf_sha256": "2a63befa50da7d1b4a8118cd96784016ab2471058a93e89536db789349b8e41a",
+      "previous_candidate_lf_sha256": "2a63befa50da7d1b4a8118cd96784016ab2471058a93e89536db789349b8e41a",
+      "unchanged_before_harness_fix": true
+    },
+    "src/pages/Projects/components/TicketMetricsPanel.tsx": {
+      "baseline_lf_sha256": "0b0b2e70e9630e5a68290b6f25920bd6146a11b0a3b4d0f26aed617aa04b2b32",
+      "previous_candidate_lf_sha256": "0b0b2e70e9630e5a68290b6f25920bd6146a11b0a3b4d0f26aed617aa04b2b32",
+      "unchanged_before_harness_fix": true
+    },
+    "tests/browser/ticket-optional-progressive-loading.spec.ts": {
+      "baseline_lf_sha256": "d4316aecf5afe2bba346ec825183da17c442833fa1b5c5c14eae3d3fb5df49d7",
+      "previous_candidate_lf_sha256": "d4316aecf5afe2bba346ec825183da17c442833fa1b5c5c14eae3d3fb5df49d7",
+      "unchanged_before_harness_fix": true
+    }
+  },
+  "comparison_limit": "Relevant sources and original spec are identical to e47deac. No separate complete e47deac browser build was run for these two cases; instrumented behavior was observed on the candidate.",
+  "change": {
+    "product_source_changed": false,
+    "keyboard": "Use Enter after focus; preserve every original assertion, disabled/open/connectivity checks and focus assertion",
+    "pointer": "Add two independent mouse cases capturing native focus before React onClick and require its identity after completion",
+    "six_non_steal_cases": "unchanged and rerun on all engines",
+    "original_assertions_and_other_cases_preserved_by_exact_inverse": true,
+    "old_spec_lf_sha256": "d4316aecf5afe2bba346ec825183da17c442833fa1b5c5c14eae3d3fb5df49d7",
+    "new_spec_lf_sha256": "b889b8e90a74a523b4531224ac47f5f68e1dc715cc87e1deb3bd9dbb056c70e4",
+    "timeouts_retries_rules_and_baseline_hashes_unchanged": true,
+    "permanent_skips_or_browser_exceptions": false
+  },
+  "validation": {
+    "stats": {
+      "startTime": "2026-10-28T00:18:21.799Z",
+      "duration": 246058.75,
+      "expected": 30,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "matrix": {
+      "chromium": 10,
+      "firefox": 10,
+      "webkit": 10
+    },
+    "cases_per_engine": "2 keyboard + 2 pointer + 6 later-interaction cancellation",
+    "full_matrix_limit": "The expanded complete matrix is now579 cases; the 30 focused cases were run locally, not a new full579 run. CI must confirm its own full suite."
+  },
+  "artifacts": [
+    {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-webkit-after-disconnect.json",
+      "bytes": 91612,
+      "sha256": "d64d0cdf0ad8ca9267abfdf153d7677fc444c1f3ffcd454fcd8a7a1ab8a2869f"
+    },
+    {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-focus-diagnostic.json",
+      "bytes": 22308,
+      "sha256": "dfcaf0359bb9217ca79b3ab77cf8fee46901c01b561c9326bfe73eba6543b544"
+    },
+    {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-focus-final-matrix.json",
+      "bytes": 37871,
+      "sha256": "ec892832669aed39e318ad88b5e3310683008d29c200b3af5614fea6ca91e20e"
+    },
+    {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-focus-final-matrix.log",
+      "bytes": 6236,
+      "sha256": "35e66b93cff696288125061b9042ed7d9125494680e25adc814d939f36ce6129"
+    }
+  ],
+  "restrictions": [
+    "Carto exact approved source remains unchanged",
+    "No credentials, real OAuth, Production, migrations, remote flags or merge"
+  ]
+}

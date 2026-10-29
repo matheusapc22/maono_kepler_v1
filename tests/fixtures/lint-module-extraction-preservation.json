@@ -1,0 +1,375 @@
+{
+  "base": "e47deac18888195b945a244dadb9e27c5902638f",
+  "changes": {
+    "src/auth/session.tsx": [
+      {
+        "before": "import React, {\n  createContext,\n  useCallback,\n  useContext,\n  useEffect,\n  useMemo,\n  useRef,\n  useState,\n} from \"react\";\n\nimport { normalizeThumbnailState, type ProjectThumbnailState } from \"../pages/Kepler/thumbnail/thumbnail-api\";\nimport { clearPreviewStatusSubscriptions } from \"../pages/Projects/components/preview-status-polling\";\nimport { activatePreviewRecovery } from \"../pages/Kepler/thumbnail/preview-recovery\";\nimport { activateProjectThumbnailCacheContext } from \"../pages/Projects/components/project-card-utils\";\nimport { normalizeRole } from \"../access-control/roles\";\n",
+        "after": "import {SessionContext} from './session-context';\nimport type {MaonoFeatureFlag,MaonoId,MaonoLimits,MaonoOrganization,MaonoProject,MaonoRole,ProjectActor,MaonoUser,PublicSession} from './session-types';\nimport React, {\n  useCallback,\n  useEffect,\n  useMemo,\n  useRef,\n  useState,\n} from \"react\";\n\nimport { normalizeThumbnailState } from \"../pages/Kepler/thumbnail/thumbnail-api\";\nimport { clearPreviewStatusSubscriptions } from \"../pages/Projects/components/preview-status-polling\";\nimport { activatePreviewRecovery } from \"../pages/Kepler/thumbnail/preview-recovery\";\nimport { activateProjectThumbnailCacheContext } from \"../pages/Projects/components/project-card-utils\";\nimport { normalizeRole } from \"../access-control/roles\";\n"
+      },
+      {
+        "before": "  isSessionRequestAbort,\n  type SessionHealth,\n} from \"./session-resilience\";\n\ntype MaonoId = number | string;\n\ntype MaonoRole =\n  | \"super_admin\"\n  | \"admin\"\n  | \"owner\"\n  | \"editor\"\n  | \"viewer\"\n  | \"client\"\n  | string;\n\ntype MaonoFeatureFlag = string;\n\ntype MaonoLimits = Record<string, unknown>;\n\ntype ProjectActor = {\n  id: MaonoId;\n  name: string;\n};\n\ntype MaonoOrganization = {\n  id: MaonoId;\n  organizationId?: MaonoId | null;\n  organization_id?: MaonoId | null;\n  name?: string;\n  slug?: string;\n  role?: MaonoRole;\n  accessLevel?: string;\n  access_level?: string;\n  active?: boolean;\n  plan?: string;\n  permissions?: Permission[];\n  deniedPermissions?: Permission[];\n  scopes?: string[];\n  featureFlags?: MaonoFeatureFlag[];\n  limits?: MaonoLimits;\n};\n\ntype MaonoUser = {\n  id: MaonoId;\n  email: string;\n  name?: string;\n  role: MaonoRole;\n\n  /**\n   * Mantém rastreabilidade temporária para migração de roles legadas.\n   * Exemplo: backend antigo pode retornar \"client\", mas a UI deve operar como \"owner\".\n   */\n  rawRole?: string;\n\n  organizationId?: MaonoId | null;\n  organization_id?: MaonoId | null;\n  activeOrganizationId?: MaonoId | null;\n  activeOrganization?: MaonoOrganization | null;\n  organization?: MaonoOrganization | null;\n  organizations?: MaonoOrganization[];\n\n  permissions?: Permission[];\n  deniedPermissions?: Permission[];\n  scopes?: string[];\n  accessLevel?: string | null;\n  access_level?: string | null;\n  featureFlags?: MaonoFeatureFlag[];\n  limits?: MaonoLimits;\n};\n\ntype MaonoProject = Partial<ProjectThumbnailState> & {\n  id: MaonoId;\n  name: string;\n  slug: string;\n  description?: string;\n  organizationId?: MaonoId | null;\n  organization_id?: MaonoId | null;\n  accessLevel: \"owner\" | \"editor\" | \"viewer\" | string;\n  access_level?: \"owner\" | \"editor\" | \"viewer\" | string;\n  permissions?: Permission[];\n  deniedPermissions?: Permission[];\n  active?: boolean;\n  thumbnailUrl?: string;\n  thumbnail_url?: string;\n  createdBy?: ProjectActor | null;\n  updatedBy?: ProjectActor | null;\n  metadataVersion?: number;\n  createdAt?: string;\n  updatedAt?: string;\n\n  /**\n   * Não incluir no payload público:\n   * - dropboxRootPath\n   * - defaultConfigFile\n   * - caminhos internos\n   * - tokens\n   * - metadados administrativos sensíveis\n   */\n};\n\ntype PublicSession = {\n  authenticated: boolean;\n  user: MaonoUser | null;\n  projects: MaonoProject[];\n  activeOrganization?: MaonoOrganization | null;\n  organizations?: MaonoOrganization[];\n  deniedPermissions?: Permission[];\n};\n\ndeclare global {\n  interface Window {\n    __MAONO_SESSION__?: PublicSession;\n  }\n}\n\ntype SessionState = {\n  authenticated: boolean;\n  loading: boolean;\n  health: SessionHealth;\n  user: MaonoUser | null;\n  projects: MaonoProject[];\n  activeOrganization: MaonoOrganization | null;\n  organizations: MaonoOrganization[];\n  switchingOrganization: boolean;\n  organizationSwitchError: string | null;\n  switchOrganization: (organizationId: MaonoId) => Promise<void>;\n  clearOrganizationSwitchError: () => void;\n  refreshSession: (options?: { signal?: AbortSignal }) => Promise<void>;\n  login: (\n    email: string,\n    password: string,\n    options?: { signal?: AbortSignal },\n  ) => Promise<void>;\n  logout: () => Promise<void>;\n};\n\nconst EMPTY_SESSION: PublicSession = {\n  authenticated: false,\n  user: null,\n  projects: [],\n  activeOrganization: null,\n  organizations: [],\n};\n\nconst SessionContext = createContext<SessionState | null>(null);\n\nfunction isRecord(value: unknown): value is Record<string, unknown> {\n  return Boolean(value) && typeof value === \"object\" && !Array.isArray(value);\n}\n",
+        "after": "  isSessionRequestAbort,\n  type SessionHealth,\n} from \"./session-resilience\";\n\ndeclare global {\n  interface Window {\n    __MAONO_SESSION__?: PublicSession;\n  }\n}\n\nconst EMPTY_SESSION: PublicSession = {\n  authenticated: false,\n  user: null,\n  projects: [],\n  activeOrganization: null,\n  organizations: [],\n};\n\nfunction isRecord(value: unknown): value is Record<string, unknown> {\n  return Boolean(value) && typeof value === \"object\" && !Array.isArray(value);\n}\n"
+      },
+      {
+        "before": "    <SessionContext.Provider value={value}>{children}</SessionContext.Provider>\n  );\n};\n\nexport function useSession() {\n  const context = useContext(SessionContext);\n\n  if (!context) {\n    throw new Error(\"useSession precisa estar dentro de SessionProvider.\");\n  }\n\n  return context;\n}\n\nexport type {\n  MaonoFeatureFlag,\n  MaonoId,\n  MaonoLimits,\n",
+        "after": "    <SessionContext.Provider value={value}>{children}</SessionContext.Provider>\n  );\n};\n\nexport type {\n  MaonoFeatureFlag,\n  MaonoId,\n  MaonoLimits,\n"
+      }
+    ],
+    "src/pages/Projects.tsx": [
+      {
+        "before": "import React, { useCallback, useEffect, useMemo, useRef, useState } from \"react\";\nimport { isRegionAccessDenied } from \"../components/loading/region-loading-policy\";\nimport { useNavigate } from \"react-router\";\n\n",
+        "after": "import {sameProject,mergeProjectSnapshot} from './Projects/project-snapshot';\nimport React, { useCallback, useEffect, useMemo, useRef, useState } from \"react\";\nimport { isRegionAccessDenied } from \"../components/loading/region-loading-policy\";\nimport { useNavigate } from \"react-router\";\n\n"
+      },
+      {
+        "before": "  permission: Permission,\n  project: MaonoProject,\n) {\n  return canUser(user, permission, buildProjectContext(user, project));\n}\n\nfunction sameProject(\n  project: ProjectListItem,\n  updatedProject: ProjectListItem,\n) {\n  if (\n    project.id !== null &&\n    project.id !== undefined &&\n    updatedProject.id !== null &&\n    updatedProject.id !== undefined\n  ) {\n    return String(project.id) === String(updatedProject.id);\n  }\n\n  return project.slug === updatedProject.slug;\n}\n\nexport function mergeProjectSnapshot(\n  projects: ProjectListItem[],\n  updatedProject: ProjectListItem,\n) {\n  return projects.map((project) => {\n    if (!sameProject(project, updatedProject)) {\n      return project;\n    }\n\n    const favorite =\n      updatedProject.favorite ??\n      updatedProject.favorited ??\n      project.favorite ??\n      project.favorited;\n\n    return {\n      ...project,\n      ...updatedProject,\n      favorite,\n      favorited: favorite,\n      thumbnailUrl:\n        updatedProject.thumbnailUrl ??\n        updatedProject.thumbnail_url ??\n        project.thumbnailUrl ??\n        project.thumbnail_url,\n      thumbnail_url:\n        updatedProject.thumbnail_url ??\n        updatedProject.thumbnailUrl ??\n        project.thumbnail_url ??\n        project.thumbnailUrl,\n      accessLevel:\n        updatedProject.accessLevel ??\n        updatedProject.access_level ??\n        project.accessLevel,\n      access_level:\n        updatedProject.access_level ??\n        updatedProject.accessLevel ??\n        project.access_level ??\n        project.accessLevel,\n      permissions: updatedProject.permissions ?? project.permissions,\n      deniedPermissions:\n        updatedProject.deniedPermissions ?? project.deniedPermissions,\n    };\n  });\n}\n\nfunction RestrictedSection({\n  section,\n",
+        "after": "  permission: Permission,\n  project: MaonoProject,\n) {\n  return canUser(user, permission, buildProjectContext(user, project));\n}\n\nfunction RestrictedSection({\n  section,\n"
+      },
+      {
+        "before": "import {\n  useSession,\n  type MaonoProject,\n  type MaonoUser,\n} from \"../auth/session\";",
+        "after": "import {\n  useSession,\n  type MaonoProject,\n  type MaonoUser,\n} from \"../auth/session.ts\";"
+      }
+    ],
+    "src/components/access/OrganizationPermissionManager.tsx": [
+      {
+        "before": "import { MaonoSelect } from \"../selection/MaonoSelect\";\nimport { useCallback, useEffect, useMemo, useState } from \"react\";\n\nimport {\n",
+        "after": "import {loadAccessGovernance,type AccessGovernanceCapabilities} from './access-governance';\nexport type {AccessGovernanceCapabilities} from './access-governance';\nimport { MaonoSelect } from \"../selection/MaonoSelect\";\nimport { useCallback, useEffect, useMemo, useState } from \"react\";\n\nimport {\n"
+      },
+      {
+        "before": "import {\n  accessFromCode,\n  profileFromTechnical,\n} from \"../../pages/Projects/components/user-access-commercial\";\nimport { requestJson } from \"../../lib/api-transport\";\nimport { normalizeUserError } from \"../../lib/user-error-catalog\";\nimport \"./OrganizationPermissionManager.css\";\n\ntype ApiId = number | string;\n",
+        "after": "import {\n  accessFromCode,\n  profileFromTechnical,\n} from \"../../pages/Projects/components/user-access-commercial\";\nimport { normalizeUserError } from \"../../lib/user-error-catalog\";\nimport \"./OrganizationPermissionManager.css\";\n\ntype ApiId = number | string;\n"
+      },
+      {
+        "before": "  \"plan.view\",\n  \"limits.view\",\n  \"limits.increase_request\",\n]);\n\nexport type AccessGovernanceCapabilities = {\n  mode: \"super_admin\" | \"organization\";\n  organizationId: ApiId;\n  canManageAdditionalAccesses: boolean;\n  canGrant: boolean;\n  canRevoke: boolean;\n  allowedPermissions: string[];\n  grantPermissions: string[];\n  revokePermissions: string[];\n  allowedTargetLevels: string[];\n  delegation?: {\n    enabled?: boolean;\n    expired?: boolean;\n    expiresAt?: string | null;\n    version?: number;\n  } | null;\n  reason: string;\n};\n\nexport async function loadAccessGovernance(\n  organizationId: ApiId,\n): Promise<AccessGovernanceCapabilities> {\n  const data = await requestJson<{\n    ok?: boolean;\n    capabilities?: AccessGovernanceCapabilities;\n  }>(\n    \"/api/organizations/\" +\n      encodeURIComponent(String(organizationId)) +\n      \"/access-governance\",\n    { cache: \"no-store\" },\n  );\n\n  if (data?.ok === false || !data?.capabilities) {\n    throw new Error(\"Não foi possível carregar a governança de acessos.\");\n  }\n\n  return data.capabilities;\n}\n\nfunction errorText(error: unknown): string {\n  return normalizeUserError(error).message;\n}\n",
+        "after": "  \"plan.view\",\n  \"limits.view\",\n  \"limits.increase_request\",\n]);\n\nfunction errorText(error: unknown): string {\n  return normalizeUserError(error).message;\n}\n"
+      }
+    ],
+    "src/Routes.tsx": [
+      {
+        "before": "import { useSession } from \"./auth/session\";",
+        "after": "import { useSession } from \"./auth/session.ts\";"
+      }
+    ],
+    "src/components/PermissionGate.tsx": [
+      {
+        "before": "import { useSession } from \"../auth/session\";",
+        "after": "import { useSession } from \"../auth/session.ts\";"
+      }
+    ],
+    "src/components/loading/index.ts": [
+      {
+        "before": "export { LoadingProvider, useLoading } from \"./LoadingProvider\";",
+        "after": "export { LoadingProvider, useLoading } from \"./LoadingProvider.ts\";"
+      }
+    ],
+    "src/components/loading/useCompleteLoadingHandoff.ts": [
+      {
+        "before": "import { useLoading } from \"./LoadingProvider\";",
+        "after": "import { useLoading } from \"./LoadingProvider.ts\";"
+      }
+    ],
+    "src/components/loading/useInitialBootReadiness.ts": [
+      {
+        "before": "import { useLoading } from \"./LoadingProvider\";",
+        "after": "import { useLoading } from \"./LoadingProvider.ts\";"
+      }
+    ],
+    "src/components/loading/useLoadingActivity.ts": [
+      {
+        "before": "import { useLoading } from \"./LoadingProvider\";",
+        "after": "import { useLoading } from \"./LoadingProvider.ts\";"
+      }
+    ],
+    "src/hooks/useSession.ts": [
+      {
+        "before": "import {\n  useSession as useAuthSession,\n  type MaonoOrganization,\n  type MaonoProject,\n  type MaonoUser,\n} from \"../auth/session\";",
+        "after": "import {\n  useSession as useAuthSession,\n  type MaonoOrganization,\n  type MaonoProject,\n  type MaonoUser,\n} from \"../auth/session.ts\";"
+      }
+    ],
+    "src/main.tsx": [
+      {
+        "before": "import { SessionProvider } from \"./auth/session\";",
+        "after": "import { SessionProvider } from \"./auth/session.ts\";"
+      }
+    ],
+    "src/pages/Admin.tsx": [
+      {
+        "before": "import { useSession, type MaonoUser } from \"../auth/session\";",
+        "after": "import { useSession, type MaonoUser } from \"../auth/session.ts\";"
+      }
+    ],
+    "src/pages/Admin/components/AdminSidebar.tsx": [
+      {
+        "before": "import type { MaonoUser } from \"../../../auth/session\";",
+        "after": "import type { MaonoUser } from \"../../../auth/session.ts\";"
+      }
+    ],
+    "src/pages/Admin/components/AdminUserManagerLegacy.tsx": [
+      {
+        "before": "import OrganizationPermissionManager from \"../../../components/access/OrganizationPermissionManager\";",
+        "after": "import OrganizationPermissionManager from \"../../../components/access/OrganizationPermissionManager.ts\";"
+      }
+    ],
+    "src/pages/AdminFiles.tsx": [
+      {
+        "before": "import { useSession } from \"../auth/session\";",
+        "after": "import { useSession } from \"../auth/session.ts\";"
+      }
+    ],
+    "src/pages/Kepler/change-requests/EditorRequestInboxPage.tsx": [
+      {
+        "before": "import { useSession } from \"../../../auth/session\";",
+        "after": "import { useSession } from \"../../../auth/session.ts\";"
+      }
+    ],
+    "src/pages/Kepler/change-requests/PointFromPinWorkflow.tsx": [
+      {
+        "before": "import { useSession } from \"../../../auth/session\";",
+        "after": "import { useSession } from \"../../../auth/session.ts\";"
+      },
+      {
+        "before": "import { useMapPanel } from \"../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/back-to-projects-button.tsx": [
+      {
+        "before": "import { useOptionalMapPanel } from \"../map-panel/MapPanelContext\";",
+        "after": "import { useOptionalMapPanel } from \"../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/maono-layer-panel/AddLayerMenu.tsx": [
+      {
+        "before": "import { useMapPanel } from \"../../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/maono-layer-panel/MaonoLayerPanel.tsx": [
+      {
+        "before": "import { useMapPanel } from \"../../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/maono-layer-panel/PanelSaveAction.tsx": [
+      {
+        "before": "import { useMapPanel } from \"../../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/maono-layer-panel/PointSpatialGroupingSection.tsx": [
+      {
+        "before": "import { usePointClusterController } from \"../../clustering/point-cluster-controller-bridge\";",
+        "after": "import { usePointClusterController } from \"../../clustering/point-cluster-controller-bridge.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/maono-map-shell/MaonoMapRuntime.tsx": [
+      {
+        "before": "import { useSession } from \"../../../../auth/session\";",
+        "after": "import { useSession } from \"../../../../auth/session.ts\";"
+      },
+      {
+        "before": "import { useMapPanel } from \"../../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/maono-map-shell/MapTopbar.tsx": [
+      {
+        "before": "import type { useSession } from \"../../../../auth/session\";",
+        "after": "import type { useSession } from \"../../../../auth/session.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/maono-save-button.tsx": [
+      {
+        "before": "import { useSession } from \"../../../auth/session\";",
+        "after": "import { useSession } from \"../../../auth/session.ts\";"
+      },
+      {
+        "before": "import { useMapPanel } from \"../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/map-overlay/GeometryFilterMenu.tsx": [
+      {
+        "before": "import { useMapPanel } from \"../../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/map-overlay/MaonoGeometryFilterRuntime.tsx": [
+      {
+        "before": "import { useMapPanel } from \"../../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx": [
+      {
+        "before": "import { useMapPanel } from \"../../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/map-overlay/MarkerContextMenu.tsx": [
+      {
+        "before": "import { useMapPanel } from \"../../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/map-overlay/useBufferPreview.ts": [
+      {
+        "before": "import { useMapPanel } from \"../../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/map-overlay/useIsochronePreview.ts": [
+      {
+        "before": "import { useMapPanel } from \"../../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/components/point-cluster-settings-panel.tsx": [
+      {
+        "before": "import { PointClusterControllerBridge } from \"../clustering/point-cluster-controller-bridge\";",
+        "after": "import { PointClusterControllerBridge } from \"../clustering/point-cluster-controller-bridge.ts\";"
+      }
+    ],
+    "src/pages/Kepler/engine-adapter/basemap-controller.ts": [
+      {
+        "before": "import { useMapPanel } from \"../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/engine-adapter/index.ts": [
+      {
+        "before": "export { KeplerEngineAdapterProvider } from \"./KeplerEngineAdapterProvider.tsx\";",
+        "after": "export { KeplerEngineAdapterProvider } from \"./KeplerEngineAdapterProvider.ts\";"
+      }
+    ],
+    "src/pages/Kepler/factories/dataset-section.tsx": [
+      {
+        "before": "import { useMapPanelCapability } from \"../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanelCapability } from \"../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/factories/layer-configurator.tsx": [
+      {
+        "before": "import { useMapPanel } from \"../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/factories/panel-header.tsx": [
+      {
+        "before": "import { useMapPanel } from \"../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/factories/side-panel.tsx": [
+      {
+        "before": "import { useMapPanel } from \"../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/index.tsx": [
+      {
+        "before": "import { replaceMapControl } from \"./factories/map-control\";",
+        "after": "import { replaceMapControl } from \"./factories/map-control.ts\";"
+      },
+      {
+        "before": "import { replaceMapLegendPanel } from \"./factories/maono-map-legend-panel\";",
+        "after": "import { replaceMapLegendPanel } from \"./factories/maono-map-legend-panel.ts\";"
+      },
+      {
+        "before": "import { replaceLegendRow } from \"./factories/maono-legend-row\";",
+        "after": "import { replaceLegendRow } from \"./factories/maono-legend-row.ts\";"
+      },
+      {
+        "before": "import { replaceMapPopover } from \"./factories/maono-map-popover\";",
+        "after": "import { replaceMapPopover } from \"./factories/maono-map-popover.ts\";"
+      },
+      {
+        "before": "import { replacePanelHeader } from \"./factories/panel-header\";",
+        "after": "import { replacePanelHeader } from \"./factories/panel-header.ts\";"
+      },
+      {
+        "before": "import { replaceLayerConfigurator } from \"./factories/layer-configurator\";",
+        "after": "import { replaceLayerConfigurator } from \"./factories/layer-configurator.ts\";"
+      },
+      {
+        "before": "import { replaceSidePanel } from \"./factories/side-panel\";",
+        "after": "import { replaceSidePanel } from \"./factories/side-panel.ts\";"
+      }
+    ],
+    "src/pages/Kepler/map-panel/MapManagementPage.tsx": [
+      {
+        "before": "import { useSession } from \"../../../auth/session\";",
+        "after": "import { useSession } from \"../../../auth/session.ts\";"
+      }
+    ],
+    "src/pages/Kepler/map-panel/MapPanelProvider.tsx": [
+      {
+        "before": "import { useSession } from \"../../../auth/session\";",
+        "after": "import { useSession } from \"../../../auth/session.ts\";"
+      },
+      {
+        "before": "import { MapPanelContextProvider, useMapPanel } from \"./MapPanelContext\";",
+        "after": "import { MapPanelContextProvider, useMapPanel } from \"./MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Kepler/map-url-loader/index.tsx": [
+      {
+        "before": "import { useMapPanel } from \"../map-panel/MapPanelContext\";",
+        "after": "import { useMapPanel } from \"../map-panel/MapPanelContext.ts\";"
+      }
+    ],
+    "src/pages/Login.tsx": [
+      {
+        "before": "import { useSession } from \"../auth/session\";",
+        "after": "import { useSession } from \"../auth/session.ts\";"
+      }
+    ],
+    "src/pages/Projects/components/LimitsPlansSection.tsx": [
+      {
+        "before": "import type { MaonoUser } from \"../../../auth/session\";",
+        "after": "import type { MaonoUser } from \"../../../auth/session.ts\";"
+      }
+    ],
+    "src/pages/Projects/components/OrganizationSection.tsx": [
+      {
+        "before": "import type { MaonoUser } from \"../../../auth/session\";",
+        "after": "import type { MaonoUser } from \"../../../auth/session.ts\";"
+      }
+    ],
+    "src/pages/Projects/components/OrganizationWorkspaceSwitcher.tsx": [
+      {
+        "before": "import type {\n  MaonoId,\n  MaonoOrganization,\n} from \"../../../auth/session\";",
+        "after": "import type {\n  MaonoId,\n  MaonoOrganization,\n} from \"../../../auth/session.ts\";"
+      }
+    ],
+    "src/pages/Projects/components/UsersAccessOverviewSection.tsx": [
+      {
+        "before": "import OrganizationPermissionManager, {\n  loadAccessGovernance,\n  type AccessGovernanceCapabilities,\n} from \"../../../components/access/OrganizationPermissionManager\";",
+        "after": "import OrganizationPermissionManager, {\n  loadAccessGovernance,\n  type AccessGovernanceCapabilities,\n} from \"../../../components/access/OrganizationPermissionManager.ts\";"
+      }
+    ],
+    "src/pages/Projects/index.tsx": [
+      {
+        "before": "export { default } from \"../Projects\";",
+        "after": "export { default } from \"../Projects.ts\";"
+      }
+    ],
+    "src/pages/Projects/projects-api.ts": [
+      {
+        "before": "import type {\n  MaonoId,\n  MaonoProject,\n  ProjectActor,\n} from \"../../auth/session\";",
+        "after": "import type {\n  MaonoId,\n  MaonoProject,\n  ProjectActor,\n} from \"../../auth/session.ts\";"
+      }
+    ],
+    "src/pages/ProjectsSidebar.tsx": [
+      {
+        "before": "import type {\n  MaonoId,\n  MaonoOrganization,\n  MaonoUser,\n} from \"../auth/session\";",
+        "after": "import type {\n  MaonoId,\n  MaonoOrganization,\n  MaonoUser,\n} from \"../auth/session.ts\";"
+      }
+    ],
+    "src/route-modules.ts": [
+      {
+        "before": "import(\"./pages/Projects\")",
+        "after": "import(\"./pages/Projects.ts\")"
+      }
+    ]
+  }
+}

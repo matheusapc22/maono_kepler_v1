@@ -7,7 +7,7 @@ import {
   useKeplerEngineAdapter,
   type KeplerCommandResult,
 } from "../../engine-adapter";
-import { useMapPanel } from "../../map-panel/MapPanelContext";
+import { useMapPanel } from "../../map-panel/MapPanelContext.ts";
 import AnalysisToolMenu from "./analysis-tools/AnalysisToolMenu";
 import { useMapToolController } from "./analysis-tools/useMapToolController";
 import BufferDialog from "./BufferDialog";

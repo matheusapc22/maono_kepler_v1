@@ -8,7 +8,8 @@ import { projectHeaderBaselineCommit, projectHeaderBaselines, restoreApprovedPro
 import { progressiveBaselines, restoreAdminProjectsProgressiveLoading } from './helpers/admin-projects-progressive-preservation.mjs';
 
 const root = new URL('../', import.meta.url);
-const read = path => readFileSync(new URL(path, root), 'utf8');
+// Historical Git blobs use LF; checkout CRLF is not a product delta.
+const read = path => readFileSync(new URL(path, root), 'utf8').replace(/\r\n/g, '\n');
 const hash = source => createHash('sha256').update(source).digest('hex');
 const ui = 'src/pages/Projects/components/ProjectPagesUi.tsx';
 const css = 'src/pages/Projects/components/ProjectPages.css';

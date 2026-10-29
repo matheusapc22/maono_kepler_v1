@@ -1,3 +1,5 @@
+import type { FileLoadingProgress } from "@kepler.gl/types";
+
 // Presentation-only translations. Native parser results, error objects,
 // filenames, source URLs and dataset values remain unchanged in Redux.
 export function importErrorText(error: unknown): string {
@@ -30,8 +32,7 @@ export function dataImportErrorMessage(error: unknown): string {
   return "Não foi possível importar os dados. Verifique o arquivo ou a fonte e tente novamente.";
 }
 
-type ImportProgress = { message?: string; error?: unknown; [key: string]: unknown };
-export function localizeImportProgress(progress: Record<string, ImportProgress> | undefined) {
+export function localizeImportProgress(progress: FileLoadingProgress | undefined): FileLoadingProgress {
   return Object.fromEntries(Object.entries(progress ?? {}).map(([key, item]) => [key, {
     ...item,
     message: item.message === "loading..." ? "Carregando arquivo…"

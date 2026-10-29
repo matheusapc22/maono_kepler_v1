@@ -9,7 +9,7 @@ import {
 } from "react-router";
 
 import MapErrorNotice from "../components/map-notice/MapErrorNotice";
-import { useSession } from "../../../auth/session";
+import { useSession } from "../../../auth/session.ts";
 import { useLoadingActivity } from "../../../components/loading";
 import { usePreparedNavigate } from "../../../hooks/usePreparedNavigate";
 import { normalizeUserError } from "../../../lib/user-error-catalog";

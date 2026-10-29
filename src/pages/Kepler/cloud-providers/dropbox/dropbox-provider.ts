@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
 // Dropbox SDK (UMD build)
 import * as DropboxSDK from "dropbox";
@@ -10,6 +9,31 @@ import Window from "global/window";
 import DropboxIcon from "./dropbox-icon";
 import { MAP_URI } from "../../constants/default-settings";
 import { KEPLER_FORMAT, Provider } from "@kepler.gl/cloud-providers";
+import type { CloudUser } from "@kepler.gl/cloud-providers/dist/provider";
+
+type DropboxUploadResult = { id: string; path: string } | { shareUrl: string; folderLink: string };
+// Kepler 3.2 declares its unimplemented login stub as Promise<never> and its
+// upload response as a list item. The actual cloud tile awaits login, while the
+// export updater stores the provider-specific receipt unchanged. Dropbox's
+// token getter is intentionally synchronous (await also accepts that value).
+// Correct only these three extension points; retain every other native member.
+interface DropboxProviderRuntime extends Pick<Provider, "name" | "displayName" | "storageMessage" | "icon" | "thumbnail" | "isNew"> {
+  login(): Promise<CloudUser>;
+  uploadMap(...args: Parameters<Provider["uploadMap"]>): Promise<DropboxUploadResult>;
+  getAccessToken(): string | null;
+  hasPrivateStorage(): ReturnType<Provider["hasPrivateStorage"]>;
+  hasSharingUrl(): ReturnType<Provider["hasSharingUrl"]>;
+  getShareUrl(...args: Parameters<Provider["getShareUrl"]>): ReturnType<Provider["getShareUrl"]>;
+  getMapUrl(...args: Parameters<Provider["getMapUrl"]>): ReturnType<Provider["getMapUrl"]>;
+  getUserName(): ReturnType<Provider["getUserName"]>;
+  getUser(): ReturnType<Provider["getUser"]>;
+  getFileConflictError(): ReturnType<Provider["getFileConflictError"]>;
+  logout(): ReturnType<Provider["logout"]>;
+  listMaps(): ReturnType<Provider["listMaps"]>;
+  downloadMap(...args: Parameters<Provider["downloadMap"]>): ReturnType<Provider["downloadMap"]>;
+  getManagementUrl(): ReturnType<Provider["getManagementUrl"]>;
+}
+const DropboxProviderBase = Provider as unknown as new (...args: ConstructorParameters<typeof Provider>) => DropboxProviderRuntime;
 
 type DropboxAuth = {
   setAccessToken(token: string): void;
@@ -71,11 +95,6 @@ function parseQueryString(query: string): Record<string, string> {
   return params;
 }
 
-function isConfigFile(err: any): boolean {
-  const summary = err?.error?.error_summary ?? err?.error_summary ?? "";
-  return typeof summary === "string" && Boolean(summary.match(/path\/conflict\/file\//g));
-}
-
 function isDropboxPathNotFound(err: any): boolean {
   const summary = err?.error?.error_summary ?? err?.error_summary ?? "";
   return typeof summary === "string" && summary.includes("path/not_found");
@@ -91,7 +110,7 @@ function isMaonoManagedProjectRoute() {
   return /^\/projects\/[^/]+\/(?:map|edit|create)\/?$/i.test(pathname);
 }
 
-export default class DropboxProvider extends Provider {
+export default class DropboxProvider extends DropboxProviderBase {
   clientId: string | null;
   appName: string;
   _folderLink: string;
@@ -112,18 +131,18 @@ export default class DropboxProvider extends Provider {
   }
 
   async login(): Promise<any> {
-    return new Promise<any>(async (resolve, reject) => {
-      try {
-        const link = await this._authLink();
+    const link = await this._authLink();
+    return new Promise<any>((resolve, reject) => {
         const authWindow = Window.open(link, "_blank", "width=1024,height=716");
 
         const handleToken = async (event: MessageEvent<any>) => {
           if (!event?.data?.token) return;
 
+          try {
           if (authWindow) {
             authWindow.close();
-            Window.removeEventListener("message", handleToken as any);
           }
+          Window.removeEventListener("message", handleToken);
 
           const { token } = event.data as { token?: string };
           if (!token) {
@@ -142,12 +161,12 @@ export default class DropboxProvider extends Provider {
           }
 
           resolve(user);
+          } catch (error) {
+            reject(error);
+          }
         };
 
-        Window.addEventListener("message", handleToken as any);
-      } catch (e) {
-        reject(e);
-      }
+        Window.addEventListener("message", handleToken);
     });
   }
 
@@ -281,7 +300,7 @@ export default class DropboxProvider extends Provider {
     return SHARING_ENABLED;
   }
 
-  getShareUrl(fullUrl = true): string | null {
+  getShareUrl(fullUrl = true): string {
     return fullUrl
       ? `${Window.location.protocol}//${Window.location.host}/${MAP_URI}${this._shareUrl ?? ""}`
       : `/${MAP_URI}${this._shareUrl ?? ""}`;
@@ -326,7 +345,7 @@ export default class DropboxProvider extends Provider {
     }) as DropboxClient;
   }
 
-  private async getUser(): Promise<{ name: string; email: string; abbreviated: string }> {
+  async getUser(): Promise<{ name: string; email: string; abbreviated: string }> {
     const token = this._dropbox.auth.getAccessToken?.();
     if (!token) throw new Error("Dropbox: no access token set before getUser()");
 
@@ -357,19 +376,6 @@ export default class DropboxProvider extends Provider {
       fileReader.onerror = reject;
       fileReader.readAsText(fileBlob, "utf-8");
     });
-  }
-
-  private _getMapPermalink(mapLink: string, fullUrl = true): string {
-    return fullUrl
-      ? `${Window.location.protocol}//${Window.location.host}/${MAP_URI}${mapLink}`
-      : `/${MAP_URI}${mapLink}`;
-  }
-
-  private _getMapPermalinkFromParams({ path }: { path: string }, fullURL = true): string {
-    const mapLink = `map/dropbox?path=${path}`;
-    return fullURL
-      ? `${Window.location.protocol}//${Window.location.host}/${mapLink}`
-      : `/${mapLink}`;
   }
 
   private _shareFile(rawMeta: any) {
