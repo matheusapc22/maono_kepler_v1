@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
@@ -268,7 +269,7 @@ test("DELETE permanece lixeira reversível após rename", async (t) => {
 
 test("cliente envia PATCH name e mostra validações legíveis sem expor mensagem remota", async (t) => {
   const bundle = await build({
-    entryPoints: [new URL("../src/lib/api.ts", import.meta.url).pathname],
+    entryPoints: [fileURLToPath(new URL("../src/lib/api.ts", import.meta.url))],
     bundle: true, format: "esm", platform: "browser", write: false,
   });
   const api = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);

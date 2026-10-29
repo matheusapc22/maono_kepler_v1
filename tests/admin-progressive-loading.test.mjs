@@ -23,11 +23,12 @@ function compileCallback(source, start, end, context) {
   const { code } = transformSync(`const callback = ${expression};`, { loader: 'ts', target: 'es2022' });
   return new Function(...Object.keys(context), `${code}\nreturn callback;`)(...Object.values(context));
 }
-function adminHarness() {
+function adminHarness(organizationsWorkspace = false) {
   const state = { projects: [], users: [], organizations: [], access: [], error: '', usersAccessEpoch: 0, regions: Object.fromEntries(['projects', 'users', 'organizations', 'access'].map(key => [key, { pending: true, loaded: false, error: '' }])) };
   const requests = [], requestRef = { current: 0 }, controllerRef = { current: null };
   const set = key => next => { state[key] = typeof next === 'function' ? next(state[key]) : next; };
-  const refresh = compileCallback(admin, 'const refreshAdminData = useCallback(', ', []);', {
+  const refresh = compileCallback(admin, 'const refreshAdminData = useCallback(', ', [organizationsWorkspace]);', {
+    organizationsWorkspace,
     requestRef, controllerRef, AbortController, isRegionAccessDenied, isRegionAuthenticationError, setUsersAccessEpoch: set('usersAccessEpoch'),
     setError: set('error'), setSuccess: set('success'), setRegions: set('regions'), setProjects: set('projects'), setUsers: set('users'), setOrganizations: set('organizations'), setAccess: set('access'),
     readJson: response => response,
@@ -42,6 +43,14 @@ function settleBatch(h, start, suffix = '') {
   h.resolve(start + 2, { users: [{ id: 2, name: `Usuário${suffix}` }] });
   h.resolve(start + 3, { organizations: [{ id: 3, name: `Organização${suffix}` }] });
 }
+
+test('organizations workspace cancels legacy reads without loading unrelated admin regions',async()=>{
+  const h=adminHarness(true);
+  await h.refresh();
+  assert.equal(h.requests.length,0);
+  assert.equal(h.requestRef.current,1);
+  assert.ok(Object.values(h.state.regions).every(region=>!region.pending&&!region.loaded));
+});
 
 test('Admin starts all four original authorized GETs immediately and reveals each result independently', async () => {
   const h = adminHarness(), finished = h.refresh();

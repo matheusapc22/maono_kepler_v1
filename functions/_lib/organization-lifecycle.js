@@ -238,32 +238,38 @@ function canResumeCreate(row) {
 }
 
 async function insertOrganization(env, payload, nowIso) {
+  const management = payload.__management;
+  const columns = management ? ', management_create_key, management_actor_id, management_request_id, management_reason' : '';
+  const placeholders = management ? ', ?, ?, ?, ?' : '';
   return env.DB.prepare(
-    `INSERT INTO organizations (
-      name,
-      slug,
-      description,
-      dropbox_root_path,
-      active,
-      storage_status,
-      storage_error,
-      storage_checked_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
-    RETURNING *`,
-  )
-    .bind(
-      payload.name,
-      payload.slug,
-      payload.description || null,
-      payload.dropboxRootPath,
-      payload.active,
-      payload.active
-        ? ORGANIZATION_STORAGE_STATUS.PENDING
-        : ORGANIZATION_STORAGE_STATUS.DISABLED,
-      payload.active ? null : nowIso,
-    )
-    .first();
+    `INSERT INTO organizations (name, slug, description, dropbox_root_path, active,
+      storage_status, storage_error, storage_checked_at${columns})
+     VALUES (?, ?, ?, ?, ?, ?, NULL, ?${placeholders}) RETURNING *`,
+  ).bind(payload.name, payload.slug, payload.description || null, payload.dropboxRootPath,
+    payload.active, payload.active ? ORGANIZATION_STORAGE_STATUS.PENDING : ORGANIZATION_STORAGE_STATUS.DISABLED,
+    payload.active ? null : nowIso,
+    ...(management ? [management.creationKey, management.actorId, management.requestId, management.reason || null] : []),
+  ).first();
+}
+
+async function persistOrganizationManagementFields(env, organizationId, payload, mode, nowIso, snapshot) {
+  const management = payload.__management;
+  let guard = ` AND active IS ? AND dropbox_root_path IS ? AND storage_status IS ?
+    AND storage_error IS ? AND storage_checked_at IS ? AND updated_at IS ?`;
+  const expected = [snapshot.active, snapshot.dropbox_root_path, snapshot.storage_status ?? null,
+    snapshot.storage_error ?? null, snapshot.storage_checked_at ?? null, snapshot.updated_at ?? null];
+  if (management) { guard += ' AND management_version IS ?'; expected.push(snapshot.management_version); }
+  let assignments = 'name = ?, slug = ?, description = ?, dropbox_root_path = ?, active = ?';
+  const values = [payload.name, payload.slug, payload.description || null, payload.dropboxRootPath, mode === 'disabled' ? 0 : 1];
+  if (mode === 'disabled') { assignments += ", storage_status = 'DISABLED', storage_error = NULL, storage_checked_at = ?"; values.push(nowIso); }
+  else if (mode === 'reset-pending') { assignments += ", storage_status = 'PENDING', storage_error = NULL, storage_checked_at = NULL"; }
+  assignments += ', updated_at = ?'; values.push(nowIso);
+  if (management) {
+    assignments += ', management_version = management_version + 1, management_actor_id = ?, management_request_id = ?, management_action = ?, management_reason = ?';
+    values.push(management.actorId, management.requestId, management.action || 'organization.updated', management.reason || null);
+  }
+  return env.DB.prepare(`UPDATE organizations SET ${assignments} WHERE id = ? ${guard} RETURNING *`)
+    .bind(...values, organizationId, ...expected).first();
 }
 
 async function persistOrganizationFields(
@@ -274,6 +280,9 @@ async function persistOrganizationFields(
   nowIso,
   snapshot,
 ) {
+  if (payload.__management) {
+    return persistOrganizationManagementFields(env, organizationId, payload, mode, nowIso, snapshot);
+  }
   const guard = ` AND active IS ? AND dropbox_root_path IS ?
     AND storage_status IS ? AND storage_error IS ? AND storage_checked_at IS ?
     AND updated_at IS ?`;
@@ -477,6 +486,7 @@ export async function createOrganizationLifecycle(
     nowFn = Date.now,
     claimTtlMs = ORGANIZATION_STORAGE_CLAIM_TTL_MS,
     ensureStorage = ensureOrganizationStorage,
+    management = null,
     observe = recordOrganizationStorageObservation,
   } = {},
 ) {
@@ -488,6 +498,7 @@ export async function createOrganizationLifecycle(
     normalizeOrganizationPayload(body),
     correlationId,
   );
+  payload.__management = management;
 
   let matches = await getIdentityMatches(
     env,
@@ -499,7 +510,17 @@ export async function createOrganizationLifecycle(
   let resumed = false;
 
   if (matches.bySlug || matches.byPath) {
-    if (matches.exact && payload.active && canResumeCreate(matches.exact)) {
+    if (management && matches.exact?.management_create_key === management.creationKey) {
+      const existing = matches.exact;
+      if (!isActive(existing) || readOrganizationStorageReadiness(existing).ready) return lifecycleResult(existing, { resumed: true });
+      const recovered = await ensureLifecycleStorageReady(env, existing, {
+        correlationId, nowFn, claimTtlMs, ensureStorage, telemetrySource: 'operator',
+      });
+      return lifecycleResult(recovered.organization, { resumed: true, storage: recovered.storage });
+    } else if (management && (matches.bySlug || matches.byPath)) {
+      assertNoIdentityCollision(matches, { correlationId });
+      throw lifecycleError('Outra organização já utiliza esse identificador.', 409, 'ORGANIZATION_EXISTS', { correlationId });
+    } else if (matches.exact && payload.active && canResumeCreate(matches.exact)) {
       organization = await persistOrganizationFieldsSafely(
         env,
         matches.exact.id,
@@ -532,7 +553,17 @@ export async function createOrganizationLifecycle(
         payload.dropboxRootPath,
       );
 
-      if (matches.exact && payload.active && canResumeCreate(matches.exact)) {
+      if (management && matches.exact?.management_create_key === management.creationKey) {
+      const existing = matches.exact;
+      if (!isActive(existing) || readOrganizationStorageReadiness(existing).ready) return lifecycleResult(existing, { resumed: true });
+      const recovered = await ensureLifecycleStorageReady(env, existing, {
+        correlationId, nowFn, claimTtlMs, ensureStorage, telemetrySource: 'operator',
+      });
+      return lifecycleResult(recovered.organization, { resumed: true, storage: recovered.storage });
+    } else if (management && (matches.bySlug || matches.byPath)) {
+      assertNoIdentityCollision(matches, { correlationId });
+      throw lifecycleError('Outra organização já utiliza esse identificador.', 409, 'ORGANIZATION_EXISTS', { correlationId });
+    } else if (matches.exact && payload.active && canResumeCreate(matches.exact)) {
         organization = await persistOrganizationFieldsSafely(
           env,
           matches.exact.id,
@@ -593,6 +624,7 @@ export async function updateOrganizationLifecycle(
     nowFn = Date.now,
     claimTtlMs = ORGANIZATION_STORAGE_CLAIM_TTL_MS,
     ensureStorage = ensureOrganizationStorage,
+    management = null,
   } = {},
 ) {
   const current = await getOrganizationLifecycleById(env, organizationId);
@@ -606,6 +638,10 @@ export async function updateOrganizationLifecycle(
     );
   }
 
+  if (management && current.management_version !== management.expectedVersion) {
+    throw lifecycleError('A organização mudou. Consulte a versão atual e revise seu rascunho.',
+      412, 'ORGANIZATION_VERSION_CONFLICT', { correlationId });
+  }
   const nowMs = Number(nowFn());
   const safeNowMs = Number.isFinite(nowMs) ? nowMs : Date.now();
   const nowIso = new Date(safeNowMs).toISOString();
@@ -614,6 +650,7 @@ export async function updateOrganizationLifecycle(
     correlationId,
     current,
   );
+  payload.__management = management;
 
   const matches = await getIdentityMatches(
     env,

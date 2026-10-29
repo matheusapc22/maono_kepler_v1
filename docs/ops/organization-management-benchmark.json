@@ -1,0 +1,55 @@
+{
+  "environment": "local SQLite + actual Pages handler; no browser/network/remote D1",
+  "generatedAt": "2026-10-27T03:04:18.517Z",
+  "warmup": 5,
+  "results": [
+    {
+      "organizations": 6,
+      "projects": 12,
+      "fileRecords": 18,
+      "activeFiles": 6,
+      "users": 2,
+      "memberships": 6,
+      "samples": 30,
+      "p50Ms": 5.984699999999975,
+      "p95Ms": 8.430400000000077,
+      "httpRequestsPerSample": 1,
+      "sqlStatementsPerSample": 8,
+      "databaseRowsReturnedPerSample": 60,
+      "organizationRowsReturned": 6,
+      "d1RowsRead": null
+    },
+    {
+      "organizations": 50,
+      "projects": 100,
+      "fileRecords": 150,
+      "activeFiles": 50,
+      "users": 2,
+      "memberships": 50,
+      "samples": 30,
+      "p50Ms": 3.8070999999999913,
+      "p95Ms": 9.050199999999904,
+      "httpRequestsPerSample": 1,
+      "sqlStatementsPerSample": 8,
+      "databaseRowsReturnedPerSample": 64,
+      "organizationRowsReturned": 10,
+      "d1RowsRead": null
+    },
+    {
+      "organizations": 500,
+      "projects": 1000,
+      "fileRecords": 1500,
+      "activeFiles": 500,
+      "users": 2,
+      "memberships": 500,
+      "samples": 30,
+      "p50Ms": 9.260999999999967,
+      "p95Ms": 20.123000000000047,
+      "httpRequestsPerSample": 1,
+      "sqlStatementsPerSample": 8,
+      "databaseRowsReturnedPerSample": 64,
+      "organizationRowsReturned": 10,
+      "d1RowsRead": null
+    }
+  ]
+}

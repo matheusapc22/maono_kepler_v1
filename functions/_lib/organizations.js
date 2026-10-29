@@ -1,3 +1,4 @@
+import { resolveOrganizationPolicy } from "./organization-limit-service.js";
 import {
   can,
   isKnownPermission,
@@ -1728,7 +1729,7 @@ async function listPendingLimitRequests(env, organizationId) {
         : null,
       reason: row.reason || null,
       status: row.status || "pending",
-      requestedBy: row.requested_by || null,
+      requestedBy: row.created_by || row.requested_by || null,
       createdAt: row.created_at || null,
       updatedAt: row.updated_at || null,
     }));
@@ -1738,8 +1739,9 @@ export async function getOrganizationLimits(env, organizationId) {
   const id = parsePositiveInteger(organizationId, "organizationId");
   const organization = await getOrganizationById(env, id);
 
-  const plan = organization.plan || organization.plan_slug || "free";
-  const planLimits = ORGANIZATION_PLANS[plan] || ORGANIZATION_PLANS.free;
+  const policy = resolveOrganizationPolicy(organization, env);
+  const plan = policy.plan;
+  const planLimits = { ...(ORGANIZATION_PLANS[plan] || ORGANIZATION_PLANS.free), projects: policy.projects, storageMb: policy.storageMb };
 
   const usedUsers = await countOrganizationRows(env, "organization_users", id);
   const usedProjects = await countOrganizationRows(env, "projects", id);
@@ -1807,6 +1809,7 @@ export async function createLimitIncreaseRequest(env, organizationId, payload, a
 
   const row = await insertRow(env, "organization_limit_requests", {
     organization_id: id,
+    created_by: actor?.id,
     requested_by: actor?.id,
     request_type: requestType,
     requested_plan: requestedPlan || null,

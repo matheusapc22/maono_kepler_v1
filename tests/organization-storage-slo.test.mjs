@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import test from "node:test";
 import fs from "node:fs";
@@ -392,10 +393,10 @@ test("gate fornece exit codes distintos e CLI n√£o sobrescreve arquivos de evid√
       args.push(`--${key}`, filename);
     }
     const script = new URL("../scripts/organization-storage/reliability-slo-report.mjs", import.meta.url);
-    const result = spawnSync(process.execPath, [script.pathname, ...args, "--gate"], { encoding: "utf8" });
+    const result = spawnSync(process.execPath, [fileURLToPath(script), ...args, "--gate"], { encoding: "utf8" });
     assert.equal(result.status, 3, result.stderr);
     assert.equal(JSON.parse(result.stdout).status, "INCONCLUSIVE");
-    const overwrite = spawnSync(process.execPath, [script.pathname, ...args, "--output", path.join(directory, "manifest.json")], { encoding: "utf8" });
+    const overwrite = spawnSync(process.execPath, [fileURLToPath(script), ...args, "--output", path.join(directory, "manifest.json")], { encoding: "utf8" });
     assert.equal(overwrite.status, 2);
     assert.equal(JSON.parse(fs.readFileSync(path.join(directory, "manifest.json"))).schemaVersion, 1);
   } finally {
