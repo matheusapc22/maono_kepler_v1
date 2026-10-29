@@ -1,0 +1,203 @@
+{
+  "productBase": "e47deac18888195b945a244dadb9e27c5902638f",
+  "note": "Final working-tree application sources are identified by SHA-256 below. Published commit and terminal CI are recorded in PR 254.",
+  "regression": {
+    "total": 547,
+    "passed": 545,
+    "failed": 0,
+    "skipped": 2,
+    "skipReason": "Bash operator cases require Linux; included in CI",
+    "execution": "545 passed and 2 Bash skips in all 44 workflow files; 17 integration cases rerun after additional legacy resume/pause assertions"
+  },
+  "scopedLint": {
+    "files": [
+      "playwright.organization-management.config.ts",
+      "src/pages/Admin.tsx",
+      "src/pages/Admin/organizations/AdminOrganizationsSection.tsx",
+      "src/pages/Admin/organizations/OrganizationDialogs.tsx",
+      "src/pages/Admin/organizations/organizations-api.ts",
+      "src/pages/Admin/organizations/organizations-types.ts",
+      "tests/browser/organization-management-integration.spec.ts",
+      "tests/browser/organization-management.spec.ts",
+      "playwright.config.ts",
+      "tests/browser/organization-management-disabled.spec.ts"
+    ],
+    "errors": 0,
+    "warnings": 0
+  },
+  "typecheck": "passed",
+  "build": {
+    "status": "passed",
+    "modules": 11945,
+    "duration": "8m 3s"
+  },
+  "browser": {
+    "passed": 20,
+    "failed": 0,
+    "execution": "19 compiled ON cases plus one explicit OFF development-server case; all existing assertions and timeouts retained",
+    "viewports": [
+      [
+        1774,
+        887
+      ],
+      [
+        1366,
+        768
+      ],
+      [
+        1920,
+        1080
+      ],
+      [
+        768,
+        1024
+      ],
+      [
+        390,
+        844
+      ]
+    ],
+    "visualInspection": "all five captures inspected; internal table scroll on small screens"
+  },
+  "environments": {
+    "local": "validated within described scope",
+    "CI": "see exact published SHA on draft PR",
+    "Preview": "not run",
+    "Production": "not run",
+    "remoteMigration": "not run"
+  },
+  "logs": {
+    "organization-regressions-final.tap": {
+      "sha256": "9760d3c1c9a64d645935838b6d4cb57c24c76771cb51ebfedf24ff7cfa8b45ea",
+      "bytes": 311624
+    },
+    "organization-loading-fix.tap": {
+      "sha256": "f6e4cb0950af565e4f12208683626b28f4fe89814d153f27f1f63f513c7a8ac0",
+      "bytes": 1324
+    },
+    "organization-error-contract-fix.tap": {
+      "sha256": "08044c1e4c715a2ae315495193098dc339cfbe484bcadc9e111ff6c2bc499ebd",
+      "bytes": 6126
+    },
+    "organization-error-ratchet-final.log": {
+      "sha256": "6072d2afe86254b69a4c0d5ebee9b345594e3688b1081a92b712bfaa73b6c2a7",
+      "bytes": 14
+    },
+    "organization-build-final-complete.log": {
+      "sha256": "fa02fbf95daa3edb4a0bb78b9335708882326846cc671900e9aaf53ff7366cee",
+      "bytes": 26138
+    },
+    "organization-browser-final-complete.log": {
+      "sha256": "456dd44af2d756fa8876d38c9b4af54e93d71b434a2b1b95efeaa1a9dc3e9c63",
+      "bytes": 6688
+    },
+    "organization-scoped-lint-final.json": {
+      "sha256": "3072e1c0743057e0604d9f8565dea05b2403d798b88f1bf47f4c3d4ed95589b3",
+      "bytes": 2434
+    },
+    "organization-lint.json": {
+      "sha256": "06dd018bf86f8d98c617b2e1866fc75e984cbc584d0ed831b165effc7c7e0850",
+      "bytes": 1188215
+    },
+    "organization-discovery-proof.json": {
+      "sha256": "cfc4f6dbdb314d24afec531ccdb1db32b3ffe63a8e739ca98b24344d34a75795",
+      "bytes": 200
+    },
+    "organization-browser-flag-off.log": {
+      "sha256": "45b956ed1f89c15f0b22094fc97f27b8b8a9d8e8c7fd43edb8bc7f84a4b0484f",
+      "bytes": 789
+    },
+    "organization-flag-matrix-proof.json": {
+      "sha256": "7d82722dcfdaeb329fb5a3128e700a414bff2c25fee3f1aa365128b52cfa4bf8",
+      "bytes": 570
+    },
+    "organization-regressions-pre-migration-final.tap": {
+      "bytes": 219664,
+      "sha256": "fac11725b74a5ead7483e3a549c03812cdd0e00c44470daae2c97f78bf370d39"
+    },
+    "organization-pre-migration-compatibility.tap": {
+      "bytes": 3159,
+      "sha256": "6b5b3b10ab61bc8ce502b06e8e82af1da82f84b3c9aa32147da80dfec86c36ae"
+    }
+  },
+  "migration": {
+    "file": "migrations/0042_organization_management.sql",
+    "sha256": "e47d8a1444c8c14681589733867a5f00e2490835ffc588e0de9dde1bcac6aa00",
+    "environment": "isolated SQLite only"
+  },
+  "manual": {
+    "file": "docs/user-guide/Manual_Gestao_Organizacoes_Maono.pdf",
+    "pages": 14,
+    "bytes": 76825,
+    "sha256": "08c913fab1e8557f57a176bffb11b87255543b228df83954bef94177eb040470",
+    "visualReview": "All 14 pages rendered; changed cover, initial guidance and final evidence pages inspected; unchanged content pages compared against the previously reviewed edition.",
+    "edition": "1.6"
+  },
+  "testedWorkingTreeBase": "cd4a6c2f1fab00b1a4a2a790029188bda82aa761",
+  "applicationSources": {
+    "src/pages/Admin/organizations/organizations-api.ts": "fd59b37ce397dd6a061d9f55e87e4142b4d4e964e682cce47d9faf97247f8450",
+    "src/pages/Admin/organizations/OrganizationDialogs.tsx": "cd49912b2296d8eedba9d8fad9811e1f93d7f8857ead62a4c5adcb4b2fa90fca",
+    "src/pages/Admin/organizations/AdminOrganizationsSection.tsx": "d70184a5126c4c65e3dbae094b8c093cd1648b5b8093a71ad794e11983abf27c"
+  },
+  "additionalErrorContracts": {
+    "passed": 70,
+    "failed": 0,
+    "note": "Overlaps organization-management and API/catalog tests; do not add to unique regression count."
+  },
+  "errorRatchet": {
+    "drift": [],
+    "baselineUnchanged": true
+  },
+  "browserDiscovery": {
+    "generalBefore": 309,
+    "generalAfter": 290,
+    "dedicated": 19,
+    "preexistingCasesPreserved": true,
+    "allOrganizationCasesInDedicatedGate": true,
+    "noTimeoutOrAssertionChanged": true
+  },
+  "configurationValidation": "Application source hashes unchanged. Browser configs, explicit OFF case and unconditional product-PR workflow coverage validated locally. Final published CI is recorded in PR 254. Branch protection is absent; repository settings were not changed. Additional changes after 70929c0 affect only fixture/test/docs; application hashes remain unchanged. New pre-migration integration and all 44 regression files pass.",
+  "flagCoverage": {
+    "preexistingGeneralCases": 290,
+    "currentGeneralCases": 291,
+    "dedicatedEnabledCases": 19,
+    "dedicatedDisabledCases": 1,
+    "preexistingCasesPreserved": true,
+    "allEnabledCasesPreserved": true,
+    "flagOffAlsoRunsInGeneralGate": true,
+    "everyProductPullRequestTriggersDedicatedGate": true,
+    "pathFilters": null,
+    "continueOnError": false,
+    "mergeProtection": {
+      "branchProtected": false,
+      "rulesets": [],
+      "note": "Workflow execution does not enforce merge blocking. Repository settings were audited read-only and not changed."
+    }
+  },
+  "preMigrationCompatibility": {
+    "schema": "Canonical product schema before the 0042 block, including prior 0007 requests table",
+    "managementFlagStates": [
+      "absent",
+      "false",
+      "true before migration (fail closed)"
+    ],
+    "addedCases": 3,
+    "integrationPassed": 17,
+    "integrationFailed": 0,
+    "paths": [
+      "session",
+      "legacy Admin listing",
+      "legacy lifecycle create/edit/resume/pause",
+      "project quota snapshot and reservation",
+      "legacy limit request",
+      "disabled management API"
+    ],
+    "newManagementSqlInOffPaths": false,
+    "existingOptionalSessionSchemaProbes": "Preserved from product baseline, including missing plan fallback; authenticated session returns 200",
+    "remoteDatabaseInspected": false,
+    "remoteMigrationApplied": false,
+    "applicationDelayed": true,
+    "mergeAuthorized": false,
+    "autoMergeEnabled": false
+  }
+}

@@ -1,4 +1,3 @@
-// @ts-nocheck
 
 import { recordPointClusterLayerProduction, pointClusterNeedsMaterialization, recordPointClusterMaterialization } from "./point-cluster-render-provenance.ts";
 
@@ -22,12 +21,43 @@ import {
   getPointClusterPolicy,
 } from "./point-cluster-store.ts";
 
+import type { CompositeLayer, Position } from "@deck.gl/core";
+import type { Layer } from "@kepler.gl/layers";
+import type { DataContainerInterface } from "@kepler.gl/utils";
+import type { PointClusterMode, PointClusterLayerPolicy } from "./point-cluster-policy.ts";
+
+type Rgb = [number, number, number];
+type ClusterCell = { filteredPoints?: unknown[]; points?: unknown[]; pointCount?: unknown; position: [number, number] };
+type FeatureShape = { type?: string; geometry?: FeatureShape | null; coordinates?: Position };
+type NativeFilterInput = Parameters<typeof buildNativePointClusterFilter>[0];
+type RenderOptions = Parameters<Layer["getDefaultDeckLayerProps"]>[0] & { data?: NativeFilterInput["dataProps"] };
+type AdaptiveLayer = Layer & {
+  __maonoPointClusterMode?: PointClusterMode;
+  config: Layer["config"] & { readOnly?: boolean; technicalReadOnly?: boolean };
+};
+type ClusterRenderArgs = { layer: AdaptiveLayer; opts: RenderOptions; policy: PointClusterLayerPolicy;
+  data: unknown[]; getPosition: (point: unknown) => unknown };
+
+// A CompositeLayer may return nested layer lists. Kepler infers only the
+// ScatterplotLayer returned by its own implementation; retain the native
+// constructor/prototype and restore the base renderLayers contract for labels.
+// Kepler 3.2.0 also references an aggregation-layer declaration absent from some
+// locked Deck layouts; props, state and construction come from its real base.
+interface CompositeClusterRuntime extends
+  Omit<DeckGLClusterLayer, "renderLayers" | "updateState" | "props" | "state">,
+  Pick<CompositeLayer<unknown>, "props" | "state"> {
+  updateState(...args: Parameters<DeckGLClusterLayer["updateState"]>): ReturnType<DeckGLClusterLayer["updateState"]>;
+  renderLayers(): ReturnType<CompositeLayer<unknown>["renderLayers"]>;
+}
+const CompositeDeckClusterLayer = DeckGLClusterLayer as unknown as
+  new (...args: ConstructorParameters<typeof CompositeLayer>) => CompositeClusterRuntime;
+
 const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(
     import.meta.env.VITE_POINT_CLUSTERING_V1,
   );
 
-function visiblePointCount(cell) {
+function visiblePointCount(cell: ClusterCell) {
   return Array.isArray(cell?.filteredPoints)
     ? cell.filteredPoints.length
     : Array.isArray(cell?.points)
@@ -35,7 +65,7 @@ function visiblePointCount(cell) {
       : Number(cell?.pointCount ?? 0);
 }
 
-function hexToRgb(value) {
+function hexToRgb(value: unknown): Rgb | null {
   const normalized = String(value ?? "").trim();
   const match = /^#([0-9a-f]{6})$/i.exec(normalized);
   if (!match) return null;
@@ -47,7 +77,7 @@ function hexToRgb(value) {
   ];
 }
 
-function normalizedRgb(value, fallback = [197, 160, 89]) {
+function normalizedRgb(value: unknown, fallback: Rgb = [197, 160, 89]): Rgb {
   if (!Array.isArray(value) || value.length < 3) {
     return fallback;
   }
@@ -56,11 +86,11 @@ function normalizedRgb(value, fallback = [197, 160, 89]) {
   return channels.every(Number.isFinite)
     ? channels.map((channel) =>
         Math.max(0, Math.min(255, Math.round(channel))),
-      )
+      ) as Rgb
     : fallback;
 }
 
-function clusterColorRange(layer) {
+function clusterColorRange(layer: AdaptiveLayer) {
   const configured = layer?.config?.visConfig?.colorRange?.colors;
   const colors = Array.isArray(configured)
     ? configured.map(hexToRgb).filter(Boolean)
@@ -78,7 +108,8 @@ function clusterColorRange(layer) {
   return [dark, base, light];
 }
 
-function clusterPoints(object) {
+function clusterPoints(value: unknown) {
+  const object = value as ClusterCell | null | undefined;
   if (Array.isArray(object?.filteredPoints)) {
     return object.filteredPoints;
   }
@@ -88,7 +119,8 @@ function clusterPoints(object) {
   return null;
 }
 
-function sourcePointIndex(point) {
+function sourcePointIndex(value: unknown) {
+  const point = value as { index?: unknown; source?: { index?: unknown }; properties?: { index?: unknown } } | null | undefined;
   const index = Number(
     point?.index ??
       point?.source?.index ??
@@ -97,7 +129,7 @@ function sourcePointIndex(point) {
   return Number.isInteger(index) && index >= 0 ? index : null;
 }
 
-function clusterHoverData(object, dataContainer) {
+function clusterHoverData(object: unknown, dataContainer: DataContainerInterface) {
   const points = clusterPoints(object);
   const index = points?.length
     ? sourcePointIndex(points[0])
@@ -110,13 +142,14 @@ function clusterHoverData(object, dataContainer) {
   return dataContainer.row(index);
 }
 
-function featureGeometry(feature) {
+function featureGeometry(value: unknown) {
+  const feature = value as FeatureShape | null | undefined;
   return feature?.type === "Feature"
     ? feature.geometry
     : feature?.geometry ?? feature;
 }
 
-function pointFeatureData(value) {
+function pointFeatureData(value: unknown) {
   if (!Array.isArray(value)) {
     return null;
   }
@@ -134,19 +167,19 @@ function pointFeatureData(value) {
   return allPoints ? features : null;
 }
 
-function featurePosition(feature) {
+function featurePosition(feature: unknown) {
   const geometry = featureGeometry(feature);
   return geometry?.type === "Point" && Array.isArray(geometry.coordinates)
     ? geometry.coordinates
     : [Number.NaN, Number.NaN];
 }
 
-function pointLayerData(dataProps) {
+function pointLayerData(dataProps: NativeFilterInput["dataProps"]) {
   const data = dataProps?.data;
   return Array.isArray(data) ? data : null;
 }
 
-function layerAllowsAdaptiveClustering(layer) {
+function layerAllowsAdaptiveClustering(layer: AdaptiveLayer) {
   return (
     layer?.config?.readOnly !== true &&
     layer?.config?.technicalReadOnly !== true &&
@@ -154,7 +187,7 @@ function layerAllowsAdaptiveClustering(layer) {
   );
 }
 
-function clusterablePointData(data, getPosition) {
+function clusterablePointData(data: unknown, getPosition: (point: unknown) => unknown) {
   if (
     !Array.isArray(data) ||
     data.length > MAX_CLIENT_POINT_COUNT ||
@@ -176,7 +209,7 @@ function clusterablePointData(data, getPosition) {
   });
 }
 
-function runtimeMode(layer, mapState, policy) {
+function runtimeMode(layer: AdaptiveLayer, mapState: RenderOptions["mapState"], policy: PointClusterLayerPolicy) {
   const nextMode = resolvePointClusterMode({
     zoom: mapState?.zoom,
     previousMode: layer.__maonoPointClusterMode,
@@ -192,7 +225,7 @@ function clusterDeckProps({
   policy,
   data,
   getPosition,
-}) {
+}: ClusterRenderArgs) {
   const defaultLayerProps = layer.getDefaultDeckLayerProps(opts);
   const mapState = opts?.mapState ?? {};
   const { _filterData: _nativeFilterData, ...formattedData } = opts?.data ?? {};
@@ -216,7 +249,7 @@ function clusterDeckProps({
     clusterRadius: policy.clusterSize,
     colorRange: clusterColorRange(layer),
     colorScaleType: "quantize",
-    getColorValue: (points) => points.length,
+    getColorValue: (points: unknown[]) => points.length,
     zoom: Math.round(Number(mapState.zoom ?? 0)),
     width: Number(mapState.width ?? 0),
     height: Number(mapState.height ?? 0),
@@ -240,18 +273,18 @@ function clusterDeckProps({
   };
 }
 
-export class MaonoMaterializedDeckClusterLayer extends DeckGLClusterLayer {
+export class MaonoMaterializedDeckClusterLayer extends CompositeDeckClusterLayer {
   static layerName = "MaonoMaterializedDeckClusterLayer";
 
-  updateState(args) {
+  updateState(args: Parameters<DeckGLClusterLayer["updateState"]>[0]) {
     // Deck transfers old aggregation state to replacement layer instances.
     // Rebuild all native stages for a newly produced policy/data/filter tuple,
     // including the radius-keyed Supercluster cache, before acknowledging it.
     const freshGeneration = pointClusterNeedsMaterialization(this);
-    const result = super.updateState(freshGeneration ? {
+    const result: unknown = super.updateState(freshGeneration ? {
       ...args, changeFlags: { ...args.changeFlags, dataChanged: true },
     } : args);
-    if (!result || typeof result.then !== "function") recordPointClusterMaterialization(this);
+    if (!result || typeof (result as { then?: unknown }).then !== "function") recordPointClusterMaterialization(this);
   }
 }
 
@@ -262,14 +295,14 @@ export class MaonoCountedDeckClusterLayer extends MaonoMaterializedDeckClusterLa
     const nativeLayer = super.renderLayers();
     const { id, visible, opacity } = this.props;
     const data =
-      this.state?.cpuAggregator?.state?.layerData?.data ?? [];
+      this.state?.cpuAggregator?.state?.layerData?.data as ClusterCell[] ?? [];
     const labels = data.filter(
       (cell) => visiblePointCount(cell) > 1,
     );
 
     return [
       nativeLayer,
-      new TextLayer({
+      new TextLayer<ClusterCell>({
         id: `${id}-count-labels`,
         data: labels,
         visible,
@@ -300,7 +333,7 @@ export class MaonoCountedDeckClusterLayer extends MaonoMaterializedDeckClusterLa
   }
 }
 
-function renderClusters(args) {
+function renderClusters(args: ClusterRenderArgs) {
   const ClusterLayerClass = args.policy.showCount
     ? MaonoCountedDeckClusterLayer
     : MaonoMaterializedDeckClusterLayer;
@@ -311,7 +344,8 @@ function renderClusters(args) {
 }
 
 export class MaonoAdaptivePointLayer extends LayerClasses.point {
-  renderLayer(opts) {
+  declare __maonoPointClusterMode: PointClusterMode | undefined;
+  renderLayer(opts: RenderOptions) {
     // Read once while constructing the layer. Keep the saved policy even when
     // the feature is off, so callbacks cannot relabel a prior representation.
     const policy = getPointClusterPolicy(this.id);
@@ -343,16 +377,18 @@ export class MaonoAdaptivePointLayer extends LayerClasses.point {
     });
   }
 
-  getHoverData(object, dataContainer, ...rest) {
+  getHoverData(...args: Parameters<InstanceType<typeof LayerClasses.point>["getHoverData"]>) {
+    const [object, dataContainer] = args;
     if (clusterPoints(object)) {
       return clusterHoverData(object, dataContainer);
     }
-    return super.getHoverData(object, dataContainer, ...rest);
+    return super.getHoverData(...args);
   }
 }
 
 export class MaonoAdaptiveGeoJsonLayer extends LayerClasses.geojson {
-  renderLayer(opts) {
+  declare __maonoPointClusterMode: PointClusterMode | undefined;
+  renderLayer(opts: RenderOptions) {
     // Read once while constructing the layer. Keep the saved policy even when
     // the feature is off, so callbacks cannot relabel a prior representation.
     const policy = getPointClusterPolicy(this.id);
@@ -382,10 +418,11 @@ export class MaonoAdaptiveGeoJsonLayer extends LayerClasses.geojson {
     });
   }
 
-  getHoverData(object, dataContainer, ...rest) {
+  getHoverData(...args: Parameters<InstanceType<typeof LayerClasses.geojson>["getHoverData"]>) {
+    const [object, dataContainer] = args;
     if (clusterPoints(object)) {
       return clusterHoverData(object, dataContainer);
     }
-    return super.getHoverData(object, dataContainer, ...rest);
+    return super.getHoverData(...args);
   }
 }

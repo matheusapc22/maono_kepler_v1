@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import TicketKnowledgePanel, {
   TicketKnowledgeReuse,
 } from "../../../src/pages/Projects/components/TicketKnowledgePanel";
-function Fixture() {
+export function Fixture() {
   const [org, setOrg] = useState(1),
     [sent, setSent] = useState(0);
   return (

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 
-import { useLoading } from "./LoadingProvider";
+import { useLoading } from "./LoadingProvider.ts";
 import type {
   LoadingToken,
   LoadingTokenMetadataInput,

@@ -1,0 +1,29 @@
+{
+  "base": "381c93256d985b0ae39722128fc4ad54f17f025f",
+  "changes": {
+    "functions/_lib/permissions.js": [
+      {
+        "before": "  const activeOrganizationId = getUserOrganizationId(user);\n  const contextOrganizationId = getContextOrganizationId(resolvedContext);\n\n  if (role === \"super_admin\") {\n    return {\n      allowed: true,\n",
+        "after": "  const activeOrganizationId = getUserOrganizationId(user);\n  const contextOrganizationId = getContextOrganizationId(resolvedContext);\n\n  // A pause applies to the requested organization, including sessions issued\n  // before it. Keep the management permission available for recovery.\n  if (String(env.ORGANIZATION_MANAGEMENT_V1).toLowerCase() === \"true\" &&\n      contextOrganizationId && normalizedPermission !== \"admin.panel.access\") {\n    const organization = await getDb(env).prepare(\n      \"SELECT active FROM organizations WHERE id = ?\",\n    ).bind(contextOrganizationId).first();\n    if (!organization || Number(organization.active) !== 1) {\n      return {\n        allowed: false, reason: \"ORGANIZATION_INACTIVE\",\n        user, permission: normalizedPermission, context: resolvedContext,\n      };\n    }\n  }\n\n  if (role === \"super_admin\") {\n    return {\n      allowed: true,\n"
+      }
+    ],
+    "functions/_lib/organizations.js": [
+      {
+        "before": "import {\n  can,\n  isKnownPermission,\n",
+        "after": "import { resolveOrganizationPolicy } from \"./organization-limit-service.js\";\nimport {\n  can,\n  isKnownPermission,\n"
+      },
+      {
+        "before": "        : null,\n      reason: row.reason || null,\n      status: row.status || \"pending\",\n      requestedBy: row.requested_by || null,\n      createdAt: row.created_at || null,\n      updatedAt: row.updated_at || null,\n    }));\n",
+        "after": "        : null,\n      reason: row.reason || null,\n      status: row.status || \"pending\",\n      requestedBy: row.created_by || row.requested_by || null,\n      createdAt: row.created_at || null,\n      updatedAt: row.updated_at || null,\n    }));\n"
+      },
+      {
+        "before": "  const id = parsePositiveInteger(organizationId, \"organizationId\");\n  const organization = await getOrganizationById(env, id);\n\n  const plan = organization.plan || organization.plan_slug || \"free\";\n  const planLimits = ORGANIZATION_PLANS[plan] || ORGANIZATION_PLANS.free;\n\n  const usedUsers = await countOrganizationRows(env, \"organization_users\", id);\n  const usedProjects = await countOrganizationRows(env, \"projects\", id);\n",
+        "after": "  const id = parsePositiveInteger(organizationId, \"organizationId\");\n  const organization = await getOrganizationById(env, id);\n\n  const policy = resolveOrganizationPolicy(organization, env);\n  const plan = policy.plan;\n  const planLimits = { ...(ORGANIZATION_PLANS[plan] || ORGANIZATION_PLANS.free), projects: policy.projects, storageMb: policy.storageMb };\n\n  const usedUsers = await countOrganizationRows(env, \"organization_users\", id);\n  const usedProjects = await countOrganizationRows(env, \"projects\", id);\n"
+      },
+      {
+        "before": "\n  const row = await insertRow(env, \"organization_limit_requests\", {\n    organization_id: id,\n    requested_by: actor?.id,\n    request_type: requestType,\n    requested_plan: requestedPlan || null,\n",
+        "after": "\n  const row = await insertRow(env, \"organization_limit_requests\", {\n    organization_id: id,\n    created_by: actor?.id,\n    requested_by: actor?.id,\n    request_type: requestType,\n    requested_plan: requestedPlan || null,\n"
+      }
+    ]
+  }
+}

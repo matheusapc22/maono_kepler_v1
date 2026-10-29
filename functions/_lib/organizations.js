@@ -1,4 +1,7 @@
 import { ownerRetention, guardedAudit, lastOwnerError } from "./owner-retention.js";
+import { normalizeMaonoError } from "./maono-error.js";
+import { errorResponse } from "./http.js";
+import { resolveOrganizationPolicy } from "./organization-limit-service.js";
 import {
   can,
   isKnownPermission,
@@ -131,6 +134,10 @@ export function methodNotAllowed(method, allowedMethods = []) {
 }
 
 export function handleApiError(error) {
+  const managementError = normalizeMaonoError(error);
+  if (managementError.code === "MANAGEMENT_OWNER_REASSIGN_REQUIRED") {
+    return errorResponse(managementError.message, 409, managementError.code, null, { retryable: false });
+  }
   const status = Number(error?.status || error?.statusCode || 500);
   const safeStatus = status >= 400 && status < 600 ? status : 500;
 
@@ -1725,7 +1732,7 @@ async function listPendingLimitRequests(env, organizationId) {
         : null,
       reason: row.reason || null,
       status: row.status || "pending",
-      requestedBy: row.requested_by || null,
+      requestedBy: row.created_by || row.requested_by || null,
       createdAt: row.created_at || null,
       updatedAt: row.updated_at || null,
     }));
@@ -1735,8 +1742,9 @@ export async function getOrganizationLimits(env, organizationId) {
   const id = parsePositiveInteger(organizationId, "organizationId");
   const organization = await getOrganizationById(env, id);
 
-  const plan = organization.plan || organization.plan_slug || "free";
-  const planLimits = ORGANIZATION_PLANS[plan] || ORGANIZATION_PLANS.free;
+  const policy = resolveOrganizationPolicy(organization, env);
+  const plan = policy.plan;
+  const planLimits = { ...(ORGANIZATION_PLANS[plan] || ORGANIZATION_PLANS.free), projects: policy.projects, storageMb: policy.storageMb };
 
   const usedUsers = await countOrganizationRows(env, "organization_users", id);
   const usedProjects = await countOrganizationRows(env, "projects", id);
@@ -1804,6 +1812,7 @@ export async function createLimitIncreaseRequest(env, organizationId, payload, a
 
   const row = await insertRow(env, "organization_limit_requests", {
     organization_id: id,
+    created_by: actor?.id,
     requested_by: actor?.id,
     request_type: requestType,
     requested_plan: requestedPlan || null,

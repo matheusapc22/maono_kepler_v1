@@ -1,0 +1,80 @@
+{
+  "observed_at_utc": "2026-10-27T21:38:54.576201+00:00",
+  "prior_head": "09f8f3bc8c0aeb67b153d0910e25bcf901902678",
+  "ci_failure": {
+    "head": "faa182f910490580b0509795525fadaf79d44cc3",
+    "run": 40586874937,
+    "job": 122480561303,
+    "passed": 3346,
+    "failed": 4,
+    "skipped": 1,
+    "scope": "Expanded Node regression; Build, Access, Foundation and Macro C passed earlier in the same job"
+  },
+  "local_before": {
+    "file": "lint-expanded-contracts-before.log",
+    "bytes": 32269,
+    "sha256": "ce36ab932604de4f778231020e266c4a1b8b4c497aa9c4e14fc52860a34e3b7a",
+    "tests": 37,
+    "pass": 31,
+    "fail": 6,
+    "skipped": 0
+  },
+  "note_before": "Windows reproduced four CI assertions plus two existing CRLF-sensitive password inverses; exact maintenance inverse normalizes line endings before checking the original deltas.",
+  "local_after": {
+    "file": "lint-expanded-contracts-after.log",
+    "bytes": 7019,
+    "sha256": "b6c8d3dcf99a218d7f256ef77d82603515f0c947441bdcc3d8ac39408267157c",
+    "tests": 39,
+    "pass": 39,
+    "fail": 0,
+    "skipped": 0
+  },
+  "clean_snapshot": {
+    "file": "lint-expanded-contracts-clean.log",
+    "bytes": 7021,
+    "sha256": "53c9ae9ec43bc0e45c921720f161b5465a5fa85a7d9c00c8ebfb5b72cff34d3b",
+    "tests": 39,
+    "pass": 39,
+    "fail": 0,
+    "skipped": 0
+  },
+  "counts_overlap": true,
+  "production_sources_unchanged": true,
+  "unchanged_controls": [
+    "src",
+    "functions",
+    "tests/fixtures",
+    "package.json",
+    "yarn.lock",
+    "eslint.config.js",
+    "scripts/user-error-sink-baseline.json"
+  ],
+  "limitations": [
+    "Tests execute actual formatter/wrapper declarations with controlled SDK/theme boundary and real React element creation; no DOM or remote provider acceptance.",
+    "New CI still pending; CC07 09f8f3bc was queued at local validation.",
+    "Carto remains denied/pending authorization. No merge, auto-merge, remote migrations, flags, Production or CI cancellation.",
+    "No new PR body update; previous approved body is explicitly a b7485405 snapshot."
+  ],
+  "manifest": [
+    {
+      "path": ".github/workflows/product-lint-maintenance.yml",
+      "sha256": "dd6228ec84e83ceb356f1bf8f17cbe84c60eb356358fcbd6a0833269f1f0aac4"
+    },
+    {
+      "path": "docs/ops/product-lint-maintenance.md",
+      "sha256": "975d8415b4f90ccf9f8bd1aab14b9297e24d45c78049495030b44f9f2f623cdd"
+    },
+    {
+      "path": "tests/maono-map-legend.test.mjs",
+      "sha256": "46625229c57133905c3d16ef4e6594f445eb314b74a361201fc2585224f73f82"
+    },
+    {
+      "path": "tests/password-management.test.mjs",
+      "sha256": "3047b33681e791132d9c59d19387bbca32d1ea20f9f69cab4fe6370fb76d3c8c"
+    },
+    {
+      "path": "docs/ops/product-lint-expanded-contracts.json",
+      "self": true
+    }
+  ]
+}

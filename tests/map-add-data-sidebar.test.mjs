@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import vm from 'node:vm';
+import ts from 'typescript';
 import postcss from 'postcss';
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const base = 'src/pages/Kepler/';
@@ -33,7 +37,18 @@ test('native ModalContainer handlers are retained and only the Add Data dialog s
 });
 test('Arquivos reuses its native factory, Tileset shares localized native forms, URL keeps existing thunk', () => {
   assert.match(sources, /LoadDataModalFactory\(\.\.\.deps\)/);
-  assert.match(sources, /method\.id === "upload"\)\.elementType/);
+  assert.match(sources, /const FileUpload = deps\[1\]/);
+  // Execute the installed native factory's declaration: its second injected
+  // dependency must remain the exact component registered for native upload.
+  const require = createRequire(import.meta.url);
+  const path = join(dirname(require.resolve('@kepler.gl/components')), 'modals/load-data-modal.js');
+  const native = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
+  const declaration = native.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'LoadDataModalFactory');
+  assert.ok(declaration, 'installed native modal factory exists');
+  const factory = vm.runInNewContext(`(${declaration.getText()})`, {_constants: {LOADING_METHODS: {upload: 'upload', tileset: 'tileset', storage: 'storage'}}});
+  const upload = () => null;
+  const modal = factory(() => null, upload, () => null, () => null);
+  assert.equal(modal.defaultLoadingMethods.find(method => method.id === 'upload').elementType, upload);
   assert.match(sources, /id: "tileset", label: "modal.loadData.tileset", elementType: LocalizedLoadTilesetTab/);
   assert.match(sources, /React\.createElement\(FileUpload, \{ \.\.\.props, fileLoadingProgress: localizeImportProgress/);
   assert.match(sources, /React\.createElement\(LocalizedLoadTilesetTab, sourceProps\)/);
@@ -43,7 +58,7 @@ test('Arquivos reuses its native factory, Tileset shares localized native forms,
 });
 test('manual selection is keyboard-accessible and dispatches through the existing input', () => {
   assert.match(sources, /React\.createElement\("button",/);
-  assert.match(sources, /querySelector\('input\[type="file"\]'\)/);
+  assert.match(sources, /querySelector(?:<HTMLInputElement>)?\('input\[type="file"\]'\)/);
   assert.match(sources, /input\.value = ""; input\.click\(\)/);
   assert.match(sources, /Selecionar arquivo/);
 });

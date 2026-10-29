@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { OrganizationUser } from "../../src/lib/api";
-import type { AccessGovernanceCapabilities } from "../../src/components/access/OrganizationPermissionManager";
+import type { AccessGovernanceCapabilities } from "../../src/components/access/OrganizationPermissionManager.ts";
 import type { ProjectMapAccessPolicy } from "../../src/components/access/project-map-access-api";
 
 // The real compiled React route, with a complete server-authorized synthetic team.

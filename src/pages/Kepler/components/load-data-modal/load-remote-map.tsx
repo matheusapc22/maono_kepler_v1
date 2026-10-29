@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
-import { Component } from "react";
+import { Component, type ChangeEvent } from "react";
 import PropTypes from "prop-types";
 import styled from "styled-components";
 
@@ -30,7 +29,7 @@ const InputForm = styled.div`
   background-color: ${(props) => props.theme.panelBackgroundLT};
 `;
 
-const StyledInput = styled.input`
+const StyledInput = styled.input<{error?: unknown}>`
   width: 100%;
   padding: ${(props) => props.theme.inputPadding};
   color: ${(props) => (props.error ? "red" : props.theme.titleColorLT)};
@@ -70,11 +69,11 @@ export const StyledErrorDescription = styled.div`
   font-size: 14px;
 `;
 
-const Error = ({ error, url }) => (
+const Error = ({ error, url }: { error: unknown; url?: string }) => (
   <StyledError>
     <StyledErrorDescription>{url}</StyledErrorDescription>
     <StyledErrorDescription>
-      {error?.code === "INVALID_URL"
+      {error && typeof error === "object" && "code" in error && error.code === "INVALID_URL"
         ? "Informe uma URL válida."
         : normalizeUserError(error).message}
     </StyledErrorDescription>
@@ -83,14 +82,17 @@ const Error = ({ error, url }) => (
 
 const CORS_LINK_MESSAGE = { corsLink: CORS_LINK };
 
-class LoadRemoteMap extends Component {
-  state = {
+export type LoadRemoteMapProps = { onLoadRemoteMap: (options: { dataUrl: string }) => void; error?: unknown; isMapLoading?: boolean; option?: {dataUrl?: string}; };
+
+class LoadRemoteMap extends Component<LoadRemoteMapProps, {dataUrl: string; error: {code: string} | null; submitted: boolean}> {
+  static propTypes = propTypes;
+  state: {dataUrl: string; error: {code: string} | null; submitted: boolean} = {
     dataUrl: "",
     error: null,
     submitted: false,
   };
 
-  onMapUrlChange = (e) => {
+  onMapUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
     this.setState({
       dataUrl: e.target.value,
       error: !validateUrl(e.target.value) ? { code: "INVALID_URL" } : null,

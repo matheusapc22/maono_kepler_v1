@@ -1,14 +1,14 @@
+import type { ComponentProps } from "react";
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
 import { SidePanelFactory } from "@kepler.gl/components";
-import { useMapPanel } from "../map-panel/MapPanelContext";
+import { useMapPanel } from "../map-panel/MapPanelContext.ts";
 
-export function CustomSidePanelFactory(...deps: any[]) {
+export function CustomSidePanelFactory(...deps: Parameters<typeof SidePanelFactory>) {
   const DefaultSidePanel = SidePanelFactory(...deps);
 
-  const Wrapped = (props: any) => {
+  const Wrapped = (props: ComponentProps<ReturnType<typeof SidePanelFactory>>) => {
     const {
       context,
       customLayerPanelEnabled,
@@ -30,7 +30,3 @@ export function CustomSidePanelFactory(...deps: any[]) {
 }
 
 CustomSidePanelFactory.deps = SidePanelFactory.deps;
-
-export function replaceSidePanel() {
-  return [SidePanelFactory, CustomSidePanelFactory];
-}

@@ -11,7 +11,7 @@ import {
   selectKeplerVisState,
 } from "../../engine-adapter/selectors";
 import { useKeplerEngineAdapter } from "../../engine-adapter";
-import { useMapPanel } from "../../map-panel/MapPanelContext";
+import { useMapPanel } from "../../map-panel/MapPanelContext.ts";
 import GeometryFilterMenu from "./GeometryFilterMenu";
 import {
   hitTestProjectedGeometry,

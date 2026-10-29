@@ -1,4 +1,5 @@
 import { restoreApprovedPreviewPipeline } from "./helpers/project-thumbnail-preservation.mjs";
+import { restoreLintModuleExtraction } from './helpers/lint-module-extraction-preservation.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -22,11 +23,12 @@ function compileCallback(source, start, end, context) {
   const { code } = transformSync(`const callback = ${expression};`, { loader: 'ts', target: 'es2022' });
   return new Function(...Object.keys(context), `${code}\nreturn callback;`)(...Object.values(context));
 }
-function adminHarness() {
+function adminHarness(organizationsWorkspace = false) {
   const state = { projects: [], users: [], organizations: [], access: [], error: '', usersAccessEpoch: 0, regions: Object.fromEntries(['projects', 'users', 'organizations', 'access'].map(key => [key, { pending: true, loaded: false, error: '' }])) };
   const requests = [], requestRef = { current: 0 }, controllerRef = { current: null };
   const set = key => next => { state[key] = typeof next === 'function' ? next(state[key]) : next; };
-  const refresh = compileCallback(admin, 'const refreshAdminData = useCallback(', ', []);', {
+  const refresh = compileCallback(admin, 'const refreshAdminData = useCallback(', ', [organizationsWorkspace]);', {
+    organizationsWorkspace,
     requestRef, controllerRef, AbortController, isRegionAccessDenied, isRegionAuthenticationError, setUsersAccessEpoch: set('usersAccessEpoch'),
     setError: set('error'), setSuccess: set('success'), setRegions: set('regions'), setProjects: set('projects'), setUsers: set('users'), setOrganizations: set('organizations'), setAccess: set('access'),
     readJson: response => response,
@@ -41,6 +43,14 @@ function settleBatch(h, start, suffix = '') {
   h.resolve(start + 2, { users: [{ id: 2, name: `Usuário${suffix}` }] });
   h.resolve(start + 3, { organizations: [{ id: 3, name: `Organização${suffix}` }] });
 }
+
+test('organizations workspace cancels legacy reads without loading unrelated admin regions',async()=>{
+  const h=adminHarness(true);
+  await h.refresh();
+  assert.equal(h.requests.length,0);
+  assert.equal(h.requestRef.current,1);
+  assert.ok(Object.values(h.state.regions).every(region=>!region.pending&&!region.loaded));
+});
 
 test('Admin starts all four original authorized GETs immediately and reveals each result independently', async () => {
   const h = adminHarness(), finished = h.refresh();
@@ -196,14 +206,14 @@ test('thumbnail loading is scoped to preview, with decode/error guards and ready
 
 test('strict inverses preserve all prior Admin user controls, project selectors and shell business code', () => {
   for (const [path, hash] of Object.entries(progressiveBaselines)) {
-    const source = read(path), restored = restoreAdminProjectsProgressiveLoading(path, restoreApprovedPreviewPipeline(path, source));
+    const source = read(path), restored = restoreAdminProjectsProgressiveLoading(path, restoreApprovedPreviewPipeline(path, restoreLintModuleExtraction(path, source)));
     assert.equal(createHash('sha256').update(restored).digest('hex'), hash, path);
   }
   const path = 'src/pages/Admin/components/AdminUserManagerLegacy.tsx', source = read(path);
   const mutated = source.replace('onClick={() => setCreating(true)}', 'onClick={() => setCreating(false)}');
   assert.notEqual(mutated, source);
   let rejected = false;
-  try { rejected = createHash('sha256').update(restoreAdminProjectsProgressiveLoading(path, mutated)).digest('hex') !== progressiveBaselines[path]; }
+  try { rejected = createHash('sha256').update(restoreAdminProjectsProgressiveLoading(path, restoreLintModuleExtraction(path, mutated))).digest('hex') !== progressiveBaselines[path]; }
   catch (error) { assert.ok(error instanceof assert.AssertionError); rejected = true; }
   assert.equal(rejected, true, 'unrelated creation behavior must not be accepted as a loading delta');
 });
@@ -211,7 +221,8 @@ test('strict inverses preserve all prior Admin user controls, project selectors 
 test('Admin workspace extraction preserves the complete pinned predecessor and rejects changed business logic', () => {
   const path = 'src/pages/Admin.tsx';
   const hash = source => createHash('sha256').update(source).digest('hex');
-  assert.equal(hash(restoreApprovedAdminWorkspace(path, admin)), adminWorkspaceBaseline);
+  const restore = source => restoreApprovedAdminWorkspace(path, restoreLintModuleExtraction(path, source));
+  assert.equal(hash(restore(admin)), adminWorkspaceBaseline);
   // These mutations are deliberately outside presentation-only differences.
   // An exact inverse either rejects the edit or leaves a differing pinned hash.
   for (const [before, after] of [
@@ -227,12 +238,12 @@ test('Admin workspace extraction preserves the complete pinned predecessor and r
     const changed = admin.replace(before, after);
     assert.notEqual(changed, admin, before);
     let rejected = false;
-    try { rejected = hash(restoreApprovedAdminWorkspace(path, changed)) !== adminWorkspaceBaseline; }
+    try { rejected = hash(restore(changed)) !== adminWorkspaceBaseline; }
     catch (error) { assert.ok(error instanceof assert.AssertionError); rejected = true; }
     assert.equal(rejected, true, `protected Admin logic: ${before}`);
   }
   // The shared preservation entry point also retains the full Admin baseline.
-  assert.equal(hash(restoreAdminProjectsProgressiveLoading(path, admin)), adminWorkspaceBaseline);
+  assert.equal(hash(restoreAdminProjectsProgressiveLoading(path, restoreLintModuleExtraction(path, admin))), adminWorkspaceBaseline);
 });
 
 const presentationCode = transformSync(read('src/components/loading/initial-loading-presentation.ts'), { loader: 'ts', format: 'esm' }).code;

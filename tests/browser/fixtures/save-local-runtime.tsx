@@ -22,7 +22,7 @@ function hangingOperation(signal: AbortSignal) {
   });
 }
 
-function Fixture() {
+export function Fixture() {
   const [state, setState] = useState<SaveState>("idle");
   const [unrelatedCount, setUnrelatedCount] = useState(0);
   const controllerRef = useRef<AbortController | null>(null);

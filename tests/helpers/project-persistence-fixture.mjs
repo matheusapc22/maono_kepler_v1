@@ -30,7 +30,7 @@ export function waitForPause(entered, running) {
 // Only the external HTTP provider is simulated. No runtime fetch is reachable.
 export function persistenceFixture(t, hooks = {}) {
   const db = new DatabaseSync(":memory:");
-  db.exec(readFileSync(new URL("../../schema.sql", import.meta.url), "utf8"));
+  db.exec(hooks.schemaSql ?? readFileSync(new URL("../../schema.sql", import.meta.url), "utf8"));
   if (!db.prepare("SELECT name FROM sqlite_master WHERE name='project_save_operation_schema'").get()) {
     db.exec(readFileSync(new URL("../../migrations/0039_project_save_operations.sql", import.meta.url), "utf8"));
   }
@@ -92,7 +92,7 @@ export function persistenceFixture(t, hooks = {}) {
             db
           });
           const stmt = db.prepare(sql);
-          const value = kind === "first" ? stmt.get(...args) ?? null : kind === "all" ? {
+          const value = kind === "first" ? stmt.get(...args) ?? null : (kind === "all" || (kind === "batch" && stmt.columns().length > 0)) ? {
             results: stmt.all(...args)
           } : (() => {
             const r = stmt.run(...args);

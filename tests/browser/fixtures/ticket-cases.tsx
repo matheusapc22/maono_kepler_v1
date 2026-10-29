@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import TicketCasesPanel from "../../../src/pages/Projects/components/TicketCasesPanel";
-function Fixture() {
+export function Fixture() {
   const [org, setOrg] = useState(1);
   return (
     <main>

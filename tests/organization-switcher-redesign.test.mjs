@@ -5,6 +5,7 @@ import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservat
 import { restoreTicketRefreshFocusStyles } from './helpers/ticket-refresh-focus-preservation.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { restoreLintModuleExtraction } from './helpers/lint-module-extraction-preservation.mjs';
 import { readFileSync } from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import { createHash } from 'node:crypto';
@@ -14,7 +15,7 @@ import postcss from 'postcss';
 
 const root = new URL('../', import.meta.url);
 const read = path => readFileSync(new URL(path, root), 'utf8').replace(/\r\n/g,'\n');
-const switcher = read('src/pages/Projects/components/OrganizationWorkspaceSwitcher.tsx');
+const switcher = restoreLintModuleExtraction('src/pages/Projects/components/OrganizationWorkspaceSwitcher.tsx', read('src/pages/Projects/components/OrganizationWorkspaceSwitcher.tsx'));
 const css = postcss.parse(read('src/pages/Projects/projects.css'));
 const bundle = await build({ entryPoints: [fileURLToPath(new URL('src/pages/Projects/components/organization-switcher-position.ts', root))], bundle: true, platform: 'node', format: 'esm', write: false });
 const { organizationMenuPosition } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
@@ -87,7 +88,7 @@ const preserved = {
 };
 for (const [path, hash] of Object.entries(preserved)) {
   test(`card/switcher revision preserves ${path}`, () => {
-    let source = restoreTicketVisualExtraction(path, restoreMaonoSelect(restoreAdminProjectsProgressiveLoading(path, restoreApprovedPreviewPipeline(path, read(path)))));
+    let source = restoreTicketVisualExtraction(path, restoreMaonoSelect(restoreAdminProjectsProgressiveLoading(path, restoreApprovedPreviewPipeline(path, restoreLintModuleExtraction(path, read(path))))));
     // The later Roadmap workspace redesign adds only the existing home callback.
     // Reverse exactly that prop in this scope guard; all controller bytes stay frozen.
     if (path === 'src/pages/Projects.tsx') {

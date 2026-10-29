@@ -686,7 +686,7 @@ export class ViewerWorkingCopyStore {
     });
     const changes = record(payload.changes) || {};
 
-    let operations = [...current.operations];
+    const operations = [...current.operations];
     if (!Object.keys(changes).length) {
       if (existingIndex < 0) return clone(current);
       operations.splice(existingIndex, 1);

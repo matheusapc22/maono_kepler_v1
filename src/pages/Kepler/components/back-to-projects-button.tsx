@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router";
-import { useOptionalMapPanel } from "../map-panel/MapPanelContext";
+import { useOptionalMapPanel } from "../map-panel/MapPanelContext.ts";
 
 const BackToProjectsButton: React.FC = () => {
   const mapPanel = useOptionalMapPanel();

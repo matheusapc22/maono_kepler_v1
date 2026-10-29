@@ -3,7 +3,7 @@ import {
   type MaonoOrganization,
   type MaonoProject,
   type MaonoUser,
-} from "../auth/session";
+} from "../auth/session.ts";
 
 export type UseSessionState = {
   loading: boolean;

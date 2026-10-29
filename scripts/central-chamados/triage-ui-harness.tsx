@@ -17,7 +17,7 @@ const initial: Ticket = {
   priority: 'normal', category: 'map', dueAt: '2026-10-05T18:34:56.000Z', attachmentsCount: 0, demandNature: null,
   needsTriage: true, triageSource: 'legacy', expectedResult: null,
 };
-function Harness() {
+export function Harness() {
   const [open, setOpen] = useState(true);
   const [ticket, setTicket] = useState(initial);
   const [lastPayload, setLastPayload] = useState<object | null>(null);

@@ -1,0 +1,308 @@
+{
+  "observed_at_utc": "2026-10-28T00:24:28.671481+00:00",
+  "base_published_head": "9852f5e6edee4647ef1bb35c62b828a04742e700",
+  "state": "Local validated candidate; subsequent commit identifies this content. New-SHA CI and combined integration rehearsal are separate.",
+  "exact_patch": {
+    "target": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+    "diff_sha256_crlf": "4c8679bd7cbc3d643781749289b754fa27b85a30e77369b636c0f646f08987ee",
+    "source_sha256_crlf": "2e26ee67f1f533391fa69d7eaad2621e25e57f4eebccd3021bf9e1ad336f1c6b",
+    "source_sha256_lf": "538247cfd2687cd3b7de0d31a770dc657823da80eebea8743e16237b3dce8fec",
+    "approval_review": "accepted after exact new authorization; single execution exited 0; no additional product-source edit"
+  },
+  "environment": {
+    "os": "Windows",
+    "node": "24.15.0",
+    "main_kepler": "3.2.6",
+    "locked_kepler": "3.2.0",
+    "toolkit": "0.0.1-rc.18",
+    "ci_difference": "Linux/Node22; local results do not substitute for new-SHA CI"
+  },
+  "contracts": {
+    "carto": {
+      "pass": 22,
+      "fail": 0,
+      "skip": 0,
+      "both_dependency_layouts": true
+    },
+    "related": {
+      "pass": 76,
+      "fail": 0,
+      "skip": 0,
+      "includes_carto": true
+    },
+    "windows_expanded": {
+      "pass": 286,
+      "fail": 0,
+      "skip": 0,
+      "scope": "Before Carto application, unchanged Windows test fixes; base/candidate comparison in separate evidence"
+    },
+    "counts_overlap": true
+  },
+  "lint": {
+    "command": "npm run lint -- --format json --output-file ../carto-global-lint-final.json",
+    "exit": 0,
+    "errors": 0,
+    "warnings": 28,
+    "rules_unchanged": true
+  },
+  "typescript": {
+    "exit": 0,
+    "compiler_options_unchanged": true,
+    "locked_dependencies": true
+  },
+  "build": {
+    "exit": 0,
+    "timing": [
+      "7m 46s"
+    ],
+    "log": {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-final-build.log",
+      "bytes": 32004,
+      "sha256": "dd0dbd1730359cbb2be4762209c61c5ab482c624cc96a4c4dc646559e8182874"
+    },
+    "local_flags": [
+      "VITE_MAONO_MAP_SHELL_V1",
+      "VITE_MAONO_LAYER_MANAGER_V1",
+      "VITE_MAONO_MAP_OVERLAY_V1"
+    ],
+    "limits": "Existing third-party externalized Node-module and chunk warnings remain; no remote flags changed"
+  },
+  "error_audit": {
+    "total": 3222,
+    "drift": [],
+    "exact_key": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts::raw-error-message",
+    "before": 6,
+    "after": 2,
+    "reason": "Validated message variable reused in switch and three regex matches; syntactic reference count reduction, not four removed user-facing error paths",
+    "other_limits_and_scanner_unchanged": true,
+    "comparison": {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-error-audit-comparison.json",
+      "bytes": 1969,
+      "sha256": "a964d53dc5801acdaec820a077f7b5b7466abd07bca1181a39febb5595867e7f"
+    }
+  },
+  "browser": {
+    "firefox": {
+      "stats": {
+        "startTime": "2026-10-27T23:10:21.988Z",
+        "duration": 254623.986,
+        "expected": 30,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "json": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-progressive-firefox-resume.json",
+        "bytes": 41568,
+        "sha256": "9d11bad18be0a8d54394c91572646adf4dde15ccbc9d7fc78597fdf477f6ced4"
+      },
+      "log": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-progressive-firefox-resume.log",
+        "bytes": 5723,
+        "sha256": "0edcb05da44604d6a7d511b9b1506345d669cec38940b5005729f06c40a4bfd5"
+      },
+      "source": "before exact Carto patch"
+    },
+    "webkit": {
+      "stats": {
+        "startTime": "2026-10-28T00:00:33.005Z",
+        "duration": 694201.399,
+        "expected": 63,
+        "skipped": 0,
+        "unexpected": 2,
+        "flaky": 0
+      },
+      "json": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-webkit-after-disconnect.json",
+        "bytes": 91612,
+        "sha256": "d64d0cdf0ad8ca9267abfdf153d7677fc444c1f3ffcd454fcd8a7a1ab8a2869f"
+      },
+      "log": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-webkit-after-disconnect.log",
+        "bytes": 18707,
+        "sha256": "1663fb70afde832c684dd34abdf6480c961a64c62a47e3d9cb8b9a31cbc4d9e7"
+      },
+      "source": "exact approved Carto patch and unchanged earlier maintenance sources",
+      "initial_failure_resolution": "Two focus assertions diagnosed with event traces; keyboard input corrected and pointer coverage added. All30 focus cases pass on Chromium/Firefox/WebKit; see product-lint-focus-validation.json. Initial failure evidence retained."
+    },
+    "notices": {
+      "stats": {
+        "startTime": "2026-10-28T00:12:48.531Z",
+        "duration": 24838.418,
+        "expected": 15,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "json": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-notices-browser.json",
+        "bytes": 18320,
+        "sha256": "ea6faeb7467d2217526957947678b0d975c290ec4d3130184283d1d4268afbfe"
+      },
+      "log": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-notices-browser.log",
+        "bytes": 2770,
+        "sha256": "a2c4634fc7dc1ae10c6ebb2c162524b7e151cf8506401e77198196a98b79d440"
+      },
+      "source": "exact approved Carto patch and unchanged earlier maintenance sources"
+    }
+  },
+  "native_carto_browser": {
+    "checks": [
+      "real toolkit constructor",
+      "no-client login rejection",
+      "missing user",
+      "native CSV and data container",
+      "native FileReader",
+      "private URL encoding",
+      "no network requests"
+    ],
+    "external_requests": 0,
+    "result": {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-native-browser-vite-artifacts-v3\\result.json",
+      "bytes": 1049,
+      "sha256": "3517836d800ff5ee3792d8e059a9197ce96f72a13a7bd403570ab4b94b9ea38e"
+    },
+    "driver": {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\run-carto-native-vite-browser-v3.cjs",
+      "bytes": 4833,
+      "sha256": "9651ad1923f76f193738e2cd3a9b3c580624b8ab514ded1d9c5620105de2824c"
+    },
+    "boundaries": "Actual browser SDK constructor, data container, CSV formatter and FileReader; no client ID, real login, account or remote storage",
+    "harness_preparation_failures": [
+      "Standalone esbuild lacked Vite browser resolution for assert/events; browser not started",
+      "Initial Vite driver used parent cwd; PDF asset plugin could not locate dependencies; browser not started",
+      "Cold Vite navigation waited for full load and exceeded 30s; no behavioral assertion ran. Final driver separates navigation commit from the existing 120s module-ready wait, with unchanged assertions and timeout values."
+    ],
+    "preparation_logs": [
+      {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-native-browser.log",
+        "bytes": 3991,
+        "sha256": "6e7eb8b100e2342e2eecb1a6d6b4e9ea5beb99b35e1191f3b9c29988f7c6e38e"
+      },
+      {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-native-vite-browser.log",
+        "bytes": 1746,
+        "sha256": "6c62327242dcb8319855569a4107760965580ffc0ee58a1d72260b329650f028"
+      },
+      {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-native-vite-browser-v2.log",
+        "bytes": 269,
+        "sha256": "75beaa9e66ccc629ec23bfe59601693626add37240e74cab1898cdc1596c9d85"
+      }
+    ]
+  },
+  "progressive_matrix": {
+    "original_case_observations": 573,
+    "original_observed_pass": 571,
+    "original_failed": 2,
+    "pre_carto": {
+      "chromium_pass": 191,
+      "firefox_pass": 191
+    },
+    "post_carto": {
+      "webkit_executed": 191,
+      "webkit_initial_pass": 189,
+      "webkit_initial_fail": 2
+    },
+    "original_interrupted_run": {
+      "observed_pass": 352,
+      "terminal_json": false,
+      "terminal_exit": null
+    },
+    "webkit_transport_interruption": {
+      "observed_pass": 126,
+      "terminal_json": false,
+      "terminal_exit": null,
+      "resume": 65,
+      "runner_absence": "Checked native process commands and port4191 before resuming; session4865 no longer registered",
+      "coverage": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\webkit-after-disconnect-coverage.json",
+        "bytes": 35764,
+        "sha256": "926cbd1104ba99e7fd338a7de0e9cdea9a14429642806872abc3ff8ec2d12b60"
+      },
+      "log": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-progressive-webkit-resume.log",
+        "bytes": 19869,
+        "sha256": "136208466084eb4e842eed8efe8525e4f23cd2d4195743cceeb8c2778dfb2596"
+      }
+    },
+    "continuations": {
+      "firefox": 30,
+      "webkit_observed_before_transport_loss": 126,
+      "webkit_terminal_after_recovery": {
+        "pass": 63,
+        "fail": 2
+      }
+    },
+    "focus_followup": {
+      "pass": 30,
+      "fail": 0,
+      "skip": 0,
+      "per_engine": 10,
+      "expanded_full_suite_cases": 579
+    },
+    "limitation": "Original573-case observations include two diagnosed focus-test failures, resolved by the30-case follow-up. Not one uninterrupted terminal gate. The expanded579-case full matrix was not rerun locally. Not all engines rerun after Carto. New-SHA CI remains authoritative for its own full matrix."
+  },
+  "manifest": [
+    ".github/workflows/product-lint-maintenance.yml",
+    "docs/ops/product-lint-carto-proposal.md",
+    "docs/ops/product-lint-carto-validation.json",
+    "docs/ops/product-lint-focus-validation.json",
+    "docs/ops/product-lint-maintenance.md",
+    "docs/ops/product-lint-windows-portability.json",
+    "scripts/user-error-sink-baseline.json",
+    "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+    "tests/browser/ticket-optional-progressive-loading.spec.ts",
+    "tests/carto-provider-contract.test.mjs",
+    "tests/helpers/projects-fallback-fixture.mjs",
+    "tests/project-header-preservation.test.mjs",
+    "tests/roadmap-loading.test.mjs",
+    "tests/ticket-document-progressive-loading.test.mjs",
+    "tests/ticket-optional-progressive-loading.test.mjs"
+  ],
+  "artifacts": [
+    {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-provider-contract.log",
+      "bytes": 2397,
+      "sha256": "3c58442004f00c179fd82f2b0952fe8237c9c153fc42b78e92ae91819ff9e601"
+    },
+    {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-clean-contract.log",
+      "bytes": 2392,
+      "sha256": "b471285f25c13dad26e9465e04514ed98b1754005d4e549f66117e52acea26bd"
+    },
+    {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-related-contracts.log",
+      "bytes": 7373,
+      "sha256": "5e51738e3a38682f3ccd2a59adf500fd968f008b157620d522341eeaaee714e3"
+    },
+    {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-global-lint-final.json",
+      "bytes": 833750,
+      "sha256": "394d63ae8f25d37a6abfe25512a0614ad1a975e725291ab2b15dbcd558e6a2ea"
+    },
+    {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-error-audit-final.json",
+      "bytes": 26533,
+      "sha256": "abcd0f01b97b7e5ea2e8a61ad79005006771584771a13b39e6173ff8db0c2dae"
+    },
+    {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-typescript.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\carto-build-typescript.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "limits": [
+    "No real Carto OAuth/storage acceptance",
+    "No merge or auto-merge by this executor",
+    "No remote migrations, flags, new credentials, Production operations or CI cancellation",
+    "Combined PR rehearsal and pre-migration compatibility are coordinated separately",
+    "No additional public PR description edit in this round"
+  ]
+}

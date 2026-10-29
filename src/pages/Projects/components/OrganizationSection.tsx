@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { LoadingStatus, Skeleton, StaticLoadingText } from "../../../components/loading/Skeleton";
 
-import type { MaonoUser } from "../../../auth/session";
+import type { MaonoUser } from "../../../auth/session.ts";
 import {
   getOrganization,
   type OrganizationDetails,

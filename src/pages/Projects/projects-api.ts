@@ -2,7 +2,7 @@ import type {
   MaonoId,
   MaonoProject,
   ProjectActor,
-} from "../../auth/session";
+} from "../../auth/session.ts";
 import {
   ApiError,
   apiErrorDiagnostic,

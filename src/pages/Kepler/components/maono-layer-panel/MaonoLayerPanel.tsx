@@ -8,7 +8,7 @@ import type {
   MaonoDatasetSnapshot,
   MaonoLayerSnapshot,
 } from "../../integration/keplerBridge";
-import { useMapPanel } from "../../map-panel/MapPanelContext";
+import { useMapPanel } from "../../map-panel/MapPanelContext.ts";
 import {
   MAONO_MAP_PANEL_TAB_REQUEST_EVENT,
   mapPanelTabFromEvent,

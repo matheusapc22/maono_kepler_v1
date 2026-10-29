@@ -5,7 +5,7 @@ import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { submitUserMutation, userMutationErrorMessage } from "./user-mutation";
 
-import OrganizationPermissionManager from "../../../components/access/OrganizationPermissionManager";
+import OrganizationPermissionManager from "../../../components/access/OrganizationPermissionManager.ts";
 import { parseJsonResponse } from "../../../lib/api-transport";
 import { normalizeUserError } from "../../../lib/user-error-catalog";
 

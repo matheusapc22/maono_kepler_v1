@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
-import { useSession, type MaonoUser } from "../auth/session";
+import { useSession, type MaonoUser } from "../auth/session.ts";
 import { StaticLoadingText, useInitialLoadingPresentation } from "../components/loading";
 import { AdminPageSkeleton, LoadingStatus, Skeleton } from "../components/loading/Skeleton";
 import { isRegionAccessDenied, isRegionAuthenticationError } from "../components/loading/region-loading-policy";
@@ -14,6 +14,7 @@ import AdminSidebar from "./Admin/components/AdminSidebar";
 import AdminOverview from "./Admin/components/AdminOverview";
 import AdminIcon, { type AdminIconName } from "./Admin/components/AdminIcon";
 import "./Admin/admin-workspace.css";
+import AdminOrganizationsSection from "./Admin/organizations/AdminOrganizationsSection";
 
 type AdminSection = "overview" | "organizations" | "users" | "projects" | "requests" | "audit" | "system";
 
@@ -128,6 +129,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const section = (params.get("section") || "overview") as AdminSection;
+  const organizationsWorkspace = import.meta.env.VITE_ORGANIZATION_MANAGEMENT_V1 === "true" && section === "organizations";
   const [projects, setProjects] = useState<AdminProject[]>([]);
   const [organizations, setOrganizations] = useState<AdminOrganization[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -155,6 +157,12 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   const presentationPending = projectPresentation.contentPending || organizationPresentation.contentPending || userPresentation.contentPending;
 
   const refreshAdminData = useCallback(async () => {
+    if (organizationsWorkspace) {
+      controllerRef.current?.abort();
+      requestRef.current += 1;
+      setRegions(current => Object.fromEntries(Object.keys(current).map(key => [key, { pending: false, loaded: false, error: "" }])) as Record<AdminRegionKey, AdminRegionState>);
+      return true;
+    }
     const revision = ++requestRef.current;
     controllerRef.current?.abort();
     const controller = new AbortController();
@@ -216,7 +224,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
     ]);
     if (isCurrent()) controllerRef.current = null;
     return results.every(result => result.status === "fulfilled" && result.value === true);
-  }, []);
+  }, [organizationsWorkspace]);
 
   useEffect(() => {
     void refreshAdminData();
@@ -372,6 +380,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   }
 
   function renderActiveSection() {
+    if (organizationsWorkspace) return <AdminOrganizationsSection />;
     if (section === "organizations") return renderOrganizations();
     if (section === "users") return renderUsers();
     if (section === "projects") return renderProjects();
@@ -415,6 +424,8 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
             <h1><StaticLoadingText pending={structurePending}>{sectionTitle(section)}</StaticLoadingText></h1>
             <p><StaticLoadingText pending={structurePending}>{section === "overview" ? "Visão geral da plataforma" : "Administração da plataforma"}</StaticLoadingText></p>
           </div>
+          {organizationsWorkspace ? <div id="admin-organizations-actions" /> : null}
+          {section === "users" && params.get("org_return") === "organizations" ? <Link className="mm-btn" to={`/admin?${(() => { const next = new URLSearchParams(params); next.set("section", "organizations"); next.delete("org_return"); next.delete("organization"); return next.toString(); })()}`}>Voltar às organizações</Link> : null}
         </header>
 
         <div className="admin-content admin-workspace-content">

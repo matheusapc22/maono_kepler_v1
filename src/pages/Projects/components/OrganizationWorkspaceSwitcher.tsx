@@ -12,7 +12,7 @@ import { createPortal } from "react-dom";
 import type {
   MaonoId,
   MaonoOrganization,
-} from "../../../auth/session";
+} from "../../../auth/session.ts";
 import { UniversalLoader } from "../../../components/loading";
 import { organizationMenuPosition } from "./organization-switcher-position";
 

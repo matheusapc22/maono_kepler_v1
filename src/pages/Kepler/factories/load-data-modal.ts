@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
 import React, { useContext, useRef } from "react";
 import { LoadDataModalFactory, withState } from "@kepler.gl/components";
 import { useIntl } from "react-intl";
-import { ThemeProvider } from "styled-components";
-import LoadRemoteMap from "../components/load-data-modal/load-remote-map";
+import { type DefaultTheme, ThemeProvider } from "styled-components";
+import LoadRemoteMap, { type LoadRemoteMapProps } from "../components/load-data-modal/load-remote-map";
 import LocalizedLoadTilesetTab from "../components/load-data-modal/tilesets/load-tileset";
 import { loadRemoteMap } from "../actions";
 import { localizeImportProgress } from "../components/load-data-modal/data-import-messages";
@@ -15,7 +14,7 @@ import { AddDataDockContext } from "../components/maono-map-shell/AddDataDockCon
 
 // Only the imported sources use the dark variant. No global Kepler theme or
 // ingestion contract changes, including other dialogs and map/layer tools.
-const dataSourceTheme = (theme) => ({
+const dataSourceTheme = (theme: DefaultTheme = {}) => ({
   ...theme,
   fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
   modalTitleColor: "var(--maono-map-text)",
@@ -34,31 +33,38 @@ const dataSourceTheme = (theme) => ({
   borderColorLT: "var(--maono-map-border)",
 });
 
-function AccessibleFileSource({ FileUpload, ...props }) {
-  const source = useRef(null);
+type NativeModalProps = React.ComponentProps<ReturnType<typeof LoadDataModalFactory>>;
+type ModalProps = NativeModalProps & LoadRemoteMapProps &
+  Omit<React.ComponentProps<typeof LocalizedLoadTilesetTab>, "intl"> &
+  Pick<React.ComponentProps<Parameters<typeof LoadDataModalFactory>[1]>, "theme">;
+type NativeFileUpload = Parameters<typeof LoadDataModalFactory>[1];
+
+function AccessibleFileSource({ FileUpload, ...props }: ModalProps & { FileUpload: NativeFileUpload }) {
+  const source = useRef<HTMLDivElement>(null);
   return React.createElement("div", { ref: source },
     React.createElement(FileUpload, { ...props, fileLoadingProgress: localizeImportProgress(props.fileLoadingProgress) }),
     React.createElement("button", {
       type: "button",
       className: "maono-map-data-sidebar__file-picker",
       onClick: () => {
-        const input = source.current?.querySelector('input[type="file"]');
+        const input = source.current?.querySelector<HTMLInputElement>('input[type="file"]');
         if (input) { input.value = ""; input.click(); }
       },
     }, "Selecionar arquivo"),
   );
 }
 
-const CustomLoadDataModalFactory = (...deps) => {
+const CustomLoadDataModalFactory = (...deps: Parameters<typeof LoadDataModalFactory>) => {
   const LoadDataModal = LoadDataModalFactory(...deps);
-  const FileUpload = LoadDataModal.defaultLoadingMethods.find((method) => method.id === "upload").elementType;
+  // The native factory registers this injected dependency as its upload method.
+  const FileUpload = deps[1];
   const loadingMethods = [
     { id: "upload", label: "modal.loadData.upload", elementType: FileUpload },
     { id: "tileset", label: "modal.loadData.tileset", elementType: LocalizedLoadTilesetTab },
     { id: "remote", label: "modal.loadData.remote", elementType: LoadRemoteMap },
   ];
 
-  const HydrationSafeLoadDataModal = (props) => {
+  const HydrationSafeLoadDataModal = (props: ModalProps) => {
     const dock = useContext(AddDataDockContext);
     const intl = useIntl();
     if (dock) {

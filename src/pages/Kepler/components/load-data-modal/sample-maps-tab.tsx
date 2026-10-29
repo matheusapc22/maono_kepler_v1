@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
-import React from "react";
+import type { MouseEventHandler } from "react";
 import styled from "styled-components";
 import { Icons } from "@kepler.gl/components";
 import { media } from "@kepler.gl/styles";
@@ -71,7 +70,7 @@ const StyledTrySampleData = styled.div`
   }
 `;
 
-const SampleMapsTab = ({ onClick }) => {
+const SampleMapsTab = ({ onClick }: { onClick: MouseEventHandler<HTMLDivElement> }) => {
   return (
     <StyledTrySampleData className="try-sample-data">
       <StyledMapIcon className="demo-map-icon" />

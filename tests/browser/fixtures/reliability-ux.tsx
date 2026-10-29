@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router";
-import { SessionProvider, useSession } from "../../../src/auth/session";
+import { SessionProvider, useSession } from "../../../src/auth/session.ts";
 import { LoadingProvider } from "../../../src/components/loading";
 import DocumentsSection from "../../../src/pages/Projects/components/DocumentsSection";
 import AdminFiles from "../../../src/pages/AdminFiles";
@@ -9,7 +9,7 @@ import { MapPanelProvider, MapPanelAccessGate } from "../../../src/pages/Kepler/
 
 // Only the surrounding page is a fixture. Requests, error conversion, loading,
 // file transfer, permissions and rendered error surfaces are production code.
-function DocumentsFixture() {
+export function DocumentsFixture() {
   const [organizationId, setOrganizationId] = useState(1);
   return (
     <main>
@@ -19,7 +19,7 @@ function DocumentsFixture() {
   );
 }
 
-function MapFixture() {
+export function MapFixture() {
   const { loading } = useSession();
   if (loading) return null;
   return (

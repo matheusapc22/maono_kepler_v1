@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { build } from "esbuild";
 
@@ -71,18 +72,19 @@ test("the initial render distinguishes authorized loading, no organization and d
 import { StaticRouter } from 'react-router';
 import RoadmapSection from './src/pages/Projects/components/RoadmapSection';
 export function render(props) { return renderToStaticMarkup(<StaticRouter location="/projects"><RoadmapSection {...props} /></StaticRouter>); }`,
-      loader: "tsx", resolveDir: new URL("../", import.meta.url).pathname,
+      loader: "tsx", resolveDir: fileURLToPath(new URL("../", import.meta.url)),
     },
     bundle: true, platform: "node", format: "esm", jsx: "automatic", write: false,
     loader: { ".css": "empty", ".png": "dataurl" },
     external: ["react", "react-dom", "react-dom/server", "react/jsx-runtime", "react-router"],
   });
-  const directory = await mkdtemp(new URL("../.roadmap-loading-test-", import.meta.url).pathname);
+  const directory = await mkdtemp(fileURLToPath(new URL("../.roadmap-loading-test-", import.meta.url)));
+  assert.equal(dirname(directory), resolve(fileURLToPath(new URL("../", import.meta.url))));
   const previousWindow = globalThis.window;
   try {
     const modulePath = join(directory, "render.mjs");
     await writeFile(modulePath, result.outputFiles[0].text);
-    const { render } = await import(modulePath);
+    const { render } = await import(pathToFileURL(modulePath).href);
     globalThis.window = { innerWidth: 1440, innerHeight: 1100 };
     const user = { id: 7, role: "viewer", organizationId: 1, activeOrganizationId: 1, permissions: ["roadmap.view"] };
     const loading = render({ organizationId: 1, user });

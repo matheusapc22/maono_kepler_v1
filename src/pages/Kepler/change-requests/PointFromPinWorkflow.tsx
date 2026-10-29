@@ -7,13 +7,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { useSession } from "../../../auth/session";
+import { useSession } from "../../../auth/session.ts";
 import { useKeplerEngineAdapter } from "../engine-adapter";
 import {
   type PointDatasetTarget,
   usePointDatasetCommand,
 } from "../engine-adapter/usePointDatasetCommand";
-import { useMapPanel } from "../map-panel/MapPanelContext";
+import { useMapPanel } from "../map-panel/MapPanelContext.ts";
 import { MAONO_CREATE_POINT_FROM_MARKER_EVENT } from "../components/map-overlay/MarkerContextMenu";
 import {
   markerOriginToScreen,

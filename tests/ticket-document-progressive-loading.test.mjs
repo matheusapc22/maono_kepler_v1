@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 const root = new URL('../', import.meta.url);
 test('document folder reservation matches the exact enclosing-card height in project density',()=>{
@@ -15,8 +16,7 @@ test('document folder reservation matches the exact enclosing-card height in pro
   assert.equal(Number(reserved[1]),Number(control[1])+2*Number(border[1]));
   assert.match(styles,/\.mm-docs \.mm-loading-folder-card \{ min-height: 72px;/,'standalone default is unchanged');
 });
-const read = name => readFileSync(new URL(`src/pages/Projects/components/${name}`, root), 'utf8');
-const directory = mkdtempSync(new URL('../.ticket-docs-loading-test-', import.meta.url).pathname);
+const read = name => readFileSync(new URL(`src/pages/Projects/components/${name}`, root), 'utf8').replace(/\r\n/g, '\n');
 const bundle = await build({ stdin: { contents: `
 import {renderToStaticMarkup} from 'react-dom/server';
 import TicketListView from './TicketListView';
@@ -35,9 +35,11 @@ export const renderCalendar=p=>renderToStaticMarkup(<TicketCalendarView {...p}/>
 export const renderDocuments=p=>renderToStaticMarkup(<ActiveDocumentsResults {...p}/>);
 export const renderDetail=()=>renderToStaticMarkup(<TicketDetailSkeleton/>);
 export const renderGrid=p=>renderToStaticMarkup(<DocumentGridSkeleton {...p}/>);
-`, resolveDir: new URL('src/pages/Projects/components/',root).pathname, loader:'tsx' }, bundle:true, platform:'node', format:'esm', jsx:'automatic',write:false, loader:{'.css':'empty','.png':'dataurl'}, external:['react','react-dom','react-dom/server','react/jsx-runtime','pdfjs-dist','pdfjs-dist/*'], plugins:[{name:'test-document-results',setup(builder){builder.onLoad({filter:/\/DocumentPreviewDialog\.tsx$/},()=>({contents:'export default function UnmountedPreview(){return null}',loader:'tsx'}));builder.onLoad({filter:/\/DocumentsSection\.tsx$/},({path})=>({contents:readFileSync(path,'utf8')+'\nexport { ActiveDocumentsResults };',loader:'tsx'}));}}] });
+`, resolveDir: fileURLToPath(new URL('src/pages/Projects/components/',root)), loader:'tsx' }, bundle:true, platform:'node', format:'esm', jsx:'automatic',write:false, loader:{'.css':'empty','.png':'dataurl'}, external:['react','react-dom','react-dom/server','react/jsx-runtime','pdfjs-dist','pdfjs-dist/*'], plugins:[{name:'test-document-results',setup(builder){builder.onLoad({filter:/[\\/]DocumentPreviewDialog\.tsx$/},()=>({contents:'export default function UnmountedPreview(){return null}',loader:'tsx'}));builder.onLoad({filter:/[\\/]DocumentsSection\.tsx$/},({path})=>({contents:readFileSync(path,'utf8')+'\nexport { ActiveDocumentsResults };',loader:'tsx'}));}}] });
+const directory = mkdtempSync(fileURLToPath(new URL('../.ticket-docs-loading-test-', import.meta.url)));
+assert.equal(dirname(directory), resolve(fileURLToPath(root)));
 let runtime;
-try { const path=join(directory,'render.mjs'); writeFileSync(path,bundle.outputFiles[0].text); runtime=await import(path); } finally { rmSync(directory,{recursive:true}); }
+try { const path=join(directory,'render.mjs'); writeFileSync(path,bundle.outputFiles[0].text); runtime=await import(pathToFileURL(path).href); } finally { rmSync(directory,{recursive:true}); }
 const noop=()=>{};
 const ticket={id:1,code:'CC-1',subject:'Chamado preservado',description:'Descrição',priority:'normal',status:'open',createdBy:{name:'Pessoa'},assignedTo:{name:'Atendente'},createdAt:'2026-10-01',updatedAt:'2026-10-01',dueAt:'2026-10-18',attachmentsCount:0};
 const pagination={page:1,total:30,hasMore:true,totalPages:3,limit:10};

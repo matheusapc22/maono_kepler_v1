@@ -901,6 +901,21 @@ export async function can(env, user, permission, context = {}) {
   const activeOrganizationId = getUserOrganizationId(user);
   const contextOrganizationId = getContextOrganizationId(resolvedContext);
 
+  // A pause applies to the requested organization, including sessions issued
+  // before it. Keep the management permission available for recovery.
+  if (String(env.ORGANIZATION_MANAGEMENT_V1).toLowerCase() === "true" &&
+      contextOrganizationId && normalizedPermission !== "admin.panel.access") {
+    const organization = await getDb(env).prepare(
+      "SELECT active FROM organizations WHERE id = ?",
+    ).bind(contextOrganizationId).first();
+    if (!organization || Number(organization.active) !== 1) {
+      return {
+        allowed: false, reason: "ORGANIZATION_INACTIVE",
+        user, permission: normalizedPermission, context: resolvedContext,
+      };
+    }
+  }
+
   if (role === "super_admin") {
     return {
       allowed: true,

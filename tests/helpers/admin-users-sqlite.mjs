@@ -3,9 +3,9 @@ import { readFileSync } from 'node:fs';
 import { sha256Hex } from '../../functions/_lib/auth.js';
 
 // Real SQL and route code; only D1's asynchronous interface is adapted locally.
-export async function adminUsersFixture(t) {
+export async function adminUsersFixture(t, { schemaSql } = {}) {
   const db = new DatabaseSync(':memory:');
-  db.exec(readFileSync(new URL('../../schema.sql', import.meta.url), 'utf8'));
+  db.exec(schemaSql ?? readFileSync(new URL('../../schema.sql', import.meta.url), 'utf8'));
   db.exec(`CREATE TABLE IF NOT EXISTS user_permissions (id INTEGER PRIMARY KEY, user_id INTEGER, organization_id INTEGER, permission TEXT, active INTEGER DEFAULT 1, expires_at TEXT);
     INSERT INTO organizations (id,name,slug,dropbox_root_path) VALUES (1,'Synthetic A','synthetic-a','/synthetic-a'),(2,'Synthetic B','synthetic-b','/synthetic-b');
     INSERT INTO users (id,email,role,password_hash) VALUES (1,'actor@example.test','super_admin','synthetic'),(2,'a@example.test','viewer','synthetic'),(3,'b@example.test','viewer','synthetic');

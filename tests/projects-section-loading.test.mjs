@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
+import { restoreLintModuleExtraction } from './helpers/lint-module-extraction-preservation.mjs';
 const read = file => readFile(new URL(`../${file}`, import.meta.url), 'utf8');
 const [organization, limits, users, skeletons, css] = await Promise.all([
   'src/pages/Projects/components/OrganizationSection.tsx',
@@ -69,7 +70,7 @@ test('the exact loading inverse preserves the original selector contract and rej
   const { restoreLimitsPlansLoading } = await import('./helpers/projects-loading-preservation.mjs');
   const { restoreMaonoSelect } = await import('./helpers/maono-select-preservation.mjs');
   const original = '47987125e6dc7c86e1adf810f3325c8a5b905659f8724d5242596b4eb0564042';
-  const verify = source => assert.equal(createHash('sha256').update(restoreMaonoSelect(restoreLimitsPlansLoading(source))).digest('hex'), original);
+  const verify = source => assert.equal(createHash('sha256').update(restoreMaonoSelect(restoreLimitsPlansLoading(restoreLintModuleExtraction('src/pages/Projects/components/LimitsPlansSection.tsx', source)))).digest('hex'), original);
   verify(limits);
   for (const [before, after] of [
     ['if (isSuperAdmin(user) || hasPlatformScope(user)) return true;', 'if (isSuperAdmin(user) || hasPlatformScope(user)) return false;'],

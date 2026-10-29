@@ -57,6 +57,11 @@ const OWNER_RETENTION_PRESENTATION: UserErrorTemplate = {
 const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
   LAST_OWNER_REQUIRED: OWNER_RETENTION_PRESENTATION,
   LAST_OWNER_REMOVAL_BLOCKED: OWNER_RETENTION_PRESENTATION,
+  MANAGEMENT_OWNER_REASSIGN_REQUIRED: {
+    title: "Responsável principal protegido",
+    message: "Defina outro responsável principal na Gestão de Organizações antes de remover, desativar ou rebaixar este usuário.",
+    severity: "warning", retryable: false,
+  },
   USER_PASSWORD_INVALID: { title: "Senha inválida", message: "Informe uma senha com pelo menos 8 caracteres.", severity: "warning", retryable: false },
   USER_PASSWORD_REQUIRED: { title: "Senha inicial necessária", message: "Informe uma senha inicial com pelo menos 8 caracteres.", severity: "warning", retryable: false },
   USER_ROLE_INVALID: { title: "Perfil inválido", message: "Selecione um perfil válido antes de salvar o usuário.", severity: "warning", retryable: false },

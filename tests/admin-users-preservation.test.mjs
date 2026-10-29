@@ -2,11 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { restoreLintModuleExtraction } from './helpers/lint-module-extraction-preservation.mjs';
+import { restoreOrganizationManagementDomain } from './helpers/organization-management-preservation.mjs';
 import { restoreAdminUsersSafety, usersSafetyFixture } from './helpers/admin-users-safety-preservation.mjs';
+
+const readBeforeUserSafety = path => restoreOrganizationManagementDomain(path,
+  restoreLintModuleExtraction(path, readFileSync(new URL('../' + path, import.meta.url), 'utf8')));
 
 test('exact inverse preserves every independent predecessor hash', () => {
   for (const [path, expected] of Object.entries(usersSafetyFixture.baseHashes)) {
-    const source = readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+    const source = readBeforeUserSafety(path);
     assert.equal(createHash('sha256').update(restoreAdminUsersSafety(path, source)).digest('hex'), expected, path);
   }
 });
@@ -18,7 +23,7 @@ for (const [path, before, after] of [
   ['functions/api/admin/users/[id].js', 'AND ${guard.sql}', ''],
   ['functions/api/admin/organizations/[id]/users.js', 'WHERE ${guard.sql}', ''],
 ]) test(`inverse rejects removal of the reviewed safety contract: ${path} / ${before}`, () => {
-  const source = readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+  const source = readBeforeUserSafety(path);
   assert.ok(source.includes(before));
   assert.throws(() => restoreAdminUsersSafety(path, source.replace(before, after)), /exact reviewed password edit \/ user safety/);
 });

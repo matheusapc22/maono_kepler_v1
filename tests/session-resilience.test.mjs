@@ -19,7 +19,7 @@ const [
   catalogSource,
   loginEndpointSource,
 ] = await Promise.all([
-  readFile(new URL("../src/auth/session.tsx", import.meta.url), "utf8"),
+  Promise.all(["../src/auth/session.tsx", "../src/auth/session-types.ts"].map(path => readFile(new URL(path, import.meta.url), "utf8"))).then(parts => parts.join("\n")),
   readFile(
     new URL("../src/pages/Projects/projects-api.ts", import.meta.url),
     "utf8",
