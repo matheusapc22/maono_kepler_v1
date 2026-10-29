@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { restoreAdminOwnerError } from './helpers/admin-owner-error-preservation.mjs';
+import { restoreAdminUserAtomicity } from './helpers/admin-user-atomicity-preservation.mjs';
 import { errorResponse } from '../functions/_lib/http.js';
 import { normalizeMaonoError } from '../functions/_lib/maono-error.js';
 import { ApiError } from '../src/lib/error-contract.ts';
@@ -50,7 +51,7 @@ test('the user sees reassignment guidance instead of another-owner or retry advi
 
 test('the error adapter preserves the composed predecessor and rejects a weakened response', () => {
   const path = 'functions/_lib/organizations.js';
-  const source = readFileSync(new URL('../' + path, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  const source = restoreAdminUserAtomicity(path, readFileSync(new URL('../' + path, import.meta.url), 'utf8'));
   // Independently captured from git show cb41163:functions/_lib/organizations.js.
   assert.equal(createHash('sha256').update(restoreAdminOwnerError(path, source)).digest('hex'), '72ebafba73f1ae22b4d2d76be3a8876042a8f3cf6c337c2469e6e87462a1c575');
   const changed = source.replace('errorResponse(managementError.message, 409', 'errorResponse(managementError.message, 200');

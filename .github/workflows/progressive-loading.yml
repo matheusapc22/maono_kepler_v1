@@ -10,6 +10,11 @@ on:
       - 'functions/api/admin/organizations/**/users.js'
       - 'functions/api/organizations/**/users/**'
       - 'tests/admin-users-*.test.mjs'
+      - 'tests/admin-organization-post-concurrency.test.mjs'
+      - 'tests/admin-user-atomicity-preservation.test.mjs'
+      - 'tests/helpers/organization-post-worker.mjs'
+      - 'tests/helpers/admin-user-atomicity-preservation.mjs'
+      - 'tests/fixtures/admin-user-atomicity-preservation.json'
       - 'tests/helpers/admin-users*.mjs'
       - 'tests/helpers/owner-retention-worker.mjs'
       - 'tests/fixtures/admin-users-safety-preservation.json'
@@ -67,6 +72,7 @@ jobs:
       - name: User mutations, concurrent ownership and retained history
         run: >-
           node --experimental-strip-types --test tests/admin-users-*.test.mjs
+          tests/admin-organization-post-concurrency.test.mjs tests/admin-user-atomicity-preservation.test.mjs
           tests/owner-retention-sqlite-workers.test.mjs tests/user-mutation.test.mjs
           tests/password-management.test.mjs tests/user-management-evolution.test.mjs
           tests/access-delegation.test.mjs tests/admin-user-organization-assignment-ui.test.mjs

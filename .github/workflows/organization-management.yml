@@ -35,6 +35,8 @@ jobs:
           tests/access-delegation.test.mjs
           tests/admin-progressive-loading.test.mjs
           tests/admin-organization-owner-integration.test.mjs
+          tests/admin-organization-post-concurrency.test.mjs
+          tests/admin-user-atomicity-preservation.test.mjs
           tests/admin-owner-schema-concurrency.test.mjs
           tests/management-owner-conflict.test.mjs
           tests/api-error-client.test.mjs

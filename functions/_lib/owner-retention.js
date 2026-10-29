@@ -48,26 +48,30 @@ export function guardedAudit(env, guard, { userId, action, details }) {
     SELECT ?, NULL, ?, ? WHERE ${guard.sql}`).bind(userId, action, JSON.stringify(details), ...guard.args);
 }
 
-export async function changeMembership(env, { userId, organizationId, accessLevel, remove = false, code = 'LAST_OWNER_REMOVAL_BLOCKED' }) {
+export async function changeMembership(env, { userId, organizationId, accessLevel, remove = false, code = 'LAST_OWNER_REMOVAL_BLOCKED', audit = null }) {
   const guard = await ownerRetention(env, { userId, organizationId, accessLevel: accessLevel ?? null, removing: remove });
-  let result;
+  // For removal, the row must still exist when the transaction starts. Audit
+  // and cleanup precede the delete under the same live guard; rejection or any
+  // statement failure cannot leave an audit/grant change behind.
+  const mutationGuard = remove ? {
+    sql: `EXISTS (SELECT 1 FROM organization_users WHERE user_id = ? AND organization_id = ?) AND ${guard.sql}`,
+    args: [userId, organizationId, ...guard.args],
+  } : guard;
+  const statements = audit ? [guardedAudit(env, mutationGuard, audit)] : [];
   if (remove) {
-    // Cleanup runs only after the conditional delete actually removed the link.
-    // A blocked last-owner removal leaves both grants and denials untouched.
     const hasGrants = await readRequestSchema(env, 'owner-retention:grants-table', async () => Boolean(
       await env.DB.prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'user_permissions'").first(),
     ));
-    [result] = await env.DB.batch([
-      env.DB.prepare(`DELETE FROM organization_users WHERE user_id = ? AND organization_id = ? AND ${guard.sql}`).bind(userId, organizationId, ...guard.args),
-      ...(hasGrants ? [env.DB.prepare(`DELETE FROM user_permissions WHERE user_id = ? AND organization_id = ?
-        AND NOT EXISTS (SELECT 1 FROM organization_users WHERE user_id = ? AND organization_id = ?)`)
-        .bind(userId, organizationId, userId, organizationId)] : []),
-    ]);
+    if (hasGrants) statements.push(env.DB.prepare(`DELETE FROM user_permissions WHERE user_id = ? AND organization_id = ?
+      AND ${mutationGuard.sql}`).bind(userId, organizationId, ...mutationGuard.args));
+    statements.push(env.DB.prepare(`DELETE FROM organization_users WHERE user_id = ? AND organization_id = ? AND ${guard.sql}`)
+      .bind(userId, organizationId, ...guard.args));
   } else {
-    result = await env.DB.prepare(`INSERT INTO organization_users (organization_id, user_id, access_level, created_at)
+    statements.push(env.DB.prepare(`INSERT INTO organization_users (organization_id, user_id, access_level, created_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(organization_id, user_id) DO UPDATE SET access_level = excluded.access_level WHERE ${guard.sql}`)
-      .bind(organizationId, userId, accessLevel, ...guard.args).run();
+      .bind(organizationId, userId, accessLevel, ...guard.args));
   }
-  if (Number(result.meta?.changes) !== 1) throw lastOwnerError(code);
+  const results = await env.DB.batch(statements);
+  if (Number(results.at(-1).meta?.changes) !== 1) throw lastOwnerError(code);
 }
