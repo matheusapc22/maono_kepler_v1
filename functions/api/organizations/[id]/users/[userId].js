@@ -302,8 +302,10 @@ export async function onRequestDelete({ env, request, params }) {
     }
     const target = await env.DB.prepare("SELECT ou.id, ou.access_level FROM organization_users ou WHERE ou.organization_id = ? AND ou.user_id = ? LIMIT 1").bind(organizationId, targetUserId).first();
     if (!target) { const error = new Error("Acesso não encontrado na organização."); error.status = 404; error.code = "MEMBERSHIP_NOT_FOUND"; throw error; }
-    await changeMembership(env, { userId: targetUserId, organizationId, remove: true });
-    await recordAuditLog(env, { actorUserId: user.id, organizationId, action: "users.membership.delete", resourceType: "user", resourceId: targetUserId, result: "success", request });
+    await changeMembership(env, { userId: targetUserId, organizationId, remove: true, audit: {
+      userId: user.id, action: "users.membership.delete",
+      details: { organizationId, resourceType: "user", resourceId: targetUserId, result: "success", metadata: {}, userAgent: request.headers.get("user-agent") || null },
+    } });
     return jsonResponse({ ok: true, removed: true });
   } catch (error) { return handleApiError(error); }
 }

@@ -7,7 +7,6 @@ import {
 } from "../../../_lib/http.js";
 import { requireSession } from "../../../_lib/auth.js";
 import { requirePermission } from "../../../_lib/permissions.js";
-import { logAudit } from "../../../_lib/projects.js";
 
 const ALLOWED_ACCESS_LEVELS = new Set(["viewer", "editor", "owner"]);
 
@@ -130,9 +129,7 @@ export async function onRequest(context) {
         );
       }
 
-      await changeMembership(env, { userId: organizationUser.user_id, organizationId: organizationUser.organization_id, accessLevel, code: "LAST_OWNER_REQUIRED" });
-
-      await logAudit(env, {
+      await changeMembership(env, { userId: organizationUser.user_id, organizationId: organizationUser.organization_id, accessLevel, code: "LAST_OWNER_REQUIRED", audit: {
         userId: user.id,
         action: "admin.organization_users.update",
         details: {
@@ -142,7 +139,7 @@ export async function onRequest(context) {
           previousAccessLevel: organizationUser.access_level,
           accessLevel,
         },
-      });
+      } });
 
       return jsonResponse({ ok: true });
     }
@@ -156,9 +153,7 @@ export async function onRequest(context) {
         "admin.organization_users.delete",
       );
 
-      await changeMembership(env, { userId: organizationUser.user_id, organizationId: organizationUser.organization_id, remove: true, code: "LAST_OWNER_REQUIRED" });
-
-      await logAudit(env, {
+      await changeMembership(env, { userId: organizationUser.user_id, organizationId: organizationUser.organization_id, remove: true, code: "LAST_OWNER_REQUIRED", audit: {
         userId: user.id,
         action: "admin.organization_users.delete",
         details: {
@@ -167,7 +162,7 @@ export async function onRequest(context) {
           targetUserId: organizationUser.user_id,
           previousAccessLevel: organizationUser.access_level,
         },
-      });
+      } });
 
       return jsonResponse({ ok: true });
     }
