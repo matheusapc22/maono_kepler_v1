@@ -55,7 +55,7 @@ jobs:
           NODE
       - run: node node_modules/typescript/bin/tsc -b --pretty false
       - run: npx eslint src/components/notices tests/browser/notice-board.spec.ts tests/browser/fixtures/notice-board.tsx playwright.notices.config.ts vite.notice-board.config.ts
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox webkit
       - name: Local mock APIs only; never Production acceptance
         run: npx playwright test --config playwright.notices.config.ts
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
