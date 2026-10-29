@@ -11,6 +11,7 @@ export const ERROR_DEFINITIONS = Object.freeze({
   FORBIDDEN: { category: E.PERMISSION, status: 403, retryable: false },
   PERMISSION_DENIED: { category: E.PERMISSION, status: 403, retryable: false },
   PERMISSION_PROJECT_SAVE_DENIED: { category: E.PERMISSION, status: 403, retryable: false },
+  MANAGEMENT_OWNER_REASSIGN_REQUIRED: { category: E.PERMISSION, status: 409, retryable: false },
 
   PROJECT_NOT_FOUND: { category: E.PROJECT, status: 404, retryable: false },
   PROJECT_SLUG_REQUIRED: { category: E.PROJECT, status: 400, retryable: false },

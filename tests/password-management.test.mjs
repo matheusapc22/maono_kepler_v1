@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { restorePasswordManagement } from "./helpers/password-management-preservation.mjs";
 import { restoreLintModuleExtraction } from "./helpers/lint-module-extraction-preservation.mjs";
+import { restoreOrganizationManagementDomain } from "./helpers/organization-management-preservation.mjs";
 import { hashPassword, verifyPassword, sha256Hex } from "../functions/_lib/auth.js";
 import { onRequest as adminUser } from "../functions/api/admin/users/[id].js";
 import { onRequest as adminUsers } from "../functions/api/admin/users/index.js";
@@ -15,7 +16,7 @@ for (const [path, before, after] of [
   ["functions/api/organizations/[id]/users/[userId].js", 'normalizeRole(user.role) !== "super_admin"', 'false'],
   ["src/pages/Admin/components/AdminUserManagerLegacy.tsx", 'if (!selected || !draft || busy || mutationPending.current) return;', 'if (!selected || !draft) return;'],
 ]) test(`preservation inverse rejects unreviewed password changes: ${path}`, () => {
-  const source = restoreLintModuleExtraction(path, readFileSync(new URL("../" + path, import.meta.url), "utf8"));
+  const source = restoreOrganizationManagementDomain(path, restoreLintModuleExtraction(path, readFileSync(new URL("../" + path, import.meta.url), "utf8")));
   assert.notEqual(restorePasswordManagement(path, source), source);
   assert.ok(source.includes(before));
   assert.throws(() => restorePasswordManagement(path, source.replace(before, after)), /exact reviewed password edit/);

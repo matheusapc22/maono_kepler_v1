@@ -1,3 +1,4 @@
+import { changeMembership } from "../../../_lib/owner-retention.js";
 import {
   errorResponse,
   jsonResponse,
@@ -6,7 +7,6 @@ import {
 } from "../../../_lib/http.js";
 import { requireSession } from "../../../_lib/auth.js";
 import { requirePermission } from "../../../_lib/permissions.js";
-import { logAudit } from "../../../_lib/projects.js";
 
 const ALLOWED_ACCESS_LEVELS = new Set(["viewer", "editor", "owner"]);
 
@@ -71,52 +71,6 @@ async function getOrganizationUser(env, organizationUserId) {
     .first();
 }
 
-async function countOrganizationOwners(env, organizationId) {
-  const row = await env.DB.prepare(
-    `SELECT COUNT(*) AS total
-     FROM organization_users
-     WHERE organization_id = ?
-       AND access_level = 'owner'`,
-  )
-    .bind(organizationId)
-    .first();
-
-  return Number(row?.total || 0);
-}
-
-async function assertDoesNotRemoveLastOwner(
-  env,
-  organizationUser,
-  nextAccessLevel = null,
-) {
-  const currentAccessLevel = normalizeAccessLevel(
-    organizationUser.access_level,
-  );
-
-  if (currentAccessLevel !== "owner") {
-    return;
-  }
-
-  if (nextAccessLevel === "owner") {
-    return;
-  }
-
-  const organizationId = normalizePositiveInteger(
-    organizationUser.organization_id,
-  );
-
-  const ownersCount = await countOrganizationOwners(env, organizationId);
-
-  if (ownersCount <= 1) {
-    const error = new Error(
-      "A organização precisa manter pelo menos um owner ativo.",
-    );
-    error.status = 409;
-    error.code = "LAST_OWNER_REQUIRED";
-    throw error;
-  }
-}
-
 export async function onRequest(context) {
   const { request, env, params } = context;
 
@@ -175,21 +129,7 @@ export async function onRequest(context) {
         );
       }
 
-      await assertDoesNotRemoveLastOwner(
-        env,
-        organizationUser,
-        accessLevel,
-      );
-
-      await env.DB.prepare(
-        `UPDATE organization_users
-         SET access_level = ?
-         WHERE id = ?`,
-      )
-        .bind(accessLevel, organizationUserId)
-        .run();
-
-      await logAudit(env, {
+      await changeMembership(env, { userId: organizationUser.user_id, organizationId: organizationUser.organization_id, accessLevel, code: "LAST_OWNER_REQUIRED", audit: {
         userId: user.id,
         action: "admin.organization_users.update",
         details: {
@@ -199,7 +139,7 @@ export async function onRequest(context) {
           previousAccessLevel: organizationUser.access_level,
           accessLevel,
         },
-      });
+      } });
 
       return jsonResponse({ ok: true });
     }
@@ -213,13 +153,7 @@ export async function onRequest(context) {
         "admin.organization_users.delete",
       );
 
-      await assertDoesNotRemoveLastOwner(env, organizationUser, null);
-
-      await env.DB.prepare(`DELETE FROM organization_users WHERE id = ?`)
-        .bind(organizationUserId)
-        .run();
-
-      await logAudit(env, {
+      await changeMembership(env, { userId: organizationUser.user_id, organizationId: organizationUser.organization_id, remove: true, code: "LAST_OWNER_REQUIRED", audit: {
         userId: user.id,
         action: "admin.organization_users.delete",
         details: {
@@ -228,7 +162,7 @@ export async function onRequest(context) {
           targetUserId: organizationUser.user_id,
           previousAccessLevel: organizationUser.access_level,
         },
-      });
+      } });
 
       return jsonResponse({ ok: true });
     }

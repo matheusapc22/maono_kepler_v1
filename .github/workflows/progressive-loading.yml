@@ -3,6 +3,23 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'functions/_lib/owner-retention.js'
+      - 'functions/_lib/organizations.js'
+      - 'functions/api/admin/users/**'
+      - 'functions/api/admin/organization-users/**'
+      - 'functions/api/admin/organizations/**/users.js'
+      - 'functions/api/organizations/**/users/**'
+      - 'tests/admin-users-*.test.mjs'
+      - 'tests/admin-organization-post-concurrency.test.mjs'
+      - 'tests/admin-user-atomicity-preservation.test.mjs'
+      - 'tests/helpers/organization-post-worker.mjs'
+      - 'tests/helpers/admin-user-atomicity-preservation.mjs'
+      - 'tests/fixtures/admin-user-atomicity-preservation.json'
+      - 'tests/helpers/admin-users*.mjs'
+      - 'tests/helpers/owner-retention-worker.mjs'
+      - 'tests/fixtures/admin-users-safety-preservation.json'
+      - 'tests/owner-retention-sqlite-workers.test.mjs'
+      - 'tests/browser/admin-users-safety.spec.ts'
       - 'src/components/loading/**'
       - 'src/pages/Admin.tsx'
       - 'src/pages/Admin/**'
@@ -52,6 +69,14 @@ jobs:
           tests/roadmap-loading.test.mjs tests/maono-select-migration.test.mjs
           tests/project-pages-contract.test.mjs
           tests/projects-fallback-scope.test.mjs
+      - name: User mutations, concurrent ownership and retained history
+        run: >-
+          node --experimental-strip-types --test tests/admin-users-*.test.mjs
+          tests/admin-organization-post-concurrency.test.mjs tests/admin-user-atomicity-preservation.test.mjs
+          tests/owner-retention-sqlite-workers.test.mjs tests/user-mutation.test.mjs
+          tests/password-management.test.mjs tests/user-management-evolution.test.mjs
+          tests/access-delegation.test.mjs tests/admin-user-organization-assignment-ui.test.mjs
+          tests/ticket-command-admin-retention.test.mjs
       - name: Scoped lint
         run: >-
           npx eslint src/components/loading/Skeleton.tsx src/components/loading/region-loading-policy.ts
@@ -70,7 +95,8 @@ jobs:
           src/pages/Projects/components/TicketsToolbar.tsx src/pages/Projects/components/DocumentsPagination.tsx
           src/pages/Projects/components/DocumentsUi.tsx
           tests/browser/*progressive-loading.spec.ts playwright.progressive-loading.config.ts
-          tests/browser/admin-workspace.spec.ts tests/browser/fixtures/admin-workspace.ts
+          tests/browser/admin-workspace.spec.ts tests/browser/admin-users-safety.spec.ts tests/browser/fixtures/admin-workspace.ts
+          src/pages/Admin/components/AdminUserManager.tsx src/pages/Admin/components/AdminUserManagerLegacy.tsx
       - name: Compile actual application
         env:
           VITE_MAONO_MAP_SHELL_V1: "true"

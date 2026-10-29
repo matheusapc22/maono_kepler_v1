@@ -1,3 +1,6 @@
+import { ownerRetention, guardedAudit, lastOwnerError } from "./owner-retention.js";
+import { normalizeMaonoError } from "./maono-error.js";
+import { errorResponse } from "./http.js";
 import { resolveOrganizationPolicy } from "./organization-limit-service.js";
 import {
   can,
@@ -5,7 +8,6 @@ import {
   isNativeAdminOrOwnerPermission,
   recordAuditLog,
 } from "./permissions.js";
-import { prepareAuditLog } from "./projects.js";
 import { readRequestSchema } from "./request-schema.js";
 
 const JSON_HEADERS = {
@@ -132,6 +134,10 @@ export function methodNotAllowed(method, allowedMethods = []) {
 }
 
 export function handleApiError(error) {
+  const managementError = normalizeMaonoError(error);
+  if (managementError.code === "MANAGEMENT_OWNER_REASSIGN_REQUIRED") {
+    return errorResponse(managementError.message, 409, managementError.code, null, { retryable: false });
+  }
   const status = Number(error?.status || error?.statusCode || 500);
   const safeStatus = status >= 400 && status < 600 ? status : 500;
 
@@ -563,7 +569,7 @@ export async function insertRow(env, tableName, data) {
   return { id: lastInsertId || null, ...data };
 }
 
-async function prepareRowUpdate(env, tableName, rowId, data) {
+async function prepareRowUpdate(env, tableName, rowId, data, guard = null) {
   const columns = await getTableColumns(env, tableName);
   const entries = Object.entries(data).filter(
     ([column, value]) => value !== undefined && hasColumn(columns, column),
@@ -582,16 +588,17 @@ async function prepareRowUpdate(env, tableName, rowId, data) {
       `
       UPDATE ${quoteIdentifier(tableName)}
       SET ${assignments}
-      WHERE id = ?
+      WHERE id = ? ${guard ? `AND ${guard.sql}` : ""}
       `,
     )
-    .bind(...entries.map(([, value]) => value), rowId);
+    .bind(...entries.map(([, value]) => value), rowId, ...(guard?.args || []));
 }
 
-export async function updateRow(env, tableName, rowId, data) {
-  const statement = await prepareRowUpdate(env, tableName, rowId, data);
+export async function updateRow(env, tableName, rowId, data, guard = null) {
+  const statement = await prepareRowUpdate(env, tableName, rowId, data, guard);
   if (!statement) return null;
-  await statement.run();
+  const result = await statement.run();
+  if (guard && Number(result.meta?.changes) !== 1) throw lastOwnerError();
 
   return getDb(env)
     .prepare(`SELECT * FROM ${quoteIdentifier(tableName)} WHERE id = ? LIMIT 1`)
@@ -731,7 +738,7 @@ export function sanitizeOrganizationUser(
   };
 }
 
-async function getOrganizationUserRow(env, organizationId, userId, prepareOnly = false) {
+async function getOrganizationUserRow(env, organizationId, userId, prepareOnly = false, email = null) {
   await requireTable(env, "users");
   await requireTable(env, "organization_users");
 
@@ -755,7 +762,7 @@ async function getOrganizationUserRow(env, organizationId, userId, prepareOnly =
     hasColumn(membershipColumns, "created_at") ? "ou.created_at AS membership_created_at" : "NULL AS membership_created_at",
   ];
 
-  const where = ["ou.organization_id = ?", "ou.user_id = ?"];
+  const where = ["ou.organization_id = ?", email === null ? "ou.user_id = ?" : "ou.user_id = (SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1)"];
 
   if (hasColumn(membershipColumns, "active")) {
     where.push("(ou.active = 1 OR ou.active IS NULL)");
@@ -771,7 +778,7 @@ async function getOrganizationUserRow(env, organizationId, userId, prepareOnly =
       LIMIT 1
       `,
     )
-    .bind(organizationId, userId);
+    .bind(organizationId, email ?? userId);
   return prepareOnly ? statement : statement.first();
 }
 
@@ -1097,139 +1104,73 @@ async function findUserByEmail(env, email) {
     .first();
 }
 
-async function createUserRow(env, data) {
-  const columns = await getTableColumns(env, "users");
-  const now = nowIso();
-
-  const insertPayload = {
-    name: data.name,
-    full_name: data.name,
-    email: data.email,
-    role: data.role,
-    active: 1,
-    organization_id: data.organizationId,
-    active_organization_id: data.organizationId,
-    created_at: now,
-    updated_at: now,
+// Build compatible statements without committing any part of an account mutation.
+async function prepareUserCreation(env, data, columns, now) {
+  const payload = {
+    name: data.name, full_name: data.name, email: data.email, role: data.role,
+    active: 1, organization_id: data.organizationId, active_organization_id: data.organizationId,
+    created_at: now, updated_at: now, password_hash: "pending_invite",
   };
-
-  if (hasColumn(columns, "password_hash")) {
-    insertPayload.password_hash = "pending_invite";
-  }
-
-  const user = await insertRow(env, "users", insertPayload);
-
-  if (!user?.id && hasColumn(columns, "id")) {
-    throw createApiError("Não foi possível criar usuário.", 500, "USER_CREATE_FAILED");
-  }
-
-  return user;
+  const entries = Object.entries(payload).filter(([column]) => hasColumn(columns, column));
+  return getDb(env).prepare(`INSERT INTO users (${entries.map(([column]) => quoteIdentifier(column)).join(", ")})
+    VALUES (${entries.map(() => "?").join(", ")})`).bind(...entries.map(([, value]) => value));
 }
 
-async function ensureOrganizationMembership(env, organizationId, userId, accessLevel) {
+async function prepareOrganizationMembership(env, organizationId, user, email, accessLevel, guard, now) {
   await requireTable(env, "organization_users");
-
-  const existing = await getOrganizationUserRow(env, organizationId, userId);
-  const now = nowIso();
-
-  if (existing?.membership_id) {
-    await updateRow(env, "organization_users", existing.membership_id, {
-      access_level: accessLevel,
-      active: 1,
-      updated_at: now,
-    });
-
-    return getOrganizationUserRow(env, organizationId, userId);
-  }
-
-  await insertRow(env, "organization_users", {
-    organization_id: organizationId,
-    user_id: userId,
-    access_level: accessLevel,
-    active: 1,
-    created_at: now,
-    updated_at: now,
-  });
-
-  return getOrganizationUserRow(env, organizationId, userId);
+  const columns = await getTableColumns(env, "organization_users");
+  const entries = Object.entries({ organization_id: organizationId, user_id: user?.id ?? email,
+    access_level: accessLevel, active: 1, created_at: now, updated_at: now })
+    .filter(([column]) => hasColumn(columns, column));
+  const values = entries.map(([column]) => column === "user_id" && !user
+    ? "(SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1)" : "?");
+  const updates = entries.filter(([column]) => ["access_level", "active", "updated_at"].includes(column))
+    .map(([column]) => `${quoteIdentifier(column)} = excluded.${quoteIdentifier(column)}`);
+  return getDb(env).prepare(`INSERT INTO organization_users (${entries.map(([column]) => quoteIdentifier(column)).join(", ")})
+    VALUES (${values.join(", ")}) ON CONFLICT(organization_id, user_id) DO UPDATE SET ${updates.join(", ")}
+    WHERE ${guard.sql}`).bind(...entries.map(([, value]) => value), ...guard.args);
 }
 
 export async function createOrganizationUser(env, organizationId, payload, actor) {
   const id = parsePositiveInteger(organizationId, "organizationId");
-
   await getOrganizationById(env, id);
-
-  const name = normalizeText(payload.name || payload.fullName, {
-    required: true,
-    maxLength: 160,
-  });
-
+  const name = normalizeText(payload.name || payload.fullName, { required: true, maxLength: 160 });
   const email = normalizeEmail(payload.email);
   const { role, accessLevel } = assertCanAssignRoleOrAccessLevel(
-    actor,
-    payload.role || "viewer",
-    payload.accessLevel || payload.access_level || "viewer",
+    actor, payload.role || "viewer", payload.accessLevel || payload.access_level || "viewer",
   );
-
-  let user = await findUserByEmail(env, email);
-
-  if (!user) {
-    user = await createUserRow(env, {
-      name,
-      email,
-      role,
-      organizationId: id,
-    });
-  } else {
-    const userColumns = await getTableColumns(env, "users");
-
-    if (hasColumn(userColumns, "role")) {
-      const currentRank = ROLE_RANK[normalizeUserRole(user.role || "viewer")] || 1;
-      const nextRank = ROLE_RANK[role] || 1;
-
-      if (nextRank > currentRank) {
-        await updateRow(env, "users", user.id, {
-          role,
-          updated_at: nowIso(),
-        });
-      }
-    }
-
-    if (hasColumn(userColumns, "name") || hasColumn(userColumns, "full_name")) {
-      await updateRow(env, "users", user.id, {
-        name,
-        full_name: name,
-        updated_at: nowIso(),
-      });
-    }
+  const user = await findUserByEmail(env, email);
+  const columns = await getTableColumns(env, "users");
+  const now = nowIso();
+  const patch = { name, full_name: name, updated_at: now };
+  if (user && hasColumn(columns, "role")) {
+    const currentRank = ROLE_RANK[normalizeUserRole(user.role || "viewer")] || 1;
+    if ((ROLE_RANK[role] || 1) > currentRank) patch.role = role;
   }
-
-  const membership = await ensureOrganizationMembership(
-    env,
-    id,
-    user.id,
-    accessLevel,
-  );
-
-  await recordAuditLog(env, {
-    actorUserId: actor?.id,
-    organizationId: id,
-    action: "users.create",
-    resourceType: "user",
-    resourceId: user.id,
-    metadata: {
-      role,
-      accessLevel,
-    },
-  });
-
-  return sanitizeOrganizationUser({
-    ...membership,
-    ...user,
-    id: user.id,
-    organization_id: id,
-    access_level: accessLevel,
-  });
+  // The live predicate guards the profile before the membership write too.
+  // A rejected owner mutation leaves every statement unchanged; a trigger or
+  // audit/read failure rolls the entire D1 batch back, including a new user.
+  const guard = user
+    ? await ownerRetention(env, { userId: user.id, organizationId: id, accessLevel, role: patch.role ?? null })
+    : { sql: "1 = 1", args: [] };
+  const statements = [];
+  if (user) {
+    const profile = await prepareRowUpdate(env, "users", user.id, patch, guard);
+    if (profile) statements.push(profile);
+  } else {
+    statements.push(await prepareUserCreation(env, { name, email, role, organizationId: id }, columns, now));
+  }
+  const membershipIndex = statements.length;
+  statements.push(await prepareOrganizationMembership(env, id, user, email, accessLevel, guard, now));
+  statements.push(getDb(env).prepare(`INSERT INTO audit_logs (user_id, project_id, action, details, created_at)
+    SELECT ?, NULL, 'users.create', json_object('organizationId', ?, 'resourceType', 'user',
+      'resourceId', u.id, 'result', 'success', 'metadata', json(?), 'userAgent', NULL), ?
+    FROM users u WHERE LOWER(u.email) = LOWER(?) AND ${guard.sql}`)
+    .bind(actor?.id ?? null, id, JSON.stringify({ role, accessLevel }), now, email, ...guard.args),
+    await getOrganizationUserRow(env, id, user?.id ?? null, true, user ? null : email));
+  const results = await getDb(env).batch(statements);
+  if (Number(results[membershipIndex].meta?.changes) !== 1) throw lastOwnerError();
+  return sanitizeOrganizationUser(results.at(-1).results[0]);
 }
 
 export async function updateOrganizationUser(env, organizationId, targetUserId, payload, actor, { passwordHash = null } = {}) {
@@ -1282,6 +1223,8 @@ export async function updateOrganizationUser(env, organizationId, targetUserId, 
     accessLevel: patchMembership.access_level,
   });
 
+  const guard = await ownerRetention(env, { userId, organizationId: id, role: patchUser.role ?? null, active: patchUser.active ?? null, accessLevel: patchMembership.access_level ?? null });
+
   const now = nowIso();
 
   if (passwordHash) {
@@ -1294,20 +1237,20 @@ export async function updateOrganizationUser(env, organizationId, targetUserId, 
     }
     patchUser.password_hash = passwordHash;
     patchUser.updated_at = now;
-    const statements = [await prepareRowUpdate(env, "users", userId, patchUser)];
+    const statements = [await prepareRowUpdate(env, "users", userId, patchUser, guard)];
     if (Object.keys(patchMembership).length > 0 && current.membership_id) {
       patchMembership.updated_at = now;
-      statements.push(await prepareRowUpdate(env, "organization_users", current.membership_id, patchMembership));
+      statements.push(await prepareRowUpdate(env, "organization_users", current.membership_id, patchMembership, guard));
     }
     statements.push(
-      getDb(env).prepare("DELETE FROM sessions WHERE user_id = ?").bind(userId),
-      prepareAuditLog(env, {
+      getDb(env).prepare(`DELETE FROM sessions WHERE user_id = ? AND ${guard.sql}`).bind(userId, ...guard.args),
+      guardedAudit(env, guard, {
         userId: actor.id,
         action: "admin.users.password_changed",
         details: { organizationId: id, resourceType: "user", resourceId: userId, result: "success",
           metadata: { sessionsInvalidated: true } },
       }),
-      prepareAuditLog(env, {
+      guardedAudit(env, guard, {
         userId: actor.id,
         action: active === false ? "users.disable" : "users.edit",
         details: { organizationId: id, resourceType: "user", resourceId: userId, result: "success",
@@ -1317,34 +1260,27 @@ export async function updateOrganizationUser(env, organizationId, targetUserId, 
       await getOrganizationUserRow(env, id, userId, true),
     );
     const results = await getDb(env).batch(statements);
+    if (Number(results[0].meta?.changes) !== 1) throw lastOwnerError();
     return sanitizeOrganizationUser(results.at(-1).results[0]);
   }
 
+  const statements = [];
   if (Object.keys(patchUser).length > 0) {
     patchUser.updated_at = now;
-    await updateRow(env, "users", userId, patchUser);
+    statements.push(await prepareRowUpdate(env, "users", userId, patchUser, guard));
   }
-
   if (Object.keys(patchMembership).length > 0 && current.membership_id) {
     patchMembership.updated_at = now;
-    await updateRow(env, "organization_users", current.membership_id, patchMembership);
+    statements.push(await prepareRowUpdate(env, "organization_users", current.membership_id, patchMembership, guard));
   }
-
-  const updated = await getOrganizationUserRow(env, id, userId);
-
-  await recordAuditLog(env, {
-    actorUserId: actor?.id,
-    organizationId: id,
-    action: active === false ? "users.disable" : "users.edit",
-    resourceType: "user",
-    resourceId: userId,
-    metadata: {
-      changedUserFields: Object.keys(patchUser),
-      changedMembershipFields: Object.keys(patchMembership),
-    },
-  });
-
-  return sanitizeOrganizationUser(updated);
+  statements.push(guardedAudit(env, guard, {
+    userId: actor.id, action: active === false ? "users.disable" : "users.edit",
+    details: { organizationId: id, resourceType: "user", resourceId: userId, result: "success",
+      metadata: { changedUserFields: Object.keys(patchUser), changedMembershipFields: Object.keys(patchMembership) } },
+  }), await getOrganizationUserRow(env, id, userId, true));
+  const results = await getDb(env).batch(statements);
+  if (Number(results[0].meta?.changes) !== 1) throw lastOwnerError();
+  return sanitizeOrganizationUser(results.at(-1).results[0]);
 }
 
 function assertCanManagePermission(actor, permission) {

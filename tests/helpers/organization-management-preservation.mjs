@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { restoreAdminOwnerError } from './admin-owner-error-preservation.mjs';
 import {readFileSync} from 'node:fs';
 // Exact inverse of the newly approved organizations integration. Historical
 // baselines stay unchanged; unrelated Admin edits still fail preservation.
@@ -40,6 +41,7 @@ export function restoreOrganizationManagement(path, source) {
 const domain = JSON.parse(readFileSync(new URL('../fixtures/organization-management-domain-preservation.json', import.meta.url),'utf8'));
 assert.equal(domain.base,'381c93256d985b0ae39722128fc4ad54f17f025f');
 export function restoreOrganizationManagementDomain(path, source) {
+  source = restoreAdminOwnerError(path, source);
   for(const {before,after} of [...(domain.changes[path]||[])].reverse()) {
     assert.equal(source.split(after).length-1,1,`Exact management domain integration: ${path}`);
     source=source.replace(after,before);

@@ -5,7 +5,7 @@ import {
   readJsonBody,
 } from "../../../../_lib/http.js";
 import { requirePermission } from "../../../../_lib/permissions.js";
-import { logAudit } from "../../../../_lib/projects.js";
+import { ownerRetention, lastOwnerError } from "../../../../_lib/owner-retention.js";
 
 const ALLOWED_ACCESS_LEVELS = new Set(["viewer", "editor", "owner"]);
 
@@ -100,8 +100,8 @@ async function getOrganization(env, organizationId) {
     .first();
 }
 
-async function listOrganizationUsers(env, organizationId) {
-  const { results } = await env.DB.prepare(
+async function listOrganizationUsers(env, organizationId, prepareOnly = false) {
+  const statement = env.DB.prepare(
     `SELECT
       organization_users.id,
       organization_users.organization_id,
@@ -117,9 +117,9 @@ async function listOrganizationUsers(env, organizationId) {
     WHERE organization_users.organization_id = ?
     ORDER BY users.email ASC`,
   )
-    .bind(organizationId)
-    .all();
-
+    .bind(organizationId);
+  if (prepareOnly) return statement;
+  const { results } = await statement.all();
   return results || [];
 }
 
@@ -207,7 +207,7 @@ async function assertCanAssignAccessLevel(
   );
 }
 
-async function upsertOrganizationUser(env, organizationId, body) {
+async function upsertOrganizationUser(env, organizationId, body, actor) {
   const userId = normalizePositiveInteger(body?.userId || body?.user_id);
   const accessLevel = normalizeAccessLevel(
     body?.accessLevel || body?.access_level,
@@ -278,7 +278,8 @@ async function upsertOrganizationUser(env, organizationId, body) {
     accessLevel,
   );
 
-  const organizationUser = await env.DB.prepare(
+  const guard = await ownerRetention(env, { userId, organizationId, accessLevel });
+  const mutation = env.DB.prepare(
     `INSERT INTO organization_users (
       organization_id,
       user_id,
@@ -286,7 +287,7 @@ async function upsertOrganizationUser(env, organizationId, body) {
     )
     VALUES (?, ?, ?)
     ON CONFLICT(organization_id, user_id) DO UPDATE SET
-      access_level = excluded.access_level
+      access_level = excluded.access_level WHERE ${guard.sql}
     RETURNING
       id,
       organization_id,
@@ -294,13 +295,18 @@ async function upsertOrganizationUser(env, organizationId, body) {
       access_level,
       created_at`,
   )
-    .bind(organizationId, userId, accessLevel)
-    .first();
-
-  return {
-    organizationUser,
-    previousAccessLevel: currentOrganizationUser?.access_level || null,
-  };
+    .bind(organizationId, userId, accessLevel, ...guard.args);
+  const audit = env.DB.prepare(`INSERT INTO audit_logs (user_id, project_id, action, details)
+    SELECT ?, NULL, 'admin.organization_users.upsert', json_object(
+      'organizationId', ou.organization_id, 'organizationUserId', ou.id,
+      'targetUserId', ou.user_id, 'previousAccessLevel', ?, 'accessLevel', ou.access_level)
+    FROM organization_users ou WHERE ou.organization_id = ? AND ou.user_id = ? AND ${guard.sql}`)
+    .bind(actor.id, currentOrganizationUser?.access_level || null, organizationId, userId, ...guard.args);
+  // Keep the response read in the transaction as well as the mandatory audit.
+  const results = await env.DB.batch([mutation, audit, await listOrganizationUsers(env, organizationId, true)]);
+  const organizationUser = results[0].results?.[0];
+  if (!organizationUser) throw lastOwnerError();
+  return { organizationUser: results[2].results.find(item => item.id === organizationUser.id) || organizationUser };
 }
 
 export async function onRequest(context) {
@@ -379,37 +385,13 @@ export async function onRequest(context) {
         requestedAccessLevel,
       );
 
-      const { organizationUser, previousAccessLevel, error } =
-        await upsertOrganizationUser(env, organizationId, body);
-
-      if (error) {
-        return error;
-      }
-
-      await logAudit(env, {
-        userId: user.id,
-        action: "admin.organization_users.upsert",
-        details: {
-          organizationId,
-          organizationUserId: organizationUser.id,
-          targetUserId: organizationUser.user_id,
-          previousAccessLevel,
-          accessLevel: organizationUser.access_level,
-        },
-      });
-
-      const organizationUsers = await listOrganizationUsers(
-        env,
-        organizationId,
-      );
-      const hydrated =
-        organizationUsers.find((item) => item.id === organizationUser.id) ||
-        organizationUser;
+      const { organizationUser, error } = await upsertOrganizationUser(env, organizationId, body, user);
+      if (error) return error;
 
       return jsonResponse(
         {
           ok: true,
-          organizationUser: publicOrganizationUser(hydrated),
+          organizationUser: publicOrganizationUser(organizationUser),
         },
         { status: 201 },
       );

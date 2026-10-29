@@ -122,6 +122,20 @@ export function normalizeMaonoError(error, options = {}) {
     return error;
   }
 
+  // Migration 0042 keeps this invariant active even with management flags OFF.
+  // Translate only the exact known constraint; other database failures stay errors.
+  const sourceStatus = Number(options.status || error?.status || error?.statusCode || 500);
+  if (sourceStatus >= 500 && /^(?:D1_ERROR:\s*)?MANAGEMENT_OWNER_REASSIGN_REQUIRED(?::\s*SQLITE_CONSTRAINT)?$/.test(String(error?.message || "").trim())) {
+    return new MaonoError({
+      code: "MANAGEMENT_OWNER_REASSIGN_REQUIRED",
+      message: "Defina outro responsável principal na Gestão de Organizações antes de remover, desativar ou rebaixar este usuário.",
+      status: 409,
+      retryable: false,
+      correlationId: options.correlationId || error?.correlationId || null,
+      cause: error,
+    });
+  }
+
   const technicalCode = inferTechnicalCode(error);
   const fallbackCode =
     error?.code ||

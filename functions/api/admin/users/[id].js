@@ -1,3 +1,4 @@
+import { ownerRetention, guardedAudit, lastOwnerError } from "../../../_lib/owner-retention.js";
 import {
   errorResponse,
   jsonResponse,
@@ -7,7 +8,7 @@ import {
 import { hashPassword, normalizeEmail } from "../../../_lib/auth.js";
 import { validateNewPassword } from "../../../_lib/password-policy.js";
 import { requirePermission } from "../../../_lib/permissions.js";
-import { logAudit, prepareAuditLog } from "../../../_lib/projects.js";
+import { logAudit } from "../../../_lib/projects.js";
 import { tableExists } from "../../../_lib/organizations.js";
 
 const ALLOWED_ROLES = new Set(["admin", "client", "viewer", "editor"]);
@@ -263,6 +264,7 @@ async function updateUser(env, targetUserId, body, actingUser) {
   }
 
   try {
+    const guard = await ownerRetention(env, { userId: targetUserId, role, active });
     let update;
 
     if (passwordChanged) {
@@ -277,7 +279,7 @@ async function updateUser(env, targetUserId, body, actingUser) {
           active = ?,
           password_hash = ?,
           updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?
+         WHERE id = ? AND ${guard.sql}
          RETURNING
           id,
           email,
@@ -287,7 +289,7 @@ async function updateUser(env, targetUserId, body, actingUser) {
           created_at,
           updated_at`,
       )
-        .bind(email, name || null, role, active, passwordHash, targetUserId);
+        .bind(email, name || null, role, active, passwordHash, targetUserId, ...guard.args);
     } else {
       update = env.DB.prepare(
         `UPDATE users
@@ -297,7 +299,7 @@ async function updateUser(env, targetUserId, body, actingUser) {
           role = ?,
           active = ?,
           updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?
+         WHERE id = ? AND ${guard.sql}
          RETURNING
           id,
           email,
@@ -307,15 +309,15 @@ async function updateUser(env, targetUserId, body, actingUser) {
           created_at,
           updated_at`,
       )
-        .bind(email, name || null, role, active, targetUserId);
+        .bind(email, name || null, role, active, targetUserId, ...guard.args);
     }
 
     // A failure in revocation or audit must roll back the password too.
     const statements = [update];
     if (passwordChanged) {
-      statements.push(env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(targetUserId));
+      statements.push(env.DB.prepare(`DELETE FROM sessions WHERE user_id = ? AND ${guard.sql}`).bind(targetUserId, ...guard.args));
     }
-    statements.push(prepareAuditLog(env, {
+    statements.push(guardedAudit(env, guard, {
       userId: actingUser.id,
       action: "admin.users.update",
       details: {
@@ -327,7 +329,7 @@ async function updateUser(env, targetUserId, body, actingUser) {
     const [result] = await env.DB.batch(statements);
     const updated = result.results?.[0];
     if (!updated) {
-      return { error: errorResponse("Usuário não encontrado.", 404, "USER_NOT_FOUND") };
+      throw lastOwnerError();
     }
 
     return {
@@ -370,18 +372,13 @@ async function deleteUser(env, targetUserId, actingUser) {
   }
 
   try {
-    await env.DB.batch([
-      env.DB.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(
-        targetUserId,
-      ),
-      env.DB.prepare(`DELETE FROM user_projects WHERE user_id = ?`).bind(
-        targetUserId,
-      ),
-      env.DB.prepare(`DELETE FROM organization_users WHERE user_id = ?`).bind(
-        targetUserId,
-      ),
-      env.DB.prepare(`DELETE FROM users WHERE id = ?`).bind(targetUserId),
+    const guard = await ownerRetention(env, { userId: targetUserId, removing: true });
+    const results = await env.DB.batch([
+      ...["sessions", "user_projects", "organization_users"].map(table =>
+        env.DB.prepare(`DELETE FROM ${table} WHERE user_id = ? AND ${guard.sql}`).bind(targetUserId, ...guard.args)),
+      env.DB.prepare(`DELETE FROM users WHERE id = ? AND ${guard.sql}`).bind(targetUserId, ...guard.args),
     ]);
+    if (Number(results.at(-1).meta?.changes) !== 1) throw lastOwnerError();
   } catch (error) {
     // D1 rolls the whole batch back before this catch. Preserve all links and
     // sessions: append-only Ticket history must never be bypassed to delete a user.
