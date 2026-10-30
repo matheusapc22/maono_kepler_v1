@@ -151,7 +151,7 @@ function checkedLedger(rows, timestampKey = 'appliedAt') {
   return rows.map(row => ({ id: row.id, name: row.name, appliedAt: row[timestampKey] })).sort((a, b) => a.id - b.id);
 }
 
-async function queryOrganizationLedger(configPath, injected) {
+export async function queryOrganizationLedger(configPath, injected) {
   const json = await runWranglerJson([
     'd1', 'execute', PRODUCTION_DATABASE_NAME, '--remote',
     '--command', 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id;',
