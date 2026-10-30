@@ -155,17 +155,20 @@ export async function collectQaInventory(configPath, remote, migration, injected
   if (JSON.stringify(ledger) !== JSON.stringify(evidence.ledger.rows) ||
       JSON.stringify(firstSummary) !== JSON.stringify(finalSummary) || JSON.stringify(first) !== JSON.stringify(final)) fail('QA_INVENTORY_DRIFT');
   const exclusions = { INACTIVE:0, STORAGE_UNREADY:0, OWNER_UNREADY:0, SHARED_ACCESS:0, OBSERVED_ACTIVITY:0, GLOBAL_MANAGEMENT_UNRESOLVED:0 };
+  const excludedOrganizations = [];
   const eligible = final.filter(row => {
     const blocked = reasons(row, finalSummary);
     for (const code of blocked) exclusions[code]++;
+    // Project only the already validated ID and fixed codes, never the row.
+    if (blocked.length) excludedOrganizations.push({ id:row.id, reasons:blocked });
     return blocked.length === 0;
   }).sort((a,b) => a.resourceCount-b.resourceCount || a.memberCount-b.memberCount || a.id-b.id);
   return {
-    version:1, phase:'organization-qa-inventory-read-only', writesPerformed:false,
+    version:2, phase:'organization-qa-inventory-read-only', writesPerformed:false,
     schema:{ profile:evidence.schema.profile, digest:evidence.schema.digest, compatible:true },
     ledger:{ appliedCount:ledger.length, digest:evidence.ledger.digest, pendingCount:0, stable:true },
     integrity:{ quickCheck:'ok', foreignKeyViolationCount:0 },
-    scannedCount:final.length, eligibleCount:eligible.length, exclusions,
+    scannedCount:final.length, eligibleCount:eligible.length, exclusions, excludedOrganizations,
     unresolvedManagementItems:finalSummary.unresolvedManagementItems,
     selection: eligible.length ? { status:'PROVISIONAL_CANDIDATE', organization:eligible[0] } : { status:'NO_ELIGIBLE_CANDIDATE', organization:null },
     snapshotDigest:sha256Text(JSON.stringify({ summary:finalSummary, organizations:final })),

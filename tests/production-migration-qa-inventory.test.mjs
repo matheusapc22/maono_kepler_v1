@@ -107,6 +107,95 @@ for (const profile of ['canonical','historical']) {
     assert.equal(result.selection.organization.id,2);
     assert.equal(result.eligibleCount,2);
   });
+  function assertDiagnostics(f, result, expected) {
+    assert.deepEqual(result.excludedOrganizations,expected);
+    assert.equal(result.version,2);
+    assert.equal(result.excludedOrganizations.length,result.scannedCount-result.eligibleCount);
+    const codes=['INACTIVE','STORAGE_UNREADY','OWNER_UNREADY','SHARED_ACCESS','OBSERVED_ACTIVITY','GLOBAL_MANAGEMENT_UNRESOLVED'];
+    const counts=Object.fromEntries(codes.map(code=>[code,0]));
+    let previous=0;
+    for (const row of result.excludedOrganizations) {
+      assert.deepEqual(Object.keys(row).sort(),['id','reasons']);
+      assert.ok(Number.isSafeInteger(row.id) && row.id>previous);
+      previous=row.id;
+      assert.ok(row.reasons.length>0 && row.reasons.length<=codes.length);
+      assert.equal(new Set(row.reasons).size,row.reasons.length);
+      for (const code of row.reasons) { assert.ok(codes.includes(code)); counts[code]++; }
+    }
+    assert.deepEqual(counts,result.exclusions);
+    const ledgerSql='SELECT id, name, applied_at FROM d1_migrations ORDER BY id;';
+    assert.deepEqual(f.calls.map(args=>args.includes('time-travel')?'time-travel':args[args.indexOf('--command')+1]),[
+      ledgerSql,...Object.values(ORGANIZATION_SCHEMA_QUERIES),'time-travel',ledgerSql,
+      QA_INVENTORY_QUERIES.quickCheck,QA_INVENTORY_QUERIES.foreignKeys,
+      QA_INVENTORY_QUERIES.summary,QA_INVENTORY_QUERIES.organizations,
+      QA_INVENTORY_QUERIES.summary,QA_INVENTORY_QUERIES.organizations,ledgerSql,
+    ],'diagnostics must not add, remove, reorder or repeat remote reads');
+    assert.equal(f.snapshot(),f.before);
+    assert.doesNotMatch(JSON.stringify(result),/PRIVATE|example\.test|private-slug|dropbox|token|password|payload_json/);
+  }
+  test(profile + ': diagnostic mixed inventory exports only excluded IDs and leaves selection intact',async t=>{
+    const f=fixture(t,db=>db.exec("UPDATE organizations SET active=0,updated_at='2020-01-01' WHERE id=1;"));
+    // 0042 records legacy metadata writes as a recent management event.
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM organization_management_events WHERE organization_id=1 AND action='organization.legacy_updated';").get().n,1);
+    const result=await collectQaInventory('synthetic',remote,migration,f.injected);
+    assertDiagnostics(f,result,[{id:1,reasons:['INACTIVE','OBSERVED_ACTIVITY']}]);
+    assert.equal(result.selection.organization.id,2);
+    assert.equal(result.eligibleCount,1);
+    assert.equal(result.selection.status,'PROVISIONAL_CANDIDATE');
+  });
+  test(profile + ': diagnostic no candidates preserves all reasons without raw state or personal fields',async t=>{
+    const f=fixture(t,db=>db.exec(`
+      UPDATE organizations SET active=0,storage_error='PRIVATE_ERROR',updated_at='2020-01-01' WHERE id=1;
+      UPDATE users SET active=0 WHERE id=1;
+      INSERT INTO organization_access_delegations(organization_id,delegate_user_id,granted_by,updated_by) VALUES(1,1,1,1);
+      INSERT INTO sessions(user_id,token_hash,expires_at) VALUES(1,'PRIVATE_TOKEN','9999-01-01');
+      INSERT INTO organization_management_operations(id,actor_id,idempotency_key,payload_hash,kind,payload_json)
+      VALUES('synthetic-diagnostic',1,'synthetic-diagnostic','PRIVATE_HASH','change','PRIVATE_PAYLOAD');
+    `));
+    const result=await collectQaInventory('synthetic',remote,migration,f.injected);
+    assertDiagnostics(f,result,[
+      {id:1,reasons:['INACTIVE','STORAGE_UNREADY','OWNER_UNREADY','SHARED_ACCESS','OBSERVED_ACTIVITY','GLOBAL_MANAGEMENT_UNRESOLVED']},
+      {id:2,reasons:['GLOBAL_MANAGEMENT_UNRESOLVED']},
+    ]);
+    assert.equal(result.eligibleCount,0);
+    assert.deepEqual(result.selection,{status:'NO_ELIGIBLE_CANDIDATE',organization:null});
+  });
+  test(profile + ': diagnostic all eligible does not list unselected organizations',async t=>{
+    const f=fixture(t);
+    const result=await collectQaInventory('synthetic',remote,migration,f.injected);
+    assertDiagnostics(f,result,[]);
+    assert.equal(result.selection.organization.id,1);
+    assert.equal(result.eligibleCount,2);
+    assert.equal(JSON.stringify(result).includes('"id":2'),false);
+  });
+  test(profile + ': diagnostic empty database has no fabricated ID or reason',async t=>{
+    const f=fixture(t,db=>db.exec('DELETE FROM organization_users; DELETE FROM organizations;'));
+    const result=await collectQaInventory('synthetic',remote,migration,f.injected);
+    assertDiagnostics(f,result,[]);
+    assert.equal(result.scannedCount,0);
+    assert.deepEqual(result.selection,{status:'NO_ELIGIBLE_CANDIDATE',organization:null});
+  });
+  function populateLimit(db,count) {
+    db.exec("UPDATE organizations SET active=0,updated_at='2020-01-01';");
+    const insert=db.prepare("INSERT INTO organizations(id,name,slug,dropbox_root_path,active,storage_status,updated_at) VALUES(?,?,?, ?,0,'READY','2020-01-01');");
+    for(let id=3;id<=count;id++) insert.run(id,'PRIVATE_NAME_'+id,'private-slug-'+id,'/PRIVATE_PATH/'+id);
+  }
+  test(profile + ': diagnostic exact limit retains every excluded ID once in ascending order',async t=>{
+    const f=fixture(t,db=>populateLimit(db,100));
+    const result=await collectQaInventory('synthetic',remote,migration,f.injected);
+    assertDiagnostics(f,result,Array.from({length:100},(_,i)=>({id:i+1,reasons:i<2?['INACTIVE','OBSERVED_ACTIVITY']:['INACTIVE','OWNER_UNREADY']})));
+    assert.equal(result.scannedCount,100);
+    assert.equal(result.eligibleCount,0);
+    assert.equal(result.selection.organization,null);
+  });
+  test(profile + ': diagnostic limit overflow fails before reading any organization IDs',async t=>{
+    const f=fixture(t,db=>populateLimit(db,101));
+    let report;
+    await assert.rejects(async()=>{report=await collectQaInventory('synthetic',remote,migration,f.injected);},{code:'QA_INVENTORY_LIMIT_EXCEEDED'});
+    assert.equal(report,undefined);
+    assert.equal(f.calls.some(args=>args.includes(QA_INVENTORY_QUERIES.organizations)),false);
+    assert.equal(f.snapshot(),f.before);
+  });
   const queues = [
     ['legacy export',"INSERT INTO organization_exports(organization_id,type,format,status) VALUES(1,'synthetic','json','queued');"],
     ['ticket export',"INSERT INTO ticket_export_jobs(id,organization_id,actor_id,request_id,request_hash,input_json,definition_json,config_json,state,generation,created_at,updated_at,expires_at) VALUES('synthetic',1,1,'synthetic','synthetic','{}','{}','{}','running',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'9999-01-01');"],
@@ -208,6 +297,7 @@ for (const profile of ['canonical','historical']) {
     ['unsafe count',r=>{r[0].resourceCount=Number.MAX_SAFE_INTEGER+1;}],
     ['extra sensitive column',r=>{r[0].email='PRIVATE_EMAIL';}],
     ['missing column',r=>{delete r[0].memberCount;}],['duplicate id',r=>{r[1].id=r[0].id;}],
+    ['string sensitive id',r=>{r[0].id='PRIVATE_ID';}],['unsafe id',r=>{r[0].id=Number.MAX_SAFE_INTEGER+1;}],
     ['reordered rows',r=>r.reverse()],['owner inconsistency',r=>{r[0].activeOwnerCount=100;}],
     ['invalid active',r=>{r[0].active=2;}],['invalid lifecycle',r=>{r[0].storageStatus='PRIVATE_INVALID';}],
   ];
