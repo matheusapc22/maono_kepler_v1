@@ -4,12 +4,27 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 import { collectQaInventory, validateQaInventoryContext, qaInventoryFailure, QA_INVENTORY_QUERIES } from '../scripts/migrations/organization-qa-inventory.mjs';
 import { ORGANIZATION_MIGRATION, ORGANIZATION_MIGRATION_SHA256, ORGANIZATION_SCHEMA_QUERIES } from '../scripts/migrations/organization-management-schema.mjs';
 import { PRODUCTION_DATABASE_NAME, PRODUCTION_DATABASE_ID } from '../scripts/migrations/production-migration-lib.mjs';
 import { installMigratedOrganizationSchema } from './helpers/organization-schema-history.mjs';
 
 const source = path => readFileSync(new URL('../' + path, import.meta.url),'utf8');
+const digest = value => createHash('sha256').update(value).digest('hex');
+// Frozen SQL from product b2a9f186, independent of the new conditional fields.
+const legacyOrganizationsSql=source('scripts/migrations/organization-qa-inventory.mjs').replace(/\r\n/g,'\n')
+  .match(/organizations: `([\s\S]*?)`,\n  quickCheck/)[1];
+test('target diagnostics preserve the exact original totals SQL',()=>{
+  assert.equal(digest(legacyOrganizationsSql),'a244320d07b02b2f8a72614d7e8a6f2dd9e1a2accb36f1c0c5055ed0fa000b76');
+});
+const legacyReasons=(row,summary)=>[
+  [row.active!==1,'INACTIVE'],[row.storageStatus!=='READY'||row.storageErrorPresent!==0,'STORAGE_UNREADY'],
+  [row.activeOwnerCount<1||row.eligibleManagerCount!==row.managerAssigned,'OWNER_UNREADY'],
+  [row.sharedMemberCount!==0||row.enabledDelegationCount!==0,'SHARED_ACCESS'],
+  [row.liveSessionCount!==0||row.pendingWorkCount!==0||row.recentlyChanged!==0,'OBSERVED_ACTIVITY'],
+  [summary.unresolvedManagementItems!==0,'GLOBAL_MANAGEMENT_UNRESOLVED'],
+].filter(([blocked])=>blocked).map(([,code])=>code);
 const migration = { name:ORGANIZATION_MIGRATION,sha256:ORGANIZATION_MIGRATION_SHA256 };
 const names = readdirSync(new URL('../migrations/',import.meta.url)).filter(n => /^\d{4}_.*\.sql$/.test(n)).sort();
 const ledger = names.map((name,i) => ({ id:i+1,name,appliedAt:'2026-10-30 01:49:42' }));
@@ -109,7 +124,7 @@ for (const profile of ['canonical','historical']) {
   });
   function assertDiagnostics(f, result, expected) {
     assert.deepEqual(result.excludedOrganizations,expected);
-    assert.equal(result.version,2);
+    assert.equal(result.version,3);
     assert.equal(result.excludedOrganizations.length,result.scannedCount-result.eligibleCount);
     const codes=['INACTIVE','STORAGE_UNREADY','OWNER_UNREADY','SHARED_ACCESS','OBSERVED_ACTIVITY','GLOBAL_MANAGEMENT_UNRESOLVED'];
     const counts=Object.fromEntries(codes.map(code=>[code,0]));
@@ -195,6 +210,274 @@ for (const profile of ['canonical','historical']) {
     assert.equal(report,undefined);
     assert.equal(f.calls.some(args=>args.includes(QA_INVENTORY_QUERIES.organizations)),false);
     assert.equal(f.snapshot(),f.before);
+  });
+  function targetFixture(t,prepare=()=>{},transform=(sql,rows)=>rows) {
+    return fixture(t,db=>{
+      db.exec(`INSERT INTO users(id,email,name,password_hash) VALUES(3,'target@example.test','PRIVATE_TARGET','PRIVATE_HASH');
+        INSERT INTO organizations(id,name,slug,dropbox_root_path,storage_status,updated_at)
+        VALUES(4,'PRIVATE_TARGET_ORG','private-slug4','/PRIVATE_PATH4','READY','2020-01-01');
+        INSERT INTO organization_users(organization_id,user_id,access_level) VALUES(4,3,'owner');`);
+      prepare(db);
+    },transform);
+  }
+  function assertTarget(f,result) {
+    const rows=f.db.prepare(legacyOrganizationsSql).all();
+    const summary=f.db.prepare(QA_INVENTORY_QUERIES.summary).get();
+    const excluded=rows.filter(row=>legacyReasons(row,summary).length).map(row=>({id:row.id,reasons:legacyReasons(row,summary)}));
+    assertDiagnostics(f,result,excluded);
+    const eligible=rows.filter(row=>!legacyReasons(row,summary).length).sort((a,b)=>a.resourceCount-b.resourceCount||a.memberCount-b.memberCount||a.id-b.id);
+    assert.equal(result.eligibleCount,eligible.length);
+    assert.deepEqual(result.selection,eligible.length?{status:'PROVISIONAL_CANDIDATE',organization:{...eligible[0]}}:{status:'NO_ELIGIBLE_CANDIDATE',organization:null});
+    assert.equal(result.snapshotDigest,digest(JSON.stringify({summary,organizations:rows})));
+    assert.equal(result.targetedDiagnosticsDigest,digest(JSON.stringify(result.targetedDiagnostics)));
+    assert.equal(result.targetedDiagnostics?.id,rows.some(row=>row.id===4)?4:undefined);
+    if(result.selection.organization) assert.equal(Object.keys(result.selection.organization).length,16);
+    const raw=f.db.prepare(QA_INVENTORY_QUERIES.organizations).all();
+    for(const row of raw) if(row.id!==4) assert.ok(Object.entries(row).filter(([key])=>key.startsWith('org4_')).every(([,value])=>value===null));
+    for(const row of raw) assert.deepEqual(Object.fromEntries(Object.keys(rows[0]??{}).map(key=>[key,row[key]])),{...rows.find(old=>old.id===row.id)});
+    return result.targetedDiagnostics;
+  }
+  test(profile+': target only ID4, with unchanged alternative candidate and empty detail sources',async t=>{
+    const f=targetFixture(t),r=await collectQaInventory('synthetic',remote,migration,f.injected),d=assertTarget(f,r);
+    assert.equal(r.selection.organization.id,1);
+    assert.equal(d.ownership.activeOwners,1);assert.equal(d.ownership.totalOwners,1);
+    assert.equal(d.ownership.noActiveOwner,false);assert.equal(d.ownership.ineligibleAssignedManager,false);
+    assert.equal(d.ownership.managerAssigned,0);assert.equal(d.members.total,1);
+    assert.equal(d.resources.total,0);assert.equal(d.pendingWork.total,0);assert.equal(d.sessions.total,0);
+    assert.ok(Object.values(d.changes).every(value=>value===0));
+    assert.deepEqual(d.reasons,[]);
+    assert.doesNotMatch(JSON.stringify(r.selection),/org4_|ownership|bySource|byExpiry/);
+  });
+  test(profile+': target absence is null, never fabricated zero counters',async t=>{
+    const f=fixture(t),r=await collectQaInventory('synthetic',remote,migration,f.injected);
+    assert.equal(assertTarget(f,r),null);
+  });
+  test(profile+': target selection still exposes exactly the old candidate fields',async t=>{
+    const f=targetFixture(t,db=>db.exec("INSERT INTO organization_file_folders(organization_id,name) VALUES(1,'PRIVATE'),(2,'PRIVATE');"));
+    const r=await collectQaInventory('synthetic',remote,migration,f.injected);assertTarget(f,r);
+    assert.equal(r.selection.organization.id,4);
+    assert.doesNotMatch(JSON.stringify(r.selection),/org4_|ownership|bySource/);
+  });
+  for(const [name,sql,expected] of [
+    ['no owner',"DELETE FROM organization_users WHERE organization_id=4;",{activeOwners:0,totalOwners:0,noActiveOwner:true,ineligibleAssignedManager:false}],
+    ['inactive owner',"UPDATE users SET active=0 WHERE id=3;",{activeOwners:0,inactiveOwners:1,noActiveOwner:true,ineligibleAssignedManager:false}],
+    ['eligible manager',"UPDATE organizations SET management_owner_id=3 WHERE id=4;",{activeOwners:1,managerAssigned:1,eligibleManagerCount:1,managerUserActive:1,managerMembershipOwner:1,ineligibleAssignedManager:false}],
+  ]) test(profile+': target ownership '+name,async t=>{
+    const f=targetFixture(t,db=>db.exec(sql));const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    for(const [key,value] of Object.entries(expected)) assert.equal(d.ownership[key],value,key);
+  });
+  // Synthetic business-invariant corruption: restore the exact guard before
+  // collection. Schema/FK checks remain active; no production guard is changed.
+  for(const [name,prepare,expected] of [
+    ['missing manager link',()=>{},{managerUserExists:1,managerUserActive:1,managerMembershipExists:0,managerMembershipOwner:0}],
+    ['manager role viewer',db=>db.exec("INSERT INTO organization_users(organization_id,user_id,access_level) VALUES(4,2,'viewer');"),{managerUserActive:1,managerMembershipExists:1,managerMembershipOwner:0}],
+    ['inactive manager owner',db=>db.exec("UPDATE users SET active=0 WHERE id=2; INSERT INTO organization_users(organization_id,user_id,access_level) VALUES(4,2,'owner');"),{managerUserActive:0,managerMembershipExists:1,managerMembershipOwner:1}],
+  ]) test(profile+': target distinguishes '+name,async t=>{
+    const f=targetFixture(t,db=>{
+      prepare(db);
+      const guard=db.prepare("SELECT sql FROM sqlite_schema WHERE name='org_management_owner_valid'").get().sql;
+      db.exec('DROP TRIGGER org_management_owner_valid;');
+      db.exec('UPDATE organizations SET management_owner_id=2 WHERE id=4;');
+      db.exec(guard);
+    });
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    assert.equal(d.ownership.ineligibleAssignedManager,true);assert.equal(d.ownership.noActiveOwner,false);
+    for(const [key,value] of Object.entries(expected)) assert.equal(d.ownership[key],value,key);
+  });
+  for(const [name,expires,key] of [['valid','9999-01-01','valid'],['invalid','PRIVATE_INVALID','invalid']]) {
+    for(const [association,user,active] of [['ActiveOnly',1,4],['MemberOnly',3,null],['Both',3,4]]) {
+      test(profile+': target session '+name+' '+association,async t=>{
+        const f=targetFixture(t,db=>db.prepare('INSERT INTO sessions(user_id,active_organization_id,token_hash,expires_at) VALUES(?,?,?,?)').run(user,active,'PRIVATE_TOKEN',expires));
+        const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+        assert.equal(d.sessions.total,1);assert.equal(d.sessions.byExpiryAndAssociation[key+association],1);
+        assert.equal(Object.values(d.sessions.byExpiryAndAssociation).filter(v=>v!==0).length,1);
+      });
+    }
+  }
+  test(profile+': target expired session is not activity and never exports session identifiers',async t=>{
+    const f=targetFixture(t,db=>db.exec("INSERT INTO sessions(user_id,active_organization_id,token_hash,expires_at) VALUES(3,4,'PRIVATE_TOKEN','2020-01-01');"));
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));assert.equal(d.sessions.total,0);
+  });
+  for(const origin of ['metadata','events']) for(const [name,value,expected] of [
+    ['old','2020-01-01',null],['recent','CURRENT_TIMESTAMP','recent'],['future','9999-01-01','future'],['invalid','PRIVATE_INVALID','invalid'],
+  ]) test(profile+': target '+origin+' date '+name,async t=>{
+    const sqlValue=value==='CURRENT_TIMESTAMP'?value:"'"+value+"'";
+    const f=targetFixture(t,db=>db.exec(origin==='metadata'?`UPDATE organizations SET updated_at=${sqlValue} WHERE id=4;`:
+      `INSERT INTO organization_management_events(organization_id,action,version,reason,created_at) VALUES(4,'PRIVATE_ACTION',0,'PRIVATE_REASON',${sqlValue});`));
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    assert.equal(Object.values(d.changes).reduce((a,b)=>a+b,0),expected?1:0);
+    if(expected) assert.equal(d.changes[origin+expected[0].toUpperCase()+expected.slice(1)],1);
+    assert.equal(d.reasons.includes('OBSERVED_ACTIVITY'),Boolean(expected));
+  });
+  for(const [name,mutate] of [
+    ['missing',r=>{delete r.org4_resources_projects;}],['null',r=>{r.org4_owner_totalOwners=null;}],
+    ['negative',r=>{r.org4_pending_saves=-1;}],['string',r=>{r.org4_sessions_invalidBoth='1';}],
+    ['unsafe',r=>{r.org4_changes_eventsInvalid=Number.MAX_SAFE_INTEGER+1;}],
+    ['sum mismatch',r=>{r.org4_resources_projects=1;}],['owner mismatch',r=>{r.org4_owner_totalOwners=0;}],
+    ['manager mismatch',r=>{r.org4_owner_managerUserActive=1;}],['metadata overlap',r=>{r.org4_changes_metadataFuture=1;r.org4_changes_metadataRecent=1;}],
+    ['union mismatch',r=>{r.org4_causes_fileState=1;}],['extra personal field',r=>{r.org4_userEmail='PRIVATE_EMAIL';}],
+  ]) test(profile+': target rejects '+name,async t=>{
+    const f=targetFixture(t,()=>{},(sql,rows)=>{if(sql===QA_INVENTORY_QUERIES.organizations) mutate(rows.find(r=>r.id===4));return rows;});
+    await assert.rejects(collectQaInventory('synthetic',remote,migration,f.injected),{code:'QA_INVENTORY_RESPONSE_INVALID'});
+  });
+  test(profile+': target rejects details attached to a different organization',async t=>{
+    const f=targetFixture(t,()=>{},(sql,rows)=>{if(sql===QA_INVENTORY_QUERIES.organizations) rows.find(r=>r.id===1).org4_owner_totalOwners=1;return rows;});
+    await assert.rejects(collectQaInventory('synthetic',remote,migration,f.injected),{code:'QA_INVENTORY_RESPONSE_INVALID'});
+  });
+  test(profile+': target detail-only drift is rejected even when legacy totals and reasons match',async t=>{
+    let reads=0;
+    const f=targetFixture(t,db=>db.exec("INSERT INTO sessions(user_id,active_organization_id,token_hash,expires_at) VALUES(3,4,'PRIVATE_TOKEN','9999-01-01');"),(sql,rows)=>{
+      if(sql===QA_INVENTORY_QUERIES.organizations&&++reads===2) {const row=rows.find(r=>r.id===4);row.org4_sessions_validBoth=0;row.org4_sessions_invalidBoth=1;}
+      return rows;
+    });
+    await assert.rejects(collectQaInventory('synthetic',remote,migration,f.injected),{code:'QA_INVENTORY_DRIFT'});
+  });
+  const insertRow=(db,table,row)=>db.prepare(`INSERT INTO ${table}(${Object.keys(row).join(',')}) VALUES(${Object.keys(row).map(()=>'?').join(',')});`).run(...Object.values(row));
+  const seedProject=db=>insertRow(db,'projects',{id:1,organization_id:4,name:'PRIVATE_PROJECT',slug:'private-project',dropbox_root_path:'/PRIVATE_PROJECT'});
+  const seedTicket=db=>insertRow(db,'organization_tickets',{id:1,organization_id:4,subject:'PRIVATE_SUBJECT',description:'PRIVATE_CONTENT',created_by:3,created_at:'2020-01-01',updated_at:'2020-01-01'});
+  const seedSave=(db,state='PUBLISHED')=>{
+    seedProject(db);
+    db.exec(saveSql.replace("VALUES('synthetic-save',1,1,","VALUES('synthetic-save',4,1,").replace("'PUBLISHED'","'"+state+"'"));
+  };
+  const seedPreview=(db,state='READY')=>{
+    seedSave(db);
+    insertRow(db,'project_preview_operations',{id:'preview',organization_id:4,project_id:1,actor_user_id:3,operation_id:'preview-operation',
+      save_operation_id:'synthetic-save',save_operation_key:'synthetic-operation',revision:1,config_checksum:'a'.repeat(64),editor_session_id:'PRIVATE_EDITOR',
+      edit_generation:0,renderer_version:'1',image_checksum:'a'.repeat(64),size_bytes:1,capture_method:'synthetic',manifest_json:'{}',
+      storage_root:'/PRIVATE_ROOT',config_file:'PRIVATE_FILE',project_epoch:1,storage_ref:'PRIVATE_REF',state,receipt_json:'{}',payload_stored_at:'2020-01-01'});
+  };
+  const seedRevision=(db,extra={})=>{
+    seedProject(db);
+    insertRow(db,'project_config_revisions',{project_id:1,revision:1,status:'WRITING',checksum_algorithm:'sha256',checksum:'a'.repeat(64),
+      storage_provider:'synthetic',storage_ref:'PRIVATE_REF',schema_name:'synthetic',schema_version:1,size_bytes:1,content_type:'application/json',...extra});
+  };
+  const seedLink=(db,extra={})=>{
+    seedTicket(db);
+    insertRow(db,'change_records',{id:'change',organization_id:4,domain:'platform',title:'PRIVATE_TITLE',proposal:'PRIVATE_PROPOSAL',status:'delivered',created_by:3,actor_id:3});
+    insertRow(db,'ticket_change_links',{ticket_id:1,organization_id:4,record_id:'change',actor_id:3,...extra});
+  };
+  const targetSources=[
+    ['reservations',db=>insertRow(db,'organization_resource_reservations',{organization_id:4,resource_type:'project',idempotency_key:'synthetic-target-key',actor_user_id:3,expires_at:'2000-01-01'})],
+    ['limitRequests',db=>insertRow(db,'organization_limit_requests',{organization_id:4,request_type:'plan',reason:'PRIVATE_REASON',status:'pending'})],
+    ['saves',db=>seedSave(db,'AWAITING_UPLOAD')],
+    ['previews',db=>seedPreview(db,'WAITING_CAPTURE')],
+    ['saveOutbox',db=>{seedSave(db);insertRow(db,'project_save_outbox',{operation_id:'synthetic-save',effect:'AUDIT',state:'PENDING'});}],
+    ['previewOutbox',db=>{seedPreview(db);insertRow(db,'project_preview_outbox',{operation_id:'preview'});}],
+    ['legacyExports',db=>insertRow(db,'organization_exports',{organization_id:4,type:'synthetic',format:'json',status:'queued'})],
+    ['ticketExports',db=>insertRow(db,'ticket_export_jobs',{id:'export',organization_id:4,actor_id:3,request_id:'synthetic',request_hash:'synthetic',
+      input_json:'{}',definition_json:'{}',config_json:'{}',state:'running',generation:0,created_at:'2020-01-01',updated_at:'2020-01-01',expires_at:'9999-01-01'})],
+    ['exportGc',db=>insertRow(db,'ticket_export_gc',{id:'gc',job_id:'old-job',organization_id:4,next_at:'2020-01-01'})],
+    ['attachmentUploads',db=>{seedTicket(db);insertRow(db,'ticket_attachment_upload_sessions',{id:'synthetic-upload',organization_id:4,ticket_id:1,user_id:3,
+      storage_key:'PRIVATE_KEY',expected_size:1,expected_content_hash:'a'.repeat(64),target_audience:'ticket',state:'RESERVED',idle_expires_at:1,hard_expires_at:2,created_at:'2020-01-01',updated_at:'2020-01-01'});}],
+    ['ticketOutbox',db=>{seedTicket(db);
+      insertRow(db,'ticket_commands',{id:'cmd',organization_id:4,actor_user_id:3,operation:'synthetic',request_hash:'hash',result_json:'{}',response_status:200,created_at:'2020-01-01'});
+      insertRow(db,'ticket_events',{id:1,organization_id:4,ticket_id:1,event_type:'synthetic'});
+      insertRow(db,'ticket_command_outbox',{id:'outbox',command_id:'cmd',organization_id:4,ticket_id:1,event_id:1,event_type:'synthetic',payload:'{}',created_at:'2020-01-01'});
+    }],
+    ['changeRequests',db=>{seedProject(db);insertRow(db,'project_change_requests',{id:'cr',organization_id:4,project_id:1,requested_by_user_id:3,base_revision:0,
+      reason:'PRIVATE_REASON',idempotency_key:'synthetic-key',submission_hash:'hash'});}],
+    ['attachmentsWithoutSession',db=>{seedTicket(db);insertRow(db,'ticket_attachments',{organization_id:4,ticket_id:1,original_name:'PRIVATE_FILE',stored_name:'PRIVATE_FILE',
+      storage_key:'PRIVATE_KEY',mime_type:'text/plain',size_bytes:1,uploaded_by:3,status:'PENDING'});}],
+    ['backfills',db=>insertRow(db,'ticket_command_backfills',{organization_id:4,status:'running'})],
+    ['files',db=>insertRow(db,'organization_files',{organization_id:4,name:'PRIVATE_FILE',file_name:'PRIVATE_FILE',dropbox_path:'PRIVATE_PATH',status:'PENDING'})],
+    ['legacyPreviews',db=>{seedProject(db);db.exec("UPDATE projects SET preview_status='PENDING' WHERE id=1;");}],
+    ['revisions',db=>seedRevision(db)],
+    ['changeLinks',db=>seedLink(db)],
+  ];
+  for(const [name,prepare] of targetSources) test(profile+': target pending source '+name,async t=>{
+    const f=targetFixture(t,prepare),d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    assert.equal(d.pendingWork.total,1);assert.equal(d.pendingWork.bySource[name],1);
+    assert.equal(Object.values(d.pendingWork.bySource).filter(v=>v!==0).length,1);
+    assert.ok(d.reasons.includes('OBSERVED_ACTIVITY'));
+  });
+  for(const [name,values,expected] of [
+    ['status',{status:'running'},{backfillStatus:1}],
+    ['pending',{status:'ready',pending_count:3},{backfillPendingRows:1}],
+    ['skipped',{status:'ready',skipped_count:4},{backfillSkippedRows:1}],
+    ['overlap',{status:'failed',pending_count:3,skipped_count:4},{backfillStatus:1,backfillPendingRows:1,backfillSkippedRows:1}],
+    ['ready',{status:'ready'},{}],
+  ]) test(profile+': target backfill cause '+name,async t=>{
+    const f=targetFixture(t,db=>insertRow(db,'ticket_command_backfills',{organization_id:4,...values}));
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    assert.equal(d.pendingWork.total,Object.keys(expected).length?1:0);
+    for(const key of ['backfillStatus','backfillPendingRows','backfillSkippedRows']) assert.equal(d.pendingWork.overlappingCauses[key],expected[key]??0);
+  });
+  for(const [name,values,expected] of [
+    ['state',{status:'PENDING'},{fileState:1}],
+    ['purge null',{status:'TRASHED',deleted_at:'2020-01-01'},{filePurgeInvalidDate:1}],
+    ['purge invalid',{status:'TRASHED',deleted_at:'2020-01-01',purge_after:'PRIVATE_INVALID'},{filePurgeInvalidDate:1}],
+    ['purge due',{status:'TRASHED',deleted_at:'2020-01-01',purge_after:'2020-01-02'},{filePurgeDue:1}],
+    ['overlap',{status:'PURGE_PENDING',deleted_at:'2020-01-01',purge_after:'2020-01-02'},{fileState:1,filePurgeDue:1}],
+    ['future',{status:'TRASHED',deleted_at:'2020-01-01',purge_after:'9999-01-01'},{}],
+    ['already purged',{status:'PURGED',deleted_at:'2020-01-01',purge_after:'PRIVATE_INVALID',purged_at:'2020-01-02'},{}],
+  ]) test(profile+': target file cause '+name,async t=>{
+    const f=targetFixture(t,db=>insertRow(db,'organization_files',{organization_id:4,name:'PRIVATE_FILE',file_name:'PRIVATE_FILE',dropbox_path:'PRIVATE_PATH',...values}));
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    assert.equal(d.pendingWork.total,Object.keys(expected).length?1:0);
+    for(const key of ['fileState','filePurgeInvalidDate','filePurgeDue']) assert.equal(d.pendingWork.overlappingCauses[key],expected[key]??0);
+  });
+  for(const [name,values,expected] of [
+    ['nonterminal',{status:'WRITING'},{revisionNonterminal:1}],
+    ['ready ahead',{status:'READY'},{revisionAheadReady:1}],
+    ['failed published ahead',{status:'FAILED',published_at:'2020-01-01'},{revisionAheadPublished:1}],
+    ['overlap',{status:'READY',published_at:'2020-01-01'},{revisionAheadReady:1,revisionAheadPublished:1}],
+    ['failed final',{status:'FAILED'},{}],
+  ]) test(profile+': target revision cause '+name,async t=>{
+    const f=targetFixture(t,db=>seedRevision(db,values));
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    assert.equal(d.pendingWork.total,Object.keys(expected).length?1:0);
+    for(const key of ['revisionNonterminal','revisionAheadReady','revisionAheadPublished']) assert.equal(d.pendingWork.overlappingCauses[key],expected[key]??0);
+  });
+  for(const [name,values,expected] of [
+    ['missing status',{source_version:1},{linkMissingStatus:1}],
+    ['version mismatch',{source_version:0,source_status:'delivered'},{linkVersionMismatch:1}],
+    ['overlap',{source_version:0},{linkMissingStatus:1,linkVersionMismatch:1}],
+    ['aligned',{source_version:1,source_status:'delivered'},{}],
+    ['inactive',{source_version:0,active:0},{}],
+  ]) test(profile+': target link cause '+name,async t=>{
+    const f=targetFixture(t,db=>seedLink(db,values));
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    assert.equal(d.pendingWork.total,Object.keys(expected).length?1:0);
+    for(const key of ['linkMissingStatus','linkVersionMismatch']) assert.equal(d.pendingWork.overlappingCauses[key],expected[key]??0);
+  });
+  test(profile+': target resource components include inactive and trashed resources without their content',async t=>{
+    const f=targetFixture(t,db=>{
+      seedProject(db);db.exec('UPDATE projects SET active=0 WHERE id=1;');seedTicket(db);
+      insertRow(db,'organization_files',{organization_id:4,name:'PRIVATE_FILE',file_name:'PRIVATE_FILE',dropbox_path:'PRIVATE_PATH',status:'TRASHED'});
+      insertRow(db,'organization_file_folders',{organization_id:4,name:'PRIVATE_FOLDER',deleted_at:'2020-01-01'});
+      insertRow(db,'organization_roadmaps',{organization_id:4,name:'PRIVATE_ROADMAP',start_date:'2020-01-01',end_date:'2020-12-31',created_by:3});
+      insertRow(db,'organization_exports',{organization_id:4,type:'synthetic',format:'json',status:'queued'});
+    });
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    assert.equal(d.resources.total,6);assert.ok(Object.values(d.resources.bySource).every(v=>v===1));
+  });
+  test(profile+': target terminal operation states and final outboxes remain nonblocking',async t=>{
+    const f=targetFixture(t,db=>{
+      seedPreview(db);
+      insertRow(db,'project_save_outbox',{operation_id:'synthetic-save',effect:'AUDIT',state:'DONE'});
+      insertRow(db,'project_preview_outbox',{operation_id:'preview',state:'DONE'});
+      insertRow(db,'organization_resource_reservations',{organization_id:4,resource_type:'project',idempotency_key:'synthetic-target-key',actor_user_id:3,expires_at:'2000-01-01',status:'EXPIRED'});
+      insertRow(db,'organization_limit_requests',{organization_id:4,request_type:'plan',reason:'PRIVATE_REASON',status:'approved'});
+      insertRow(db,'ticket_command_backfills',{organization_id:4,status:'ready'});
+    });
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    assert.equal(d.pendingWork.total,0);assert.deepEqual(d.reasons,[]);
+  });
+  test(profile+': target mixed causes retain union totals and distinguish every temporal origin',async t=>{
+    const f=targetFixture(t,db=>{
+      insertRow(db,'ticket_command_backfills',{organization_id:4,status:'failed',pending_count:2,skipped_count:3});
+      insertRow(db,'organization_files',{organization_id:4,name:'PRIVATE_FILE',file_name:'PRIVATE_FILE',dropbox_path:'PRIVATE_PATH',status:'PURGE_PENDING',deleted_at:'2020-01-01',purge_after:'PRIVATE_INVALID'});
+      db.exec("UPDATE organizations SET updated_at='9999-01-01' WHERE id=4;");
+      for(const date of ['2020-01-01','9999-01-01','PRIVATE_INVALID']) insertRow(db,'organization_management_events',{organization_id:4,action:'PRIVATE_ACTION',version:0,created_at:date});
+      db.exec("INSERT INTO organization_management_events(organization_id,action,version) VALUES(4,'PRIVATE_ACTION',0);");
+      insertRow(db,'sessions',{user_id:3,token_hash:'PRIVATE_VALID',expires_at:'9999-01-01',active_organization_id:4});
+      insertRow(db,'sessions',{user_id:1,token_hash:'PRIVATE_INVALID',expires_at:'PRIVATE_INVALID',active_organization_id:4});
+    });
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    assert.equal(d.pendingWork.total,2);
+    assert.equal(Object.values(d.pendingWork.overlappingCauses).reduce((a,b)=>a+b,0),5);
+    assert.equal(d.sessions.total,2);assert.equal(d.sessions.byExpiryAndAssociation.validBoth,1);assert.equal(d.sessions.byExpiryAndAssociation.invalidActiveOnly,1);
+    assert.deepEqual(d.changes,{metadataInvalid:0,metadataFuture:1,metadataRecent:0,eventsInvalid:1,eventsFuture:1,eventsRecent:1});
   });
   const queues = [
     ['legacy export',"INSERT INTO organization_exports(organization_id,type,format,status) VALUES(1,'synthetic','json','queued');"],
