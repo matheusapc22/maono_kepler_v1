@@ -103,7 +103,8 @@ a lista permite associar cada exclusao ao ID sem alterar nenhum recurso.
 As categorias se sobrepoem: uma organizacao pode ter varios codigos. Esses
 codigos agrupam sinais; por exemplo, OBSERVED_ACTIVITY nao distingue uma sessao
 de trabalho pendente e SHARED_ACCESS nao distingue membro de delegacao.
-Nao exporta linhas agregadas completas das excluidas, ledger completo, DDL, erros livres,
+Exceto o diagnostico fixo do ID4 descrito abaixo, nao exporta linhas agregadas
+completas das excluidas. Nao exporta ledger completo, DDL, erros livres,
 linhas de FK, nomes/emails/IDs de usuarios, tokens, conteudo de negocio ou logs.
 Apenas o JSON fixo e publicado pelo workflow, retencao de tres dias. Esse
 relatorio contem ID/contagens operacionais e deve ser tratado como evidencia
@@ -116,6 +117,63 @@ delta no dispatcher de main. Publicar e integrar a alteracao de produto continua
 dependendo de revisao/CI e autorizacao; uma nova leitura depende de autorizacao
 especifica e do mesmo Environment humano. Diagnostico nao autoriza saneamento,
 criacao de organizacoes, mudanca de owners, flags ou acceptance.
+
+## Diagnostico direcionado v3 - organizacao 4
+
+A versao 3 preserva os campos anteriores e acrescenta `targetedDiagnostics`,
+exclusivamente para o ID4 fixo no codigo. Se nao existir, o campo e `null`; nao
+fabricar contagens zero. A candidata em `selection.organization` continua com
+exatamente os 16 campos anteriores, mesmo quando outra organizacao for escolhida.
+Nenhum input permite escolher outro ID, SQL, URL ou segredo.
+
+O total original e sua consulta SQL permanecem intactos dentro da mesma chamada.
+Novas agregacoes condicionais detalham o ID4; isto amplia a projecao, mas nao
+acrescenta chamadas remotas, tabelas, escritas ou dados pessoais. As duas leituras
+e a comparacao integral de drift incluem os detalhes. `snapshotDigest` preserva
+o contrato v2 dos agregados anteriores; `targetedDiagnosticsDigest` fixa o novo
+bloco separado. Ausencia de detalhe em v1/v2 nao significa ausencia de bloqueio.
+
+O bloco fornece:
+
+- `state` e `members`: estado registrado, versao, membros totais/ativos/compartilhados
+  e delegacoes habilitadas. Nao identifica pessoas ou vinculos individuais.
+- `ownership`: owners totais/ativos/inativos; presenca e elegibilidade do
+  responsavel; existencia/atividade do usuario e existencia/papel owner do
+  vinculo, apenas como 0/1. `noActiveOwner` e `ineligibleAssignedManager` sao
+  independentes. Responsavel nao atribuido, sozinho, nao e bloqueio.
+- `resources.bySource`: seis contagens de projetos, arquivos, pastas, tickets,
+  roadmaps e exports legados, incluindo recursos inativos/lixeira como antes.
+- `sessions.byExpiryAndAssociation`: seis contagens disjuntas, cruzando prazo
+  futuro valido ou data invalida/nula com associacao pela organizacao ativa,
+  pelo vinculo de membro ou por ambos. Sessao expirada nao entra no total.
+- `changes`: metadata invalida, futura ou passada recente; eventos invalidos,
+  futuros ou passados recentes. Metadata e 0/1; eventos sao contagens. Recente
+  significa entre agora menos 24 horas e agora. Futuro e separado; nao dizer
+  que todo sinal representa uma alteracao ocorrida nas ultimas 24 horas.
+- `pendingWork.bySource`: as 18 fontes de pendencias ja cobertas pelo coletor.
+  `overlappingCauses` separa, dentro de backfills, status/pending/skipped; dentro
+  de arquivos, estado/purge com data invalida/purge vencido; dentro de revisoes,
+  estado nao terminal/acima do ponteiro READY/acima do ponteiro com publicacao;
+  dentro de links, status ausente/versao divergente. Sao CONTAGENS DE LINHAS,
+  nao somas dos campos pending_count ou skipped_count nem tarefas unicas.
+
+As causas internas podem se sobrepor; sua soma NAO substitui o total da uniao.
+Um mesmo fluxo tambem pode ocupar fontes diferentes. O validador exige chaves
+exatas, inteiros seguros nao negativos, coerencia com os totais e detalhes nulos
+para qualquer outro ID. Elegibilidade, motivos, ordenacao e limite nao mudam.
+
+Uso do resultado: separar ausencia de owner de responsavel inelegivel; distinguir
+datas invalidas de prazo/atividade recente; identificar a fonte operacional da
+pendencia. Isso permite decidir entre aguardar quietude e investigar uma categoria
+especifica. Nao diagnostica por si so fila travada, defeito do provider ou dados
+de negocio incorretos. Contagens nao identificam usuario/recurso para mutacao
+exata, nao autorizam limpeza e nao comprovam menor impacto ou exclusividade.
+Uma correcao posterior pode registrar novo evento e reiniciar a janela de 24h.
+Credenciais QA, flags, storage real e runtime/UI continuam sem comprovacao.
+
+Preparacao v3 somente local nesta etapa. Publicacao, integracao, nova execucao
+protegida e eventual adequacao continuam etapas distintas; nao usar o resultado
+para alterar owners, sessoes, delegacoes, filas ou lifecycle por inferencia.
 
 Estabilidade de contagens nao e snapshot transacional nem prova de exclusividade:
 trocas de membros/recursos com mesmas contagens, escritas entre leituras,
