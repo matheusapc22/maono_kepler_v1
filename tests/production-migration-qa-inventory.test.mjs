@@ -12,6 +12,30 @@ import { installMigratedOrganizationSchema } from './helpers/organization-schema
 
 const source = path => readFileSync(new URL('../' + path, import.meta.url),'utf8');
 const digest = value => createHash('sha256').update(value).digest('hex');
+const FIXED_NOW = '2026-10-30T12:00:00.000Z';
+// Test-only clock seam. Run the original SQL unchanged; only replace SQLite's
+// 'now' argument, delegating date parsing/modifiers/NULL to a native connection.
+// The real clock, production code and the allowlisted queries are untouched.
+function freezeJulianNow(t, db) {
+  const native = new DatabaseSync(':memory:');
+  t.after(() => native.close());
+  const statements = new Map();
+  db.function('julianday', { varargs:true }, (...args) => {
+    const values = args.length ? args.map((value,index) => index===0 && value==='now' ? FIXED_NOW : value) : [FIXED_NOW];
+    if (!statements.has(values.length)) statements.set(values.length,
+      native.prepare(`SELECT julianday(${values.map(()=>'?').join(',')}) AS value`));
+    return statements.get(values.length).get(...values).value;
+  });
+}
+test('target boundary clock delegates native date semantics without rewriting SQL',t=>{
+  const db=new DatabaseSync(':memory:');t.after(()=>db.close());freezeJulianNow(t,db);
+  const row=db.prepare(`SELECT julianday('now') AS current, julianday(?) AS literal,
+    julianday('now','-1 day') AS previous, julianday('now','+0.001 seconds') AS next,
+    julianday('PRIVATE_INVALID') AS invalid, julianday(NULL) AS absent`).get(FIXED_NOW);
+  assert.equal(row.current,Date.parse(FIXED_NOW)/86400000+2440587.5);
+  assert.equal(row.literal,row.current);assert.equal(row.previous,row.current-1);
+  assert.ok(row.next>row.current);assert.equal(row.invalid,null);assert.equal(row.absent,null);
+});
 // Frozen SQL from product b2a9f186, independent of the new conditional fields.
 const legacyOrganizationsSql=source('scripts/migrations/organization-qa-inventory.mjs').replace(/\r\n/g,'\n')
   .match(/organizations: `([\s\S]*?)`,\n  quickCheck/)[1];
@@ -309,6 +333,40 @@ for (const profile of ['canonical','historical']) {
     if(expected) assert.equal(d.changes[origin+expected[0].toUpperCase()+expected.slice(1)],1);
     assert.equal(d.reasons.includes('OBSERVED_ACTIVITY'),Boolean(expected));
   });
+  for(const origin of ['metadata','events']) for(const [name,value,expected] of [
+    ['before 24h','2026-10-29T11:59:59.999Z',null],
+    ['exact 24h','2026-10-29T12:00:00.000Z','Recent'],
+    ['after 24h','2026-10-29T12:00:00.001Z','Recent'],
+    ['before now','2026-10-30T11:59:59.999Z','Recent'],
+    ['exact now',FIXED_NOW,'Recent'],
+    ['after now','2026-10-30T12:00:00.001Z','Future'],
+  ]) test(profile+': target boundary '+origin+' '+name,async t=>{
+    const f=targetFixture(t,db=>{
+      freezeJulianNow(t,db);
+      if(origin==='metadata') db.prepare('UPDATE organizations SET updated_at=? WHERE id=4').run(value);
+      else db.prepare('INSERT INTO organization_management_events(organization_id,action,version,created_at) VALUES(4,?,0,?)').run('PRIVATE_ACTION',value);
+    });
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    const changes={metadataInvalid:0,metadataFuture:0,metadataRecent:0,eventsInvalid:0,eventsFuture:0,eventsRecent:0};
+    if(expected) changes[origin+expected]=1;
+    assert.deepEqual(d.changes,changes);
+    assert.deepEqual(d.reasons,expected?['OBSERVED_ACTIVITY']:[]);
+  });
+  for(const [name,value,live] of [
+    ['before now','2026-10-30T11:59:59.999Z',0],['exact now',FIXED_NOW,0],['after now','2026-10-30T12:00:00.001Z',1],
+  ]) for(const [association,user,active] of [['ActiveOnly',1,4],['MemberOnly',3,null],['Both',3,4]]) {
+    test(profile+': target boundary session '+association+' '+name,async t=>{
+      const f=targetFixture(t,db=>{
+        freezeJulianNow(t,db);
+        db.prepare('INSERT INTO sessions(user_id,active_organization_id,token_hash,expires_at) VALUES(?,?,?,?)').run(user,active,'PRIVATE_TOKEN',value);
+      });
+      const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+      const partitions={validActiveOnly:0,validMemberOnly:0,validBoth:0,invalidActiveOnly:0,invalidMemberOnly:0,invalidBoth:0};
+      partitions['valid'+association]=live;
+      assert.equal(d.sessions.total,live);assert.deepEqual(d.sessions.byExpiryAndAssociation,partitions);
+      assert.deepEqual(d.reasons,live?['OBSERVED_ACTIVITY']:[]);
+    });
+  }
   for(const [name,mutate] of [
     ['missing',r=>{delete r.org4_resources_projects;}],['null',r=>{r.org4_owner_totalOwners=null;}],
     ['negative',r=>{r.org4_pending_saves=-1;}],['string',r=>{r.org4_sessions_invalidBoth='1';}],
@@ -355,6 +413,17 @@ for (const profile of ['canonical','historical']) {
     seedTicket(db);
     insertRow(db,'change_records',{id:'change',organization_id:4,domain:'platform',title:'PRIVATE_TITLE',proposal:'PRIVATE_PROPOSAL',status:'delivered',created_by:3,actor_id:3});
     insertRow(db,'ticket_change_links',{ticket_id:1,organization_id:4,record_id:'change',actor_id:3,...extra});
+  };
+  const seedMapLink=(db,extra={})=>{
+    seedProject(db);seedTicket(db);
+    insertRow(db,'project_change_requests',{id:'map-change',organization_id:4,project_id:1,requested_by_user_id:3,
+      base_revision:0,status:'applied',lifecycle_version:7,reason:'PRIVATE_REASON',idempotency_key:'synthetic-map-key',submission_hash:'hash'});
+    // The real insert trigger creates the map_project record at version 1.
+    // Different versions make choosing c.version instead of r.lifecycle_version observable.
+    const record=db.prepare("SELECT id,domain,version FROM change_records WHERE change_request_id='map-change'").get();
+    assert.deepEqual({...record},{id:'cr:map-change',domain:'map_project',version:1});
+    assert.equal(db.prepare("SELECT lifecycle_version FROM project_change_requests WHERE id='map-change'").get().lifecycle_version,7);
+    insertRow(db,'ticket_change_links',{ticket_id:1,organization_id:4,record_id:record.id,actor_id:3,...extra});
   };
   const targetSources=[
     ['reservations',db=>insertRow(db,'organization_resource_reservations',{organization_id:4,resource_type:'project',idempotency_key:'synthetic-target-key',actor_user_id:3,expires_at:'2000-01-01'})],
@@ -416,6 +485,20 @@ for (const profile of ['canonical','historical']) {
     assert.equal(d.pendingWork.total,Object.keys(expected).length?1:0);
     for(const key of ['fileState','filePurgeInvalidDate','filePurgeDue']) assert.equal(d.pendingWork.overlappingCauses[key],expected[key]??0);
   });
+  for(const [name,value,due] of [
+    ['before now','2026-10-30T11:59:59.999Z',1],['exact now',FIXED_NOW,1],['after now','2026-10-30T12:00:00.001Z',0],
+  ]) test(profile+': target boundary file purge '+name,async t=>{
+    const f=targetFixture(t,db=>{
+      freezeJulianNow(t,db);
+      insertRow(db,'organization_files',{organization_id:4,name:'PRIVATE_FILE',file_name:'PRIVATE_FILE',dropbox_path:'PRIVATE_PATH',
+        status:'TRASHED',deleted_at:'2020-01-01',purge_after:value});
+    });
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    assert.equal(d.pendingWork.total,due);assert.equal(d.pendingWork.bySource.files,due);
+    assert.equal(d.pendingWork.overlappingCauses.filePurgeDue,due);
+    assert.equal(d.pendingWork.overlappingCauses.filePurgeInvalidDate,0);assert.equal(d.pendingWork.overlappingCauses.fileState,0);
+    assert.deepEqual(d.reasons,due?['OBSERVED_ACTIVITY']:[]);
+  });
   for(const [name,values,expected] of [
     ['nonterminal',{status:'WRITING'},{revisionNonterminal:1}],
     ['ready ahead',{status:'READY'},{revisionAheadReady:1}],
@@ -439,6 +522,23 @@ for (const profile of ['canonical','historical']) {
     const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
     assert.equal(d.pendingWork.total,Object.keys(expected).length?1:0);
     for(const key of ['linkMissingStatus','linkVersionMismatch']) assert.equal(d.pendingWork.overlappingCauses[key],expected[key]??0);
+  });
+  for(const [name,values,expected] of [
+    ['aligned lifecycle',{source_version:7,source_status:'applied'},{}],
+    ['matches record but not lifecycle',{source_version:1,source_status:'applied'},{linkVersionMismatch:1}],
+    ['different from both',{source_version:0,source_status:'applied'},{linkVersionMismatch:1}],
+    ['missing status',{source_version:7},{linkMissingStatus:1}],
+    ['overlap',{source_version:1},{linkMissingStatus:1,linkVersionMismatch:1}],
+    ['inactive mismatch',{source_version:1,active:0},{}],
+  ]) test(profile+': target map_project link '+name,async t=>{
+    const f=targetFixture(t,db=>seedMapLink(db,values));
+    const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+    const pending=Object.keys(expected).length?1:0;
+    assert.equal(d.pendingWork.total,pending);assert.equal(d.pendingWork.bySource.changeLinks,pending);
+    assert.equal(d.pendingWork.bySource.changeRequests,0);
+    assert.equal(Object.values(d.pendingWork.bySource).filter(value=>value!==0).length,pending);
+    for(const key of ['linkMissingStatus','linkVersionMismatch']) assert.equal(d.pendingWork.overlappingCauses[key],expected[key]??0);
+    assert.deepEqual(d.reasons,pending?['OBSERVED_ACTIVITY']:[]);
   });
   test(profile+': target resource components include inactive and trashed resources without their content',async t=>{
     const f=targetFixture(t,db=>{
