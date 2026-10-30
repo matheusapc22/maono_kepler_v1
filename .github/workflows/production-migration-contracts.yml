@@ -11,6 +11,8 @@ on:
       - 'tests/production-migration-gate.test.mjs'
       - 'tests/production-migration-actions-workflow.test.mjs'
       - 'tests/production-migration-organization-schema.test.mjs'
+      - 'tests/production-migration-qa-inventory.test.mjs'
+      - 'docs/runbooks/organization-qa-inventory.md'
       - 'tests/helpers/organization-schema-history.mjs'
       - '.github/workflows/production-d1-migration-operator.yml'
       - 'docs/runbooks/production-migrations-codex.md'
@@ -27,6 +29,8 @@ on:
       - 'tests/production-migration-gate.test.mjs'
       - 'tests/production-migration-actions-workflow.test.mjs'
       - 'tests/production-migration-organization-schema.test.mjs'
+      - 'tests/production-migration-qa-inventory.test.mjs'
+      - 'docs/runbooks/organization-qa-inventory.md'
       - 'tests/helpers/organization-schema-history.mjs'
       - '.github/workflows/production-d1-migration-operator.yml'
       - 'docs/runbooks/production-migrations-codex.md'
@@ -52,5 +56,7 @@ jobs:
           node --check scripts/migrations/post-validate-production.mjs
           node --check scripts/migrations/organization-management-schema.mjs
           node --check scripts/migrations/organization-schema-references.mjs
+          node --check scripts/migrations/organization-qa-inventory.mjs
+          node --check scripts/migrations/inventory-organizations-production.mjs
       - name: Validate migration gates
         run: npm run test:production-migration-gate
