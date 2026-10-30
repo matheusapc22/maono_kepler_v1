@@ -4,9 +4,11 @@ import * as cc04 from "./suites/cc04-selective-access.mjs";
 import * as cc03 from "./suites/cc03-command-lifecycle.mjs";
 import * as cc03Recovery from "./suites/cc03-recover-ticket-5.mjs";
 import * as cc07 from "./suites/cc07-notifications.mjs";
+import * as organizationReadiness from "./suites/organization-management-readiness.mjs";
 import { fail, validateManifest } from "./production-acceptance-lib.mjs";
 
 const suites = new Map([
+  [organizationReadiness.manifest.id, organizationReadiness],
   [cc07.manifest.id, cc07],
   [cc03.manifest.id, cc03],
   [cc03Recovery.manifest.id, cc03Recovery],
@@ -46,6 +48,7 @@ export function publicManifest(id) {
     prerequisites: manifest.prerequisites || [],
     cleanup: manifest.cleanup || null,
     managedFlags: manifest.managedFlags,
+    ...(manifest.preflightOnly ? { preflightOnly: true, observedFlags: [...manifest.observedFlags] } : {}),
     cases: [...manifest.cases],
   };
 }

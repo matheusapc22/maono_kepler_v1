@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { ORGANIZATION_MIGRATION, collectOrganizationPostValidation } from './organization-management-schema.mjs';
 import {
   PRODUCTION_DATABASE_ID,
   PRODUCTION_DATABASE_NAME,
@@ -29,10 +30,13 @@ try {
   const git = await readGitSnapshot();
   temporary = await makeTemporaryWranglerConfig(accountId);
   const remote = await readRemoteState(temporary.configPath, migration.name);
-  const ledger = await queryLedger(temporary.configPath);
+  const organizationEvidence = migration.name === ORGANIZATION_MIGRATION
+    ? await collectOrganizationPostValidation(temporary.configPath, remote, migration) : null;
+  const ledger = organizationEvidence?.ledger.rows ?? await queryLedger(temporary.configPath);
   const applied = ledger.find((row) => row.name === migration.name) || null;
   const integrity = await queryIntegrity(temporary.configPath);
-  const ok = Boolean(applied && integrity.quickCheckOk && integrity.foreignKeyCheckOk);
+  const ok = Boolean(applied && integrity.quickCheckOk && integrity.foreignKeyCheckOk &&
+    (!organizationEvidence || organizationEvidence.schema.compatible));
 
   await ensureReportDir();
   const reportPath = args.report ? resolve(args.report) : defaultPostReportPath(migration.name, git.sha);
@@ -49,9 +53,10 @@ try {
       sha256: migration.sha256,
       applied: Boolean(applied),
       appliedAt: applied?.appliedAt || null,
-      stillPendingLocallyAgainstLedger: remote.pending.selectedPending,
+      stillPendingLocallyAgainstLedger: (organizationEvidence?.pending ?? remote.pending).selectedPending,
     },
     integrity,
+    ...(organizationEvidence ? { organizationEvidence } : {}),
     ok,
   };
   await writeJsonReport(reportPath, report);
