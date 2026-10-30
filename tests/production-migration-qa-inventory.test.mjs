@@ -148,7 +148,7 @@ for (const profile of ['canonical','historical']) {
   });
   function assertDiagnostics(f, result, expected) {
     assert.deepEqual(result.excludedOrganizations,expected);
-    assert.equal(result.version,3);
+    assert.equal(result.version,4);
     assert.equal(result.excludedOrganizations.length,result.scannedCount-result.eligibleCount);
     const codes=['INACTIVE','STORAGE_UNREADY','OWNER_UNREADY','SHARED_ACCESS','OBSERVED_ACTIVITY','GLOBAL_MANAGEMENT_UNRESOLVED'];
     const counts=Object.fromEntries(codes.map(code=>[code,0]));
@@ -261,6 +261,119 @@ for (const profile of ['canonical','historical']) {
     for(const row of raw) assert.deepEqual(Object.fromEntries(Object.keys(rows[0]??{}).map(key=>[key,row[key]])),{...rows.find(old=>old.id===row.id)});
     return result.targetedDiagnostics;
   }
+  function metadataFile(db, values={}) {
+    const row={id:91,organization_id:4,name:'PRIVATE_NAME',file_name:'PRIVATE_FILE',dropbox_path:'PRIVATE_PATH_'+(values.id??91),
+      status:'PENDING',created_at:'2020-02-29 10:11:12',updated_at:'2026-10-30T12:00:00.001Z',...values};
+    db.prepare(`INSERT INTO organization_files(${Object.keys(row).join(',')}) VALUES(${Object.keys(row).map(()=>'?').join(',')})`).run(...Object.values(row));
+  }
+  const metadataRow = f => f.db.prepare(QA_INVENTORY_QUERIES.organizations).all().find(row=>row.id===4);
+  test(profile+': file metadata is exact, bounded, private and uses only the two existing reads',async t=>{
+    const f=targetFixture(t,db=>{
+      metadataFile(db);metadataFile(db,{id:92,organization_id:1,status:'PRIVATE_SECRET'});
+      metadataFile(db,{id:93,status:'ACTIVE'});
+    });
+    const raw=metadataRow(f).org4_blockingFile;
+    assert.ok(Buffer.byteLength(raw,'utf8')<=256);
+    assert.doesNotMatch(raw,/PRIVATE|name|path|uploaded|email|token/);
+    const result=await collectQaInventory('synthetic',remote,migration,f.injected),d=assertTarget(f,result);
+    assert.deepEqual(d.pendingWork.blockingFile,{id:91,status:'PENDING',createdAt:'2020-02-29 10:11:12',updatedAt:'2026-10-30T12:00:00.001Z'});
+    assert.equal(f.calls.filter(a=>a.includes(QA_INVENTORY_QUERIES.organizations)).length,2);
+    assert.equal(f.snapshot(),f.before);
+    assert.doesNotMatch(JSON.stringify(result),/PRIVATE|"id":92|"id":93/);
+    assert.equal(d.pendingWork.overlappingCauses.fileState,1);
+  });
+  for(const status of ['PENDING','PURGE_PENDING','pending','purge_pending','active','Failed','deleted','Trashed','purged',
+    'PROCESSING','INACTIVE','ERROR','processing','inactive','error']) {
+    test(profile+': exact blocking file status '+status,async t=>{
+      const f=targetFixture(t,db=>metadataFile(db,{status}));
+      const result=await collectQaInventory('synthetic',remote,migration,f.injected);
+      assert.equal(assertTarget(f,result).pendingWork.blockingFile.status,status);
+    });
+  }
+  for(const status of ['ACTIVE','FAILED','DELETED','TRASHED','PURGED']) {
+    test(profile+': no metadata for accepted file status '+status,async t=>{
+      const f=targetFixture(t,db=>metadataFile(db,{status}));
+      assert.equal(metadataRow(f).org4_blockingFile,null);
+      assert.equal(assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected)).pendingWork.blockingFile,null);
+    });
+  }
+  test(profile+': no blocking file returns null without manufacturing an ID',async t=>{
+    const f=targetFixture(t);
+    assert.equal(metadataRow(f).org4_blockingFile,null);
+    assert.equal(assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected)).pendingWork.blockingFile,null);
+  });
+  test(profile+': multiple blocking files are not projected or selected arbitrarily',async t=>{
+    const f=targetFixture(t,db=>{metadataFile(db);metadataFile(db,{id:92,status:'PURGE_PENDING'});});
+    const raw=metadataRow(f);assert.equal(raw.org4_causes_fileState,2);assert.equal(raw.org4_blockingFile,null);
+    await assert.rejects(collectQaInventory('synthetic',remote,migration,f.injected),{code:'QA_INVENTORY_FILE_CARDINALITY'});
+    assert.equal(f.snapshot(),f.before);
+  });
+  for(const status of ['', 'PRIVATE_EMAIL@example.test','PRIVATE_SECRET','PENDING\0PRIVATE_SECRET','PENDING\n',' PENDING', 'P'.repeat(100000), 'ＰＥＮＤＩＮＧ']) {
+    test(profile+': unsupported file status is redacted in SQL and fails closed '+JSON.stringify(status.slice(0,24)),async t=>{
+      const f=targetFixture(t,db=>metadataFile(db,{status}));
+      const raw=metadataRow(f).org4_blockingFile;
+      assert.equal(JSON.parse(raw).status,null);assert.ok(Buffer.byteLength(raw,'utf8')<=256);
+      assert.doesNotMatch(raw,/PRIVATE|ＰＥＮＤＩＮＧ/);
+      await assert.rejects(collectQaInventory('synthetic',remote,migration,f.injected),error=>{
+        assert.equal(error.code,'QA_INVENTORY_FILE_METADATA_INVALID');
+        assert.deepEqual(qaInventoryFailure({...error,details:{stdout:status}}),{ok:false,writesPerformed:false,code:'QA_INVENTORY_FILE_METADATA_INVALID'});return true;
+      });
+    });
+  }
+  for(const field of ['created_at','updated_at']) {
+    for(const value of ['2020-02-29','2020-02-29 23:59:59','2020-02-29T23:59:59Z',FIXED_NOW,'2026-10-30T12:00:00.001Z','9999-12-31T23:59:59.999Z']) {
+      test(profile+': exact valid file timestamp '+field+' '+value,async t=>{
+        const f=targetFixture(t,db=>metadataFile(db,{[field]:value}));
+        const d=assertTarget(f,await collectQaInventory('synthetic',remote,migration,f.injected));
+        assert.equal(d.pendingWork.blockingFile[field==='created_at'?'createdAt':'updatedAt'],value);
+      });
+    }
+    for(const value of ['','PRIVATE_TIMESTAMP','2020-02-29\0PRIVATE_SECRET','2023-02-29','2020-02-30','2020-13-01',
+      '0000-01-01','2020-02-29T24:00:00Z','2020-02-29T12:60:00Z','2020-02-29T12:00:60Z','2020-02-29T12:00:00+02:00',
+      '2020-02-29T12:00:00.0000Z','2020-02-29T12:00:00Z PRIVATE','9'.repeat(100000)]) {
+      test(profile+': invalid file timestamp is redacted before transport '+field+' '+JSON.stringify(value?.slice(0,30)),async t=>{
+        const f=targetFixture(t,db=>metadataFile(db,{[field]:value}));
+        const raw=metadataRow(f).org4_blockingFile;
+        assert.equal(JSON.parse(raw)[field==='created_at'?'createdAt':'updatedAt'],null);
+        assert.doesNotMatch(raw,/PRIVATE/);assert.ok(Buffer.byteLength(raw,'utf8')<=256);
+        await assert.rejects(collectQaInventory('synthetic',remote,migration,f.injected),{code:'QA_INVENTORY_FILE_METADATA_INVALID'});
+      });
+    }
+  }
+  for(const [field,value] of [['id',92],['status','PURGE_PENDING'],['createdAt','2020-03-01'],['updatedAt','2026-10-30T12:00:00.002Z']]) {
+    test(profile+': file metadata drift rejects changed '+field+' with equal aggregates',async t=>{
+      let reads=0;
+      const f=targetFixture(t,db=>metadataFile(db),(sql,rows)=>{
+        if(sql===QA_INVENTORY_QUERIES.organizations && ++reads===2){const row=rows.find(r=>r.id===4),file=JSON.parse(row.org4_blockingFile);
+          file[field]=value;row.org4_blockingFile=JSON.stringify(file);}
+        return rows;
+      });
+      await assert.rejects(collectQaInventory('synthetic',remote,migration,f.injected),{code:'QA_INVENTORY_DRIFT'});
+      assert.equal(reads,2);assert.equal(f.snapshot(),f.before);
+    });
+  }
+  for(const [name,transform] of [
+    ['missing',()=>null],['malformed',()=>'{'],['too large',()=> ' '.repeat(257)],
+    ['extra field',raw=>JSON.stringify({...JSON.parse(raw),name:'PRIVATE_NAME'})],
+    ['duplicate key',raw=>raw.replace('{','{"id":91,')],['unsafe ID',raw=>raw.replace('91','9007199254740992')],
+    ['accepted status',raw=>raw.replace('PENDING','ACTIVE')],['invalid calendar',raw=>raw.replace('2020-02-29','2023-02-29')],
+    ['null status',raw=>JSON.stringify({...JSON.parse(raw),status:null})],
+    ['null createdAt',raw=>JSON.stringify({...JSON.parse(raw),createdAt:null})],
+    ['null updatedAt',raw=>JSON.stringify({...JSON.parse(raw),updatedAt:null})],
+    ['wrong type',raw=>JSON.parse(raw)],
+  ]) test(profile+': file transport validation rejects '+name,async t=>{
+    const f=targetFixture(t,db=>metadataFile(db),(sql,rows)=>{
+      if(sql===QA_INVENTORY_QUERIES.organizations){const row=rows.find(r=>r.id===4);row.org4_blockingFile=transform(row.org4_blockingFile);}return rows;
+    });
+    await assert.rejects(collectQaInventory('synthetic',remote,migration,f.injected),{code:'QA_INVENTORY_FILE_METADATA_INVALID'});
+  });
+  test(profile+': file metadata attached to another organization fails closed',async t=>{
+    const f=targetFixture(t,db=>metadataFile(db),(sql,rows)=>{
+      if(sql===QA_INVENTORY_QUERIES.organizations)rows.find(r=>r.id===1).org4_blockingFile=rows.find(r=>r.id===4).org4_blockingFile;
+      return rows;
+    });
+    await assert.rejects(collectQaInventory('synthetic',remote,migration,f.injected),{code:'QA_INVENTORY_FILE_METADATA_INVALID'});
+  });
   test(profile+': target only ID4, with unchanged alternative candidate and empty detail sources',async t=>{
     const f=targetFixture(t),r=await collectQaInventory('synthetic',remote,migration,f.injected),d=assertTarget(f,r);
     assert.equal(r.selection.organization.id,1);

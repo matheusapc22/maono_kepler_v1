@@ -168,6 +168,63 @@ pendencia. Isso permite decidir entre aguardar quietude e investigar uma categor
 especifica. Nao diagnostica por si so fila travada, defeito do provider ou dados
 de negocio incorretos. Contagens nao identificam usuario/recurso para mutacao
 exata, nao autorizam limpeza e nao comprovam menor impacto ou exclusividade.
+
+## Metadados minimos do arquivo bloqueador v4 - organizacao 4
+
+A v4 acrescenta somente `targetedDiagnostics.pendingWork.blockingFile`:
+`{ id, status, createdAt, updatedAt }`, ou `null` quando nao existe arquivo
+correspondente. A organizacao continua fixa em 4 e o predicado original permanece
+`status NOT IN ('ACTIVE','FAILED','DELETED','TRASHED','PURGED')`, sensivel a caixa.
+Nao se muda a elegibilidade, a contagem de arquivos/purge, a selecao ou a projecao
+das outras organizacoes. `snapshotDigest` continua sobre os agregados antigos;
+`targetedDiagnosticsDigest` passa a incluir estes metadados na v4. Relatorios
+v1-v3 e o FAIL original permanecem evidencias independentes e nao sao reescritos.
+
+O SQL so projeta metadados quando ha exatamente um correspondente. Zero retorna
+null; mais de um bloqueia com `QA_INVENTORY_FILE_CARDINALITY`, sem escolher ou
+exportar qualquer ID. A mesma consulta de organizations e executada duas vezes,
+sem chamadas novas. ID, status e ambas as datas integram a comparacao integral:
+drift bloqueia mesmo se todas as contagens e motivos permanecerem iguais.
+Isto nao prova snapshot atomico, exclusividade ou ausencia de mudancas intermediarias.
+
+A sanitizacao acontece no SQL, antes de qualquer linha chegar ao stdout do
+Wrangler, e novamente no validador. Apenas quatro chaves, um ID inteiro positivo
+seguro e JSON de no maximo 256 caracteres ASCII sao aceitos. Nao sao coletados
+nomes, caminhos, conteudo, erros livres, identificadores pessoais ou credenciais.
+Status conhecido e devolvido literalmente, sem trim, uppercase ou fallback:
+PENDING/PURGE_PENDING/PROCESSING/INACTIVE/ERROR e variantes de caixa dos estados conhecidos podem satisfazer
+o predicado. Valores fora desse vocabulario fechado sao redigidos para null no
+SQL e bloqueiam com `QA_INVENTORY_FILE_METADATA_INVALID`. Nao se alega ter obtido
+o status exato quando ele for rejeitado. O vocabulario e sustentado pelos escritores
+versionados de upload, trash/restore e purge; PROCESSING tambem e escrito por
+`project-creation-reservation.js`, INACTIVE pela migration `0008_harden_organization_files.sql`,
+e ERROR e reconhecido pelo guard de publicacao em `project-save-operations.js`
+(nao foi localizado escritor atual desse ultimo estado). Esses locais foram
+conferidos, sem alteracao de seus contratos. Nao e uma restricao do schema.
+
+createdAt/updatedAt preservam o valor registrado em um dos formatos UTC admitidos:
+YYYY-MM-DD, YYYY-MM-DD HH:mm:ss, YYYY-MM-DDTHH:mm:ssZ ou
+YYYY-MM-DDTHH:mm:ss.sssZ. Calendario, tamanho, caracteres, nulidade e tipo sao
+verificados; ano zero, datas impossiveis, controles/NUL e outros formatos sao
+rejeitados sem eco. Valores livres/invalidos sao redigidos no SQL. Uma data futura
+valida e preservada como evidencia, nunca tratada automaticamente como idade positiva.
+Erro impede emissao de um relatorio de sucesso; nao se substitui data por agora.
+
+O `generatedAt` do relatorio final e o relogio UTC do runner depois da coleta,
+nao um timestamp transacional do D1. Comparar createdAt com esse horario mede
+idade desde criacao; comparar updatedAt mede tempo desde a ultima atualizacao
+dos metadados. Renomeacao, movimentacao, upload/purge e alteracao administrativa
+podem mudar updated_at: ele NAO comprova tempo no status, travamento ou causa.
+Inversao createdAt/updatedAt ou data futura deve ser relatada como tal, sem
+inferir que se deve retentar, apagar ou mudar o estado do arquivo.
+
+Este recorte e suficiente para identificar o unico bloqueador de formato valido
+e propor investigacao/espera conforme estado e idade. Nao explica falha do provider,
+nao identifica conta QA e nao autoriza qualquer mutacao. Cardinalidade inesperada
+ou formato fora do contrato exige relato do limite, nunca coleta generica ou bypass.
+Os mesmos gates SHA/identidade/schema/ledger/Environment e a retencao de tres dias
+permanecem. Preparacao local, publicacao, merge/deploy e nova leitura protegida
+sao etapas separadas; esta preparacao nao dispara workflow nem altera main.
 Uma correcao posterior pode registrar novo evento e reiniciar a janela de 24h.
 Credenciais QA, flags, storage real e runtime/UI continuam sem comprovacao.
 
