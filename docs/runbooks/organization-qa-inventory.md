@@ -91,13 +91,31 @@ Nao encontrar candidata e resultado valido, sem inventar ou reutilizar um ID.
 
 ## Minimizacao e limites
 
-O artifact contem somente a candidata (ou null), contagens totais/de exclusao,
+O artifact contem a candidata (ou null), contagens totais/de exclusao,
 digests e perfil do schema/ledger, integridade resumida, procedencia e limites.
-Nao exporta todas as organizacoes, ledger completo novamente, DDL, erros livres,
+A versao 2 acrescenta `excludedOrganizations`: somente `{ id, reasons }` para
+cada organizacao excluida. Reutiliza os IDs validados e os mesmos codigos fixos
+que ja compoem os totais; nao faz consulta adicional nem recalcula elegibilidade.
+A lista segue ID crescente, sem duplicatas, com no maximo 100 entradas e seis
+codigos por entrada. Organizacoes elegiveis nao selecionadas continuam omitidas.
+Inventario vazio ou inteiramente elegivel produz lista vazia; sem candidata,
+a lista permite associar cada exclusao ao ID sem alterar nenhum recurso.
+As categorias se sobrepoem: uma organizacao pode ter varios codigos. Esses
+codigos agrupam sinais; por exemplo, OBSERVED_ACTIVITY nao distingue uma sessao
+de trabalho pendente e SHARED_ACCESS nao distingue membro de delegacao.
+Nao exporta linhas agregadas completas das excluidas, ledger completo, DDL, erros livres,
 linhas de FK, nomes/emails/IDs de usuarios, tokens, conteudo de negocio ou logs.
 Apenas o JSON fixo e publicado pelo workflow, retencao de tres dias. Esse
 relatorio contem ID/contagens operacionais e deve ser tratado como evidencia
 minimizada; nao adicionar identificadores pessoais para facilitar a escolha.
+
+Relatorios da versao 1, inclusive o run 41109323371, nao contem diagnostico por
+ID. Preservar esses artifacts originais: a ausencia do campo nao significa que
+nao houve exclusoes. A extensao v2 nao requer novo input, segredo, permissao ou
+delta no dispatcher de main. Publicar e integrar a alteracao de produto continua
+dependendo de revisao/CI e autorizacao; uma nova leitura depende de autorizacao
+especifica e do mesmo Environment humano. Diagnostico nao autoriza saneamento,
+criacao de organizacoes, mudanca de owners, flags ou acceptance.
 
 Estabilidade de contagens nao e snapshot transacional nem prova de exclusividade:
 trocas de membros/recursos com mesmas contagens, escritas entre leituras,
