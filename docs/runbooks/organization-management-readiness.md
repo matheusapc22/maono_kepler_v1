@@ -18,13 +18,59 @@ O novo coletor somente lê metadados usando 27 consultas fixas. Compara as
 12 colunas, quatro tabelas, cinco índices nomeados, autoíndices das constraints
 e onze triggers da0042, incluindo defaults, nullability, FKs, ações de exclusão,
 CHECKs, índices parciais e predicados de triggers. Não recebe SQL/identificadores
-do usuário. A referência vem do SQL revisado com SHA256 fixo e do baseline local,
-executados somente em SQLite na memória do runner.
+do usuário. Duas referências completas são construídas somente em SQLite na
+memória do runner, a partir de fontes locais versionadas com SHA256 fixo:
+
+- `canonical-bootstrap-v1`: baseline de schema.sql mais a 0042 integral.
+- `migrated-0002-0042-v1`: arquivos integrais 0002, 0007 de solicitações, 0009,
+  0016 e 0042, mais os oito triggers anexados a organizations das 0035/0039/0040.
+  Cada trigger é extraído por nome fixo, definição única completa e tabela-alvo,
+  depois de conferir o hash do arquivo inteiro. O scaffold users/projects é
+  mínimo e fixo; não representa nem certifica essas tabelas de produção. Os oito
+  triggers antigos são renderizados após os ALTERs, sem inserir dados, para não
+  depender de tabelas operacionais externas ao escopo. O resultado é comparado
+  a uma fixture independente com o contexto canônico completo.
+
+A referência histórica cobre integralmente as seis tabelas e os objetos das
+27 consultas; não é replay nem certificação das 37 migrations do banco inteiro.
+O relatório versão2 exige correspondência integral com exatamente um perfil:
+zero correspondências, ambiguidade ou mistura entre perfis bloqueiam. Exporta
+o perfil reconhecido, hashes/procedência das fontes e resultados de cada perfil.
+Não há whitelist de digest remoto nem seleção permissiva baseada no ledger.
+
+O perfil histórico exige as oito migrations-fonte no ledger. O perfil canônico
+conserva os pré-requisitos 0007/0016/0042. O ledger é uma condição adicional à
+comparação estrutural; não prova, sozinho, como uma instalação foi criada.
+Qualquer alteração em uma fonte fixada exige revisão explícita da referência;
+o workflow de contratos também roda quando schema.sql ou migrations mudam.
 
 As definições completas das seis tabelas são comparadas, incluindo constraints
 de tabela, colunas anteriores e opções. Todos os índices/triggers pertencentes
 a essas tabelas entram na comparação, mesmo fora do namespace da 0042. Drift
 histórico também bloqueia e exige revisão; não é descartado como compatível.
+Os PRAGMAs comparam todas as colunas, FKs e entradas de índices das seis tabelas,
+incluindo as colunas anteriores à 0042. index_xinfo continua limitado aos oito
+índices/autoíndices fixos; os demais índices são comparados por DDL e index_list.
+
+### Diferença histórica comprovada
+
+A 0009 adiciona storage_status TEXT nullable, sem default, e faz backfill dos
+registros então existentes. O verificador histórico de recuperação também exige
+essa definição. O bootstrap schema.sql usa NOT NULL DEFAULT 'PENDING' e outra
+ordem de colunas. A 0042 não altera esse contrato. Não modificar o banco ou SQLs
+históricos para fazer a comparação passar.
+
+O run41003828754 permanece registrado como FAIL67/68, com integridade OK/FK0.
+Seu único mismatch de DDL organizations foi reproduzido a partir das fontes
+versionadas. Isso motivou a correção da referência; não reescreve esse artefato
+nem constitui nova verificação remota. Os novos PRAGMAs também distinguem a
+diferença semântica de default/nullability.
+
+NULL continua possível por escritores que omitam o status no schema histórico.
+O caminho normal de criação fornece PENDING/DISABLED explicitamente, e readiness
+recusa status inválido sem marcar READY. Esse risco preexistente de disponibilidade
+é separado da compatibilidade estrutural. Não foi constatada a existência atual
+de registros nulos, e schema compatível não comprova saúde funcional dos dados.
 
 O relatório inclui nomes conhecidos, checks e digests; não inclui linhas de
 organizações/usuários, SQL remoto ou defaults arbitrários. Também exporta o

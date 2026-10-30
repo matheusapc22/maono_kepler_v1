@@ -7,10 +7,16 @@ import {
   expectedOrganizationSchema, evaluateOrganizationSchema, readOrganizationSchema, collectOrganizationPostValidation,
 } from '../scripts/migrations/organization-management-schema.mjs';
 import { PRODUCTION_DATABASE_NAME, PRODUCTION_DATABASE_ID } from '../scripts/migrations/production-migration-lib.mjs';
+import { ORGANIZATION_SCHEMA_PROFILES, ORGANIZATION_SCHEMA_SOURCES, buildOrganizationSchemaReferences } from '../scripts/migrations/organization-schema-references.mjs';
+import { installMigratedOrganizationSchema } from './helpers/organization-schema-history.mjs';
 
-const reference = expectedOrganizationSchema();
+for (const profile of ORGANIZATION_SCHEMA_PROFILES) {
+const reference = expectedOrganizationSchema(profile);
 const migration = { name: ORGANIZATION_MIGRATION, sha256: ORGANIZATION_MIGRATION_SHA256 };
-const ledger = ['0007_create_organization_limit_requests.sql', '0016_map_panel_navigation_and_quota.sql', ORGANIZATION_MIGRATION]
+const prerequisiteNames = profile === 'canonical-bootstrap-v1'
+  ? ['0007_create_organization_limit_requests.sql', '0016_map_panel_navigation_and_quota.sql', ORGANIZATION_MIGRATION]
+  : Object.keys(ORGANIZATION_SCHEMA_SOURCES).filter(path => path.startsWith('migrations/')).map(path => path.slice(11));
+const ledger = prerequisiteNames
   .map((name, i) => ({ id: i + 1, name, appliedAt: '2026-10-30 01:49:42' }));
 const remote = {
   identity: { name: PRODUCTION_DATABASE_NAME, id: PRODUCTION_DATABASE_ID }, ledger,
@@ -19,7 +25,8 @@ const remote = {
 function fixture(t, prepare = () => {}) {
   const db = new DatabaseSync(':memory:');
   t.after(() => db.close());
-  db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+  if (profile === 'migrated-0002-0042-v1') installMigratedOrganizationSchema(db);
+  else db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
   db.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY,name TEXT,applied_at TEXT);');
   for (const row of ledger) db.prepare('INSERT INTO d1_migrations VALUES(?,?,?)').run(row.id, row.name, row.appliedAt);
   db.exec("INSERT INTO users(email,password_hash) VALUES('synthetic-only@example.test','SYNTHETIC_SECRET');");
@@ -42,11 +49,15 @@ function fixture(t, prepare = () => {}) {
   return { db, calls, injected };
 }
 
-test('0042 reference and actual canonical SQLite schema agree through fixed read-only queries', async t => {
+test('0042 reference and independent SQLite fixture agree through fixed read-only queries: ' + profile, async t => {
   const f = fixture(t);
   const before = f.db.prepare('SELECT * FROM users').all();
   const result = await readOrganizationSchema('synthetic-config', f.injected);
   assert.equal(result.compatible, true);
+  assert.equal(result.profile, profile);
+  assert.equal(result.profiles.filter(p => p.compatible).length, 1);
+  assert.equal(result.checks.length, 68);
+  assert.ok(result.checks.every(c => c.ok));
   assert.deepEqual(result.expectedCounts, { addedColumns:12,tables:4,namedIndexes:5,triggers:11 });
   assert.equal(f.calls.length, 27);
   assert.deepEqual(f.db.prepare('SELECT * FROM users').all(), before);
@@ -73,27 +84,28 @@ const mutations = [
   ['changed unique constraint', r => { r['indexes:organization_management_operations'].find(c=>c.name.endsWith('_2')).unique=0; }],
   ['unexpected namespace object', r => { r.objects.push({type:'table',name:'organization_management_SECRET',tbl_name:'organization_management_SECRET',sql:'SECRET'}); }],
 ];
-for (const [label, mutate] of mutations) test('0042 fails closed: ' + label, () => {
+for (const [label, mutate] of mutations) test(profile + ' 0042 fails closed: ' + label, () => {
   const observed = structuredClone(reference);
   mutate(observed);
   const report = evaluateOrganizationSchema(observed, reference);
   assert.equal(report.compatible, false);
+  assert.equal(evaluateOrganizationSchema(observed).compatible, false);
   assert.ok(report.mismatches.length > 0);
   assert.equal(JSON.stringify(report).includes('SECRET'), false);
 });
 
-test('0042 accepts formatting/comments without changing SQL literals', () => {
+test(profile + ' 0042 accepts formatting/comments without changing SQL literals', () => {
   const observed = structuredClone(reference);
   // SQLite autoindexes have no SQL text; formatting must not invent a "null" DDL.
   for (const o of observed.objects) if (o.sql !== null) o.sql = '\n /* metadata formatting */ \n' + o.sql + ' \n';
   assert.equal(evaluateOrganizationSchema(observed, reference).compatible, true);
 });
 
-test('0042 postvalidation exports complete ledger, pending set/digest and a fresh bookmark without writes', async t => {
+test(profile + ' 0042 postvalidation exports complete ledger, pending set/digest and a fresh bookmark without writes', async t => {
   const f=fixture(t);
   const result=await collectOrganizationPostValidation('synthetic-config',remote,migration,f.injected);
   assert.deepEqual(result.ledger.rows,ledger);
-  assert.equal(result.ledger.appliedCount,3);
+  assert.equal(result.ledger.appliedCount,ledger.length);
   assert.deepEqual(result.pending.pending,['0001_earlier_pending.sql','0043_later_pending.sql']);
   assert.equal(result.pending.selectedPending,false);
   assert.match(result.pending.pendingDigest,/^[a-f0-9]{64}$/);
@@ -120,7 +132,7 @@ test('0042 refuses duplicate or missing prerequisite ledger before collection', 
   const injected={runProcess:async()=>{calls++;throw new Error('must not run');}};
   await assert.rejects(collectOrganizationPostValidation('synthetic',{...remote,ledger:[...ledger,ledger[0]]},migration,injected),
     {code:'ORGANIZATION_LEDGER_INVALID'});
-  await assert.rejects(collectOrganizationPostValidation('synthetic',{...remote,ledger:ledger.slice(1)},migration,injected),
+  await assert.rejects(collectOrganizationPostValidation('synthetic',{...remote,ledger:ledger.filter(row => row.name !== ORGANIZATION_MIGRATION)},migration,injected),
     {code:'ORGANIZATION_LEDGER_REQUIRED'});
   assert.equal(calls,0);
 });
@@ -138,6 +150,17 @@ test('0042 collector propagates a denied query without trying another route', as
   await assert.rejects(readOrganizationSchema('synthetic',{runProcess:async()=>{calls++;throw new Error('denied');}}),/denied/);
   assert.equal(calls,1);
 });
+
+if (profile === 'migrated-0002-0042-v1') {
+  for (const name of prerequisiteNames.filter(n => !['0007_create_organization_limit_requests.sql', '0016_map_panel_navigation_and_quota.sql', ORGANIZATION_MIGRATION].includes(n))) {
+    test('0042 refuses historical profile without source ledger: ' + name, async t => {
+      const f = fixture(t, db => db.prepare('DELETE FROM d1_migrations WHERE name=?').run(name));
+      const target = { ...remote, ledger: ledger.filter(row => row.name !== name) };
+      await assert.rejects(collectOrganizationPostValidation('synthetic', target, migration, f.injected), {code:'ORGANIZATION_LEDGER_REQUIRED'});
+      assert.equal(f.calls.length, 28); // initial ledger + fixed metadata; no bookmark/retry
+    });
+  }
+}
 
 // Rebuild only an empty synthetic table, preserving every pre-existing index
 // and trigger. Read the resulting real SQLite metadata through the collector.
@@ -165,7 +188,7 @@ const restrictiveSchema = [
   ['organizations arbitrary restrictive trigger', db => db.exec("CREATE TRIGGER unexpected_restrictive_trigger BEFORE INSERT ON organizations BEGIN SELECT RAISE(ABORT,'SYNTHETIC_RESTRICTION'); END")],
   ['requests arbitrary restrictive trigger', db => db.exec("CREATE TRIGGER unexpected_restrictive_trigger BEFORE INSERT ON organization_limit_requests BEGIN SELECT RAISE(ABORT,'SYNTHETIC_RESTRICTION'); END")],
 ];
-for (const [label, prepare] of restrictiveSchema) test('0042 rejects real SQLite drift: ' + label, async t => {
+for (const [label, prepare] of restrictiveSchema) test(profile + ' 0042 rejects real SQLite drift: ' + label, async t => {
   const f = fixture(t, prepare);
   const report = await readOrganizationSchema('synthetic-config', f.injected);
   assert.equal(report.compatible, false);
@@ -183,7 +206,7 @@ const invalidRawLedger = [
   ['null row', () => null],
 ];
 for (const phase of ['initial', 'final']) for (const [label, invalidate] of invalidRawLedger) {
-  test('0042 rejects invalid raw ledger ' + phase + ': ' + label, async t => {
+  test(profile + ' 0042 rejects invalid raw ledger ' + phase + ': ' + label, async t => {
     const f = fixture(t);
     let ledgerReads = 0;
     const injected = { runProcess: async (command, args) => {
@@ -192,7 +215,7 @@ for (const phase of ['initial', 'final']) for (const [label, invalidate] of inva
         ledgerReads++;
         if (ledgerReads === (phase === 'initial' ? 1 : 2)) {
           const raw = JSON.parse(result.stdout);
-          raw[0].results.push(invalidate({id:4,name:'0043_synthetic.sql',applied_at:'2026-10-30 01:49:42'}));
+          raw[0].results.push(invalidate({id:ledger.length+1,name:'0043_synthetic.sql',applied_at:'2026-10-30 01:49:42'}));
           return { stdout: JSON.stringify(raw) };
         }
       }
@@ -208,8 +231,8 @@ for (const phase of ['initial', 'final']) for (const [label, invalidate] of inva
 for (const phase of ['initial', 'final']) for (const [label, mutate, code] of [
   ['duplicate id', rows => rows.push({...rows[0],name:'0043_synthetic.sql'}), 'ORGANIZATION_LEDGER_INVALID'],
   ['duplicate name', rows => rows.push({...rows[0],id:4}), 'ORGANIZATION_LEDGER_INVALID'],
-  ['missing prerequisite', rows => rows.shift(), 'ORGANIZATION_LEDGER_REQUIRED'],
-]) test('0042 rejects raw ledger ' + phase + ': ' + label, async t => {
+  ['missing prerequisite', rows => rows.splice(rows.findIndex(r => r.name === ORGANIZATION_MIGRATION),1), 'ORGANIZATION_LEDGER_REQUIRED'],
+]) test(profile + ' 0042 rejects raw ledger ' + phase + ': ' + label, async t => {
   const f = fixture(t);
   let ledgerReads = 0;
   const injected = { runProcess: async (command, args) => {
@@ -229,8 +252,8 @@ for (const phase of ['initial', 'final']) for (const [label, mutate, code] of [
 
 for (const [label, mutate] of [
   ['changed timestamp', rows => { rows[0].applied_at='2026-10-30 02:00:00'; }],
-  ['added valid row', rows => rows.push({id:4,name:'0043_later_pending.sql',applied_at:'2026-10-30 02:00:00'})],
-]) test('0042 detects raw ledger drift across collection: ' + label, async t => {
+  ['added valid row', rows => rows.push({id:ledger.length+1,name:'0043_later_pending.sql',applied_at:'2026-10-30 02:00:00'})],
+]) test(profile + ' 0042 detects raw ledger drift across collection: ' + label, async t => {
   const f = fixture(t);
   let ledgerReads = 0;
   const injected = { runProcess: async (command, args) => {
@@ -246,6 +269,87 @@ for (const [label, mutate] of [
     {code:'ORGANIZATION_POSTVALIDATE_LEDGER_DRIFT'});
   assert.equal(ledgerReads, 2);
   assert.equal(f.calls.length, 30);
+});
+}
+
+test('0042 preserves the original historical failure and recognizes a complete historical profile', () => {
+  const historical = expectedOrganizationSchema('migrated-0002-0042-v1');
+  const oldComparison = evaluateOrganizationSchema(historical, expectedOrganizationSchema());
+  // The old full DDL mismatch remains reproducible; full legacy PRAGMAs now
+  // correctly show the semantic nullability/default difference as well.
+  assert.equal(oldComparison.compatible, false);
+  const definition = oldComparison.checks.find(c => c.name === 'organizations');
+  assert.equal(definition.ok, false);
+  assert.equal(definition.observedDigest, '34da4f6a89d01b79690fdff132f5e2a330537b06f0c2ac76c649b7e718ee4d54');
+  assert.equal(definition.expectedDigest, '7f8b0b0c2d08afadf8ea69b98c2ce1f5110350720cc293f5d27bad3caa11b1a7');
+  const result = evaluateOrganizationSchema(historical);
+  assert.equal(result.compatible, true);
+  assert.equal(result.profile, 'migrated-0002-0042-v1');
+  assert.equal(result.referenceSources.length, 8);
+});
+
+for (const profile of ORGANIZATION_SCHEMA_PROFILES) {
+  for (const [label, mutate] of [
+    ['legacy nullability', r => { r['columns:organizations'].find(c => c.name === 'storage_status').notnull ^= 1; }],
+    ['legacy default', r => { r['columns:organizations'].find(c => c.name === 'storage_status').dflt_value = "'UNEXPECTED'"; }],
+    ['legacy FK action', r => { r['foreignKeys:organization_limit_requests'][0].on_delete = 'CASCADE'; }],
+    ['legacy index constraint', r => { r['indexes:organizations'].find(c => c.name === 'idx_organizations_active').unique = 1; }],
+  ]) test(profile + ' rejects equivalent legacy metadata drift: ' + label, () => {
+    const observed = expectedOrganizationSchema(profile);
+    mutate(observed);
+    assert.equal(evaluateOrganizationSchema(observed).compatible, false);
+  });
+  test(profile + ' rejects a hybrid DDL/metadata profile', () => {
+    const observed = expectedOrganizationSchema(profile);
+    const other = expectedOrganizationSchema(ORGANIZATION_SCHEMA_PROFILES.find(p => p !== profile));
+    observed.objects.find(o => o.name === 'organizations').sql = other.objects.find(o => o.name === 'organizations').sql;
+    assert.equal(evaluateOrganizationSchema(observed).compatible, false);
+  });
+}
+
+test('0042 rejects real hybrid historical ordering with canonical nullability/default', t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close());
+  installMigratedOrganizationSchema(db);
+  const objects = db.prepare("SELECT sql FROM sqlite_schema WHERE tbl_name='organizations' AND type IN ('index','trigger') AND sql IS NOT NULL").all();
+  const sql = db.prepare("SELECT sql FROM sqlite_schema WHERE name='organizations'").get().sql;
+  db.exec('DROP TABLE organizations');
+  db.exec(sql.replace('storage_status TEXT', "storage_status TEXT NOT NULL DEFAULT 'PENDING'"));
+  for (const object of objects) db.exec(object.sql);
+  const observed = Object.fromEntries(Object.entries(ORGANIZATION_SCHEMA_QUERIES).map(([key, query]) => [key, db.prepare(query).all()]));
+  assert.equal(evaluateOrganizationSchema(observed).compatible, false);
+});
+
+test('0042 rejects the complete historical baseline before 0042', t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close());
+  installMigratedOrganizationSchema(db, { include0042: false });
+  const observed = Object.fromEntries(Object.entries(ORGANIZATION_SCHEMA_QUERIES).map(([key, query]) => [key, db.prepare(query).all()]));
+  assert.equal(evaluateOrganizationSchema(observed).compatible, false);
+});
+
+for (const changed of Object.keys(ORGANIZATION_SCHEMA_SOURCES)) test('0042 rejects changed reference source: ' + changed, () => {
+  assert.throws(() => buildOrganizationSchemaReferences(ORGANIZATION_SCHEMA_QUERIES, path =>
+    readFileSync(new URL('../' + path, import.meta.url), 'utf8') + (path === changed ? '\n-- changed source' : '')),
+  { code: 'ORGANIZATION_SCHEMA_SOURCE_DRIFT' });
+});
+
+test('0042 missing local reference fails closed without leaking a path/error payload', () => {
+  assert.throws(() => buildOrganizationSchemaReferences(ORGANIZATION_SCHEMA_QUERIES, () => { throw new Error('PRIVATE_PATH'); }),
+    error => error.code === 'ORGANIZATION_SCHEMA_SOURCE_DRIFT' && !error.message.includes('PRIVATE_PATH'));
+});
+
+test('0042 rejects ambiguous complete profile matches', async () => {
+  const references = buildOrganizationSchemaReferences(ORGANIZATION_SCHEMA_QUERIES);
+  const observed = references[0].schema;
+  const injected = { runProcess: async (_command, args) => {
+    const sql = args[args.indexOf('--command') + 1];
+    const key = Object.keys(ORGANIZATION_SCHEMA_QUERIES).find(k => ORGANIZATION_SCHEMA_QUERIES[k] === sql);
+    assert.ok(key);
+    return { stdout: JSON.stringify([{ success:true, results:observed[key] }]) };
+  } };
+  const result = await readOrganizationSchema('synthetic', injected, [references[0], references[0]]);
+  assert.equal(result.compatible, false);
+  assert.equal(result.profile, null);
+  assert.ok(result.mismatches.includes('ambiguous_schema_profiles'));
 });
 
 test('0042 strict ledger collection preserves the legacy queryLedger consumer contract', async () => {
