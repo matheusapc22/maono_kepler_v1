@@ -21,12 +21,22 @@ CHECKs, índices parciais e predicados de triggers. Não recebe SQL/identificado
 do usuário. A referência vem do SQL revisado com SHA256 fixo e do baseline local,
 executados somente em SQLite na memória do runner.
 
+As definições completas das seis tabelas são comparadas, incluindo constraints
+de tabela, colunas anteriores e opções. Todos os índices/triggers pertencentes
+a essas tabelas entram na comparação, mesmo fora do namespace da 0042. Drift
+histórico também bloqueia e exige revisão; não é descartado como compatível.
+
 O relatório inclui nomes conhecidos, checks e digests; não inclui linhas de
 organizações/usuários, SQL remoto ou defaults arbitrários. Também exporta o
 ledger inteiro (id/nome/appliedAt), contagem/digest, pendências/digest finais e
 bookmark Time Travel fresco. Confere o ledger antes e depois da coleta; drift,
 entrada inválida/duplicada ou ausência das migrations necessárias bloqueiam.
 Isso não é snapshot transacional: atomicDatabaseSnapshot=false é explícito.
+
+As leituras inicial e final do coletor validam todas as linhas brutas antes de
+normalizar/projetar campos; nomes vazios/nulos, tipos inválidos e duplicações
+geram erro explícito. A leitura inicial também precisa concordar com o estado
+anterior do operador. O helper legado de audit/apply permanece inalterado.
 
 Schema incompatível produz ok=false e exit2 no postvalidate, preservando o
 relatório. Erros de identidade, autorização, transporte ou ledger não autorizam

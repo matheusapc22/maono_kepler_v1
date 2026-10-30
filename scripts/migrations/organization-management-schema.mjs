@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
   PRODUCTION_DATABASE_NAME, PRODUCTION_DATABASE_ID, runWranglerJson, rowsFromD1Json,
-  gateError, sha256Text, queryLedger, computePendingState, captureTimeTravelBookmark,
+  gateError, sha256Text, computePendingState, captureTimeTravelBookmark,
 } from './production-migration-lib.mjs';
 
 export const ORGANIZATION_MIGRATION = '0042_organization_management.sql';
@@ -19,9 +19,12 @@ const INDEXES = ['idx_org_management_creation', 'idx_org_management_plan_active'
   'idx_org_management_events_request', 'idx_org_management_operation_actor',
   'sqlite_autoindex_organization_management_operations_1', 'sqlite_autoindex_organization_management_operations_2',
   'sqlite_autoindex_organization_management_operation_items_1'];
-// No caller-supplied identifiers/SQL. Namespace reads also detect unexpected objects.
+const TABLE_NAMES_SQL = TABLES.map(n => "'" + n + "'").join(',');
+// No caller-supplied identifiers/SQL. Include all objects owned by these tables:
+// an extra index/trigger can constrain writes even outside the 0042 namespace.
 export const ORGANIZATION_SCHEMA_QUERIES = Object.freeze({
-  objects: 'SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name IN (' + TABLES.map(n => "'" + n + "'").join(',') +
+  objects: 'SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name IN (' + TABLE_NAMES_SQL +
+    ') OR tbl_name IN (' + TABLE_NAMES_SQL +
     ") OR name GLOB 'org_management_*' OR name GLOB 'organization_management_*' OR name GLOB 'idx_org_management_*' ORDER BY type,name;",
   ...Object.fromEntries(TABLES.flatMap(name => [
     ['columns:' + name, 'PRAGMA table_info(' + name + ');'],
@@ -38,22 +41,6 @@ function tokens(sql) {
     .filter(t => !t.startsWith('--') && !t.startsWith('/*'))
     .map(t => /^[A-Za-z_][A-Za-z_0-9]*$/.test(t) ? t.toLowerCase() : t)
     .filter((t, i, all) => t !== ';' || i !== all.length - 1);
-}
-function columnDefinition(sql, name) {
-  const list = tokens(sql), start = list.indexOf('(');
-  let depth = 0, part = [];
-  for (const token of list.slice(start + 1)) {
-    if ((token === ',' || token === ')') && depth === 0) {
-      if (part[0] === name) return part;
-      part = [];
-      if (token === ')') break;
-      continue;
-    }
-    part.push(token);
-    if (token === '(') depth++;
-    if (token === ')') depth--;
-  }
-  return null;
 }
 function select(row, fields) {
   return Object.fromEntries(fields.map(key => [key, row[key] ?? null]));
@@ -102,14 +89,10 @@ export function evaluateOrganizationSchema(observed, expected = expectedOrganiza
   for (const object of expectedObjects) {
     const matches = actualObjects.filter(r => r.name === object.name && r.type === object.type);
     const actual = matches.length === 1 ? matches[0] : null;
-    let want, got;
-    if (ADDED_COLUMNS[object.name]) {
-      want = ADDED_COLUMNS[object.name].map(n => columnDefinition(object.sql, n));
-      got = ADDED_COLUMNS[object.name].map(n => columnDefinition(actual?.sql, n));
-    } else {
-      want = tokens(object.sql);
-      got = tokens(actual?.sql);
-    }
+    // Whole definitions are intentional, including existing columns, table-level
+    // constraints and table options. Projecting only added columns hides drift.
+    const want = tokens(object.sql);
+    const got = tokens(actual?.sql);
     const ok = actual?.tbl_name === object.tbl_name && JSON.stringify(want) === JSON.stringify(got);
     checks.push({ name: object.name, type: object.type, ok,
       expectedDigest: sha256Text(JSON.stringify(want)), observedDigest: sha256Text(JSON.stringify(got)) });
@@ -140,22 +123,40 @@ export async function readOrganizationSchema(configPath, injected = {}) {
   return evaluateOrganizationSchema(observed);
 }
 
-function checkedLedger(rows) {
+function checkedLedger(rows, timestampKey = 'appliedAt') {
   const names = new Set(), ids = new Set();
-  const clean = rows.map(row => {
-    if (!Number.isSafeInteger(row.id) || row.id <= 0 || ids.has(row.id) ||
+  if (!Array.isArray(rows)) throw gateError('ORGANIZATION_LEDGER_INVALID', 'Ledger inválido; nenhuma escrita foi executada.');
+  // Validate every raw row before coercion, projection, sorting or filtering.
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row) ||
+        !Number.isSafeInteger(row.id) || row.id <= 0 || ids.has(row.id) ||
         typeof row.name !== 'string' || !/^\d{4}_[A-Za-z0-9][A-Za-z0-9_-]*\.sql$/.test(row.name) ||
-        names.has(row.name) || typeof row.appliedAt !== 'string' ||
-        !/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/.test(row.appliedAt)) {
+        names.has(row.name) || typeof row[timestampKey] !== 'string' ||
+        !/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/.test(row[timestampKey])) {
       throw gateError('ORGANIZATION_LEDGER_INVALID', 'Ledger inválido ou duplicado; nenhuma escrita foi executada.');
     }
     names.add(row.name); ids.add(row.id);
-    return { id: row.id, name: row.name, appliedAt: row.appliedAt };
-  }).sort((a, b) => a.id - b.id);
+  }
   for (const name of ['0007_create_organization_limit_requests.sql', '0016_map_panel_navigation_and_quota.sql', ORGANIZATION_MIGRATION]) {
     if (!names.has(name)) throw gateError('ORGANIZATION_LEDGER_REQUIRED', 'Migration necessária ausente do ledger; revisar somente leitura.');
   }
-  return clean;
+  return rows.map(row => ({ id: row.id, name: row.name, appliedAt: row[timestampKey] })).sort((a, b) => a.id - b.id);
+}
+
+async function queryOrganizationLedger(configPath, injected) {
+  const json = await runWranglerJson([
+    'd1', 'execute', PRODUCTION_DATABASE_NAME, '--remote',
+    '--command', 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id;',
+  ], configPath, injected);
+  // Do not use queryLedger: its legacy normalization filters empty names. Other
+  // consumers retain that behavior; this completeness claim requires raw rows.
+  return checkedLedger(rowsFromD1Json(json), 'applied_at');
+}
+
+function assertStableLedger(initial, final) {
+  if (JSON.stringify(initial) !== JSON.stringify(final)) {
+    throw gateError('ORGANIZATION_POSTVALIDATE_LEDGER_DRIFT', 'Ledger mudou durante a leitura; preservar evidência e revisar sem retry automático.');
+  }
 }
 
 export async function collectOrganizationPostValidation(configPath, remote, migration, injected = {}) {
@@ -163,13 +164,13 @@ export async function collectOrganizationPostValidation(configPath, remote, migr
       remote.identity.name !== PRODUCTION_DATABASE_NAME || remote.identity.id !== PRODUCTION_DATABASE_ID) {
     throw gateError('ORGANIZATION_POSTVALIDATE_TARGET_INVALID', 'Alvo fixo da pós-validação 0042 divergente.');
   }
-  const initialLedger = checkedLedger(remote.ledger);
+  const previousLedger = checkedLedger(remote.ledger);
+  const initialLedger = await queryOrganizationLedger(configPath, injected);
+  assertStableLedger(previousLedger, initialLedger);
   const schema = await readOrganizationSchema(configPath, injected);
   const backup = await captureTimeTravelBookmark(configPath, injected);
-  const ledger = checkedLedger(await queryLedger(configPath, injected));
-  if (JSON.stringify(initialLedger) !== JSON.stringify(ledger)) {
-    throw gateError('ORGANIZATION_POSTVALIDATE_LEDGER_DRIFT', 'Ledger mudou durante a leitura; preservar evidência e revisar sem retry automático.');
-  }
+  const ledger = await queryOrganizationLedger(configPath, injected);
+  assertStableLedger(initialLedger, ledger);
   const pending = computePendingState(remote.localMigrations, ledger.map(r => r.name), ORGANIZATION_MIGRATION);
   return { schema, ledger: { appliedCount: ledger.length, rows: ledger, digest: sha256Text(JSON.stringify(ledger)) },
     pending, backup, ledgerStableAcrossCollection: true, atomicDatabaseSnapshot: false };

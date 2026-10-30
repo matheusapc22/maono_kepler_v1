@@ -53,7 +53,7 @@ try {
       sha256: migration.sha256,
       applied: Boolean(applied),
       appliedAt: applied?.appliedAt || null,
-      stillPendingLocallyAgainstLedger: remote.pending.selectedPending,
+      stillPendingLocallyAgainstLedger: (organizationEvidence?.pending ?? remote.pending).selectedPending,
     },
     integrity,
     ...(organizationEvidence ? { organizationEvidence } : {}),
