@@ -68,7 +68,7 @@ const BASE_QUERIES = Object.freeze({
 });
 // Fixed SQL fragments only: no identifier, predicate or target comes from input.
 // The original totals/eligibility query stays intact; the same statement adds
-// conditional aggregates only for organization 4. There are no extra calls.
+// conditional details only for organization 4. There are no extra calls.
 const count = (from, where) => `(SELECT COUNT(*) FROM ${from} WHERE ${where})`;
 const RESOURCE_PARTS = Object.freeze({
   projects:count('projects p','p.organization_id=o.id'),
@@ -146,10 +146,32 @@ const OWNER_PARTS = Object.freeze({
 const DETAIL_GROUPS = Object.freeze({ resources:RESOURCE_PARTS,pending:PENDING_PARTS,causes:CAUSE_PARTS,sessions:SESSION_PARTS,changes:CHANGE_PARTS,owner:OWNER_PARTS });
 const DETAIL_ENTRIES = Object.entries(DETAIL_GROUPS).flatMap(([group,parts]) => Object.entries(parts).map(([name,sql]) => [`org4_${group}_${name}`,sql]));
 const DETAIL_FIELDS = DETAIL_ENTRIES.map(([name])=>name);
+// A free-form status/date may contain private text. Bound and sanitize inside
+// D1, before Wrangler receives any row; the JS validator repeats these checks.
+// Also include project reservation PROCESSING, historical migration 0008
+// INACTIVE and the ERROR state recognized by the project publication guard.
+const FILE_STATES = ['ACTIVE','FAILED','DELETED','TRASHED','PURGED','PENDING','PURGE_PENDING','PROCESSING','INACTIVE','ERROR'];
+const BLOCKING_FILE_SCOPE = "f.organization_id=o.id AND f.status NOT IN ('ACTIVE','FAILED','DELETED','TRASHED','PURGED')";
+const fileTimestamp = column => `CASE WHEN typeof(${column})='text'
+  AND instr(${column},char(0))=0 AND ${column} NOT GLOB '*[^0-9TZ :.-]*' AND CAST(substr(${column},1,4) AS INTEGER) BETWEEN 1 AND 9999
+  AND ((length(${column})=10 AND ${column} GLOB '????-??-??')
+    OR (length(${column})=19 AND ${column} GLOB '????-??-?? ??:??:??')
+    OR (length(${column})=20 AND ${column} GLOB '????-??-??T??:??:??Z')
+    OR (length(${column})=24 AND ${column} GLOB '????-??-??T??:??:??.???Z'))
+  AND julianday(${column}) IS NOT NULL AND date(${column},'+0 days')=substr(${column},1,10)
+  THEN ${column} ELSE NULL END`;
+const BLOCKING_FILE_SQL = `CASE WHEN o.id=4 AND ${CAUSE_PARTS.fileState}=1 THEN
+  (SELECT json_object('id',CASE WHEN typeof(f.id)='integer' AND f.id BETWEEN 1 AND 9007199254740991 THEN f.id ELSE NULL END,
+    'status',CASE WHEN typeof(f.status)='text' AND length(f.status)<=13 AND instr(f.status,char(0))=0
+      AND upper(f.status) IN (${FILE_STATES.map(value=>`'${value}'`).join(',')}) THEN f.status ELSE NULL END,
+    'createdAt',${fileTimestamp('f.created_at')},'updatedAt',${fileTimestamp('f.updated_at')})
+  FROM organization_files f WHERE ${BLOCKING_FILE_SCOPE}) ELSE NULL END`;
+const FILE_FIELD = 'org4_blockingFile';
 export const QA_INVENTORY_QUERIES = Object.freeze({
   ...BASE_QUERIES,
   organizations:`WITH inventory AS (${BASE_QUERIES.organizations.replace(/;$/,'')})
-    SELECT inventory.*, ${DETAIL_ENTRIES.map(([name,sql])=>`CASE WHEN o.id=4 THEN ${sql} ELSE NULL END AS ${name}`).join(',\n      ')}
+    SELECT inventory.*, ${DETAIL_ENTRIES.map(([name,sql])=>`CASE WHEN o.id=4 THEN ${sql} ELSE NULL END AS ${name}`).join(',\n      ')},
+      ${BLOCKING_FILE_SQL} AS ${FILE_FIELD}
     FROM inventory JOIN organizations o ON o.id=inventory.id ORDER BY inventory.id;`,
 });
 const COUNTS = ['managementVersion','eligibleManagerCount','memberCount','activeMemberCount','activeOwnerCount',
@@ -165,6 +187,7 @@ const detailGroup = (row,group) => Object.fromEntries(Object.keys(DETAIL_GROUPS[
 const fail = code => { throw gateError(code, 'Inventario QA bloqueado; nenhuma escrita executada.'); };
 const integer = value => Number.isSafeInteger(value) && value >= 0;
 const FAILURE_CODES = new Set(['QA_INVENTORY_CONTEXT_INVALID','QA_INVENTORY_RESPONSE_INVALID',
+  'QA_INVENTORY_FILE_CARDINALITY','QA_INVENTORY_FILE_METADATA_INVALID',
   'QA_INVENTORY_LIMIT_EXCEEDED','QA_INVENTORY_INCOMPLETE','QA_INVENTORY_SCHEMA_OR_LEDGER_UNREADY',
   'QA_INVENTORY_INTEGRITY_FAILED','QA_INVENTORY_DRIFT','ORGANIZATION_LEDGER_INVALID',
   'ORGANIZATION_SCHEMA_SOURCE_DRIFT',
@@ -205,13 +228,14 @@ function checkOrganizations(rows, summary) {
   if (rows.length !== summary.organizationCount) fail('QA_INVENTORY_INCOMPLETE');
   let last = 0;
   for (const row of rows) {
-    if (!keys(row,[...FIELDS,...DETAIL_FIELDS]) || !Number.isSafeInteger(row.id) || row.id <= last ||
+    if (!keys(row,[...FIELDS,...DETAIL_FIELDS,FILE_FIELD]) || !Number.isSafeInteger(row.id) || row.id <= last ||
         !['READY','PENDING','ERROR','DISABLED','UNKNOWN'].includes(row.storageStatus) ||
         !COUNTS.every(k => integer(row[k])) || !BITS.every(k => row[k] === 0 || row[k] === 1) ||
         row.activeOwnerCount > row.activeMemberCount || row.activeMemberCount > row.memberCount ||
         row.sharedMemberCount > row.memberCount || row.eligibleManagerCount > row.managerAssigned ||
         row.eligibleManagerCount > row.activeOwnerCount) fail('QA_INVENTORY_RESPONSE_INVALID');
     checkTargetDetails(row);
+    checkBlockingFile(row);
     last = row.id;
   }
   return rows;
@@ -252,6 +276,34 @@ function checkTargetDetails(row) {
     if (Math.max(...values)>pending[source] || pending[source]>sum(values)) fail('QA_INVENTORY_RESPONSE_INVALID');
   }
 }
+function validFileTimestamp(value) {
+  if (typeof value!=='string' || value.length>24 ||
+      !/^(?!0000)\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}|T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)?$/.test(value)) return false;
+  const canonical=value.length===10?value+'T00:00:00.000Z':
+    value.length===19?value.replace(' ','T')+'.000Z':value.length===20?value.replace('Z','.000Z'):value;
+  const epoch=Date.parse(canonical);
+  return Number.isFinite(epoch) && new Date(epoch).toISOString()===canonical;
+}
+function checkBlockingFile(row) {
+  const raw=row[FILE_FIELD];
+  const count=row.id===4?row.org4_causes_fileState:0;
+  if (count>1) fail('QA_INVENTORY_FILE_CARDINALITY');
+  if (count===0) {
+    if (raw!==null) fail('QA_INVENTORY_FILE_METADATA_INVALID');
+    return null;
+  }
+  if (typeof raw!=='string' || raw.length>256) fail('QA_INVENTORY_FILE_METADATA_INVALID');
+  let file;
+  try { file=JSON.parse(raw); } catch { fail('QA_INVENTORY_FILE_METADATA_INVALID'); }
+  if (!keys(file,['id','status','createdAt','updatedAt']) || !Number.isSafeInteger(file.id) || file.id<1 ||
+      typeof file.status!=='string' || !/^[A-Za-z_]{1,13}$/.test(file.status) ||
+      !FILE_STATES.includes(file.status.toUpperCase()) || FILE_STATES.slice(0,5).includes(file.status) ||
+      !validFileTimestamp(file.createdAt) || !validFileTimestamp(file.updatedAt)) fail('QA_INVENTORY_FILE_METADATA_INVALID');
+  // Re-encode to reject duplicate keys, whitespace padding and noncanonical
+  // transport representations; do not silently normalize an ambiguous row.
+  if (JSON.stringify(file)!==raw) fail('QA_INVENTORY_FILE_METADATA_INVALID');
+  return file;
+}
 function targetedDiagnostics(row, summary) {
   if (!row) return null;
   const owner=detailGroup(row,'owner');
@@ -265,7 +317,8 @@ function targetedDiagnostics(row, summary) {
     resources:{ total:row.resourceCount,bySource:detailGroup(row,'resources') },
     sessions:{ total:row.liveSessionCount,byExpiryAndAssociation:detailGroup(row,'sessions') },
     changes:detailGroup(row,'changes'),
-    pendingWork:{ total:row.pendingWorkCount,bySource:detailGroup(row,'pending'),overlappingCauses:detailGroup(row,'causes') },
+    pendingWork:{ total:row.pendingWorkCount,bySource:detailGroup(row,'pending'),overlappingCauses:detailGroup(row,'causes'),
+      blockingFile:checkBlockingFile(row) },
     reasons:reasons(row,summary),
   };
 }
@@ -311,7 +364,7 @@ export async function collectQaInventory(configPath, remote, migration, injected
   }).sort((a,b) => a.resourceCount-b.resourceCount || a.memberCount-b.memberCount || a.id-b.id);
   const target=targetedDiagnostics(final.find(row=>row.id===4),finalSummary);
   return {
-    version:3, phase:'organization-qa-inventory-read-only', writesPerformed:false,
+    version:4, phase:'organization-qa-inventory-read-only', writesPerformed:false,
     schema:{ profile:evidence.schema.profile, digest:evidence.schema.digest, compatible:true },
     ledger:{ appliedCount:ledger.length, digest:evidence.ledger.digest, pendingCount:0, stable:true },
     integrity:{ quickCheck:'ok', foreignKeyViolationCount:0 },
