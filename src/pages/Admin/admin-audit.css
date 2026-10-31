@@ -1,0 +1,7 @@
+.maono-admin-workspace .admin-audit { min-width: 0; padding: 20px; }
+.maono-admin-workspace .admin-audit p { color: var(--admin-workspace-muted); line-height: 1.5; overflow-wrap: anywhere; }
+.maono-admin-workspace .admin-audit caption { text-align: left; padding: 12px 0; }
+.maono-admin-workspace .admin-audit :is(th, td) { padding: 12px; }
+.maono-admin-workspace .admin-audit nav { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.maono-admin-workspace .admin-audit .mm-btn { min-height: 44px; white-space: normal; }
+.maono-admin-workspace .admin-audit button:focus-visible { outline: 2px solid var(--admin-gold); outline-offset: 3px; }

@@ -39,7 +39,8 @@ test('Admin static panels never wait for unrelated reads and status stays outsid
   const status = page.locator('.admin-content').getByRole('status');
   expect(await status.evaluate(element => element.closest('[aria-busy="true"]') === null)).toBe(true);
   await page.locator('.admin-nav').getByRole('button', { name: 'Auditoria', exact: true }).click();
-  await expect(page.locator('.mm-audit-list')).toContainText('admin.open');
+  await expect(page.locator('.admin-audit')).toContainText('Registros de auditoria');
+  await expect(page.locator('.admin-audit')).not.toContainText('admin.open');
   await page.locator('.admin-nav').getByRole('button', { name: 'Solicitações', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Solicitações', exact: true, level: 2 })).toBeVisible();
   gate.release();
