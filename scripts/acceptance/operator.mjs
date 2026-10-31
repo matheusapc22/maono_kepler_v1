@@ -70,6 +70,9 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
   let cleanupErrors = [];
 
   try {
+    if (manifest.preflightOnly && options.mode !== "preflight") {
+      fail("SUITE_PREFLIGHT_ONLY", "Esta suíte apenas observa readiness; run e closure exigem outro contrato registrado.");
+    }
     budget.enter("preflight");
     if (options.mode === "run" && manifest.requiresApprovedIdentities && !options.qaUserIds) {
       fail("QA_IDENTITIES_REQUIRED", "Defina os IDs QA dedicados aprovados antes de executar a janela.");
@@ -81,7 +84,10 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
 
     if (options.mode === "preflight") {
       assertProduction(initialProject, options.expectedCommit, manifest, { requireBaseline: true });
-      if (suite.verifyPreflight) suite.verifyPreflight(initialProject, options);
+      if (suite.verifyPreflight) {
+        const evidence = suite.verifyPreflight(initialProject, options);
+        if (evidence !== undefined) report.suitePreflight = evidence;
+      }
       if (manifest.requiresGlobalWindow) report.pendingGates = ['EXPLICIT_GLOBAL_WINDOW_APPROVAL', 'FRESH_ALL_ORGANIZATIONS_SQL_EVIDENCE',
         'WRITERS_PAUSED', 'QA_IDENTITIES_AUTHENTICATED', 'ENVIRONMENT_RUN_APPROVAL'];
       report.ok = true;

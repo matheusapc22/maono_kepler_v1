@@ -15,6 +15,10 @@ const SHA40 = /^[0-9a-f]{40}$/i;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
 const DURABLE_SAVE_FLAGS = new Set(["PROJECT_DURABLE_SAVE_V1", "PROJECT_DURABLE_SAVE_INLINE_ENABLED"]);
 const PREVIEW_FLAGS = new Set(["PROJECT_PREVIEW_OPERATIONS_V1", "PROJECT_PREVIEW_PROCESSOR_ENABLED", "VITE_PROJECT_PREVIEW_OPERATIONS_V1"]);
+export const ORGANIZATION_READINESS_SUITE = "organization-management-readiness";
+export const ORGANIZATION_OBSERVED_FLAGS = Object.freeze([
+  "ORGANIZATION_MANAGEMENT_V1", "VITE_ORGANIZATION_MANAGEMENT_V1", "PROJECT_QUOTA_RESERVATION_V1",
+]);
 const TERMINAL = new Set(["success", "failure", "canceled"]);
 const BACKEND_CODE = /^[A-Z0-9_]{1,120}$/;
 const CORRELATION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,99}$/;
@@ -150,6 +154,7 @@ export function validateManifest(manifest) {
   }
   if (!Array.isArray(manifest.cases) || !manifest.cases.length) fail("MANIFEST_INVALID", "A suite deve declarar casos.");
   if (!manifest.managedFlags || typeof manifest.managedFlags !== "object" || Array.isArray(manifest.managedFlags)) fail("MANIFEST_INVALID", "managedFlags inválido.");
+  observationFlagNames(manifest);
   if (manifest.mutationMode === "read_only" && Object.keys(manifest.managedFlags).length) fail("MANIFEST_INVALID", "Suite read_only não pode alterar flags.");
   for (const [name, cfg] of Object.entries(manifest.managedFlags)) {
     if (!/^MAONO_[A-Z0-9_]+$/.test(name) && !DURABLE_SAVE_FLAGS.has(name) && !(manifest.id === "durable-project-preview" && PREVIEW_FLAGS.has(name))) fail("MANIFEST_INVALID", `Flag inválida: ${name}.`);
@@ -158,6 +163,23 @@ export function validateManifest(manifest) {
     }
   }
   return manifest;
+}
+
+// Observing these flags grants no permission to transition them. This capability
+// is limited to one registered, preflight-only suite, not arbitrary manifests.
+export function observationFlagNames(manifest) {
+  if (manifest.id !== ORGANIZATION_READINESS_SUITE &&
+      !Object.hasOwn(manifest, "observedFlags") && !Object.hasOwn(manifest, "preflightOnly")) {
+    return Object.keys(manifest.managedFlags);
+  }
+  if (manifest.id !== ORGANIZATION_READINESS_SUITE || manifest.preflightOnly !== true ||
+      manifest.mutationMode !== "read_only" || Object.keys(manifest.managedFlags).length !== 0 ||
+      !Array.isArray(manifest.requiredProfiles) || manifest.requiredProfiles.length !== 0 ||
+      manifest.requiresBrowser === true || !Array.isArray(manifest.observedFlags) ||
+      JSON.stringify(manifest.observedFlags) !== JSON.stringify(ORGANIZATION_OBSERVED_FLAGS)) {
+    fail("MANIFEST_INVALID", "Observação de flags de Organizações exige a suíte de preflight somente leitura registrada.");
+  }
+  return [...ORGANIZATION_OBSERVED_FLAGS];
 }
 
 function readFlag(entry) {
@@ -228,7 +250,7 @@ function projectPath() {
 }
 
 export async function readProduction(token, manifest, deps = {}) {
-  const names = Object.keys(manifest.managedFlags);
+  const names = observationFlagNames(manifest);
   const [project, deployments] = await Promise.all([
     cfRequest(token, projectPath(), deps),
     cfRequest(token, `${projectPath()}/deployments?env=production&per_page=25`, deps),
