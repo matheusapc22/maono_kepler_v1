@@ -1,0 +1,8 @@
+.maono-admin-workspace .admin-requests { display: grid; gap: 16px; min-width: 0; }
+.maono-admin-workspace .admin-requests-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.maono-admin-workspace .admin-requests .mm-section-card { min-width: 0; padding: 20px; }
+.maono-admin-workspace .admin-requests :is(h2, h3) { margin: 0 0 12px; font-size: 20px; line-height: 1.3; }
+.maono-admin-workspace .admin-requests p { margin: 0 0 16px; color: var(--admin-workspace-muted); line-height: 1.5; overflow-wrap: anywhere; }
+.maono-admin-workspace .admin-requests .mm-btn { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; margin-bottom: 16px; white-space: normal; }
+.maono-admin-workspace .admin-requests a:focus-visible { outline: 2px solid var(--admin-gold); outline-offset: 3px; }
+@media (max-width: 960px) { .maono-admin-workspace .admin-requests-grid { grid-template-columns: minmax(0, 1fr); } }

@@ -7,3 +7,4 @@ src/fallback-ui-styles.ts text eol=lf
 
 # PDF fixtures contain significant xref whitespace and are binary assets.
 tests/fixtures/document-preview/*.pdf binary
+output/pdf/*.pdf binary
