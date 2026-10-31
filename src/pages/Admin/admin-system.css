@@ -1,0 +1,9 @@
+.maono-admin-workspace .admin-system { min-width: 0; padding: 20px; }
+.maono-admin-workspace .admin-system p { line-height: 1.5; color: var(--admin-workspace-muted); overflow-wrap: anywhere; }
+.maono-admin-workspace .admin-system dl { display: grid; gap: 0; margin: 16px 0 24px; }
+.maono-admin-workspace .admin-system dl > div { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--admin-border); }
+.maono-admin-workspace .admin-system :is(dt, dd) { margin: 0; overflow-wrap: anywhere; }
+.maono-admin-workspace .admin-system dd { color: var(--admin-gold); }
+.maono-admin-workspace .admin-system .mm-btn { min-height: 44px; }
+.maono-admin-workspace .admin-system button:focus-visible { outline: 2px solid var(--admin-gold); outline-offset: 3px; }
+@media (max-width: 480px) { .maono-admin-workspace .admin-system dl > div { grid-template-columns: minmax(0, 1fr); gap: 6px; } }
