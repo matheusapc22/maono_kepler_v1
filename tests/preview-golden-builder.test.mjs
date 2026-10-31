@@ -4,8 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(new URL("..", import.meta.url).pathname);
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 test("builder Golden gera MapConfig v1 e manifesto reproduzível a partir de GeoJSON", async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "maono-preview-golden-"));
