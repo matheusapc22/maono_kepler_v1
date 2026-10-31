@@ -93,7 +93,7 @@ jobs:
           src/pages/Admin/components/AdminIcon.tsx
           src/pages/Admin/components/AdminRequests.tsx src/pages/Admin/components/admin-request-navigation.ts src/pages/Admin/components/AdminAudit.tsx
           src/pages/Admin/components/admin-audit-model.ts functions/_lib/admin-audit-reader.js functions/api/admin/audit/index.js
-          src/pages/Admin/components/AdminSystem.tsx src/pages/Admin/components/admin-system-model.ts
+          src/pages/Admin/components/AdminSystem.tsx src/pages/Admin/components/admin-system-model.ts src/pages/Admin/components/admin-overview-model.ts
           src/pages/Projects/components/ProjectCard.tsx src/pages/Projects/components/ProjectPagesUi.tsx
           src/pages/Projects/components/ProjectsSection.tsx src/pages/Projects/components/ProjectSectionSkeletons.tsx
           src/pages/Projects/components/TicketLoadingSkeletons.tsx
@@ -108,7 +108,8 @@ jobs:
           tests/browser/admin-workspace.spec.ts tests/browser/admin-users-safety.spec.ts tests/browser/fixtures/admin-workspace.ts
           src/pages/Admin/components/AdminUserManager.tsx src/pages/Admin/components/AdminUserManagerLegacy.tsx tests/admin-requests-progressive.test.mjs
           tests/helpers/admin-requests-preservation.mjs tests/admin-audit-progressive.test.mjs tests/helpers/admin-audit-preservation.mjs
-          tests/admin-system-progressive.test.mjs tests/helpers/admin-system-preservation.mjs
+          tests/admin-system-progressive.test.mjs tests/helpers/admin-system-preservation.mjs tests/admin-overview-progressive.test.mjs
+          tests/helpers/admin-overview-preservation.mjs
       - name: Compile actual application
         env:
           VITE_MAONO_MAP_SHELL_V1: "true"
