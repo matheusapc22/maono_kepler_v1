@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { build } from 'esbuild';
 import postcss from 'postcss';
@@ -12,7 +13,8 @@ const runtime = read('MaonoMapRuntime.tsx');
 const css = postcss.parse(read('maono-map-shell.css'));
 const tokenCss = read('maono-map-tokens.css');
 const accentCss = read('maono-map-accent.css');
-const directory = mkdtempSync(new URL('../.map-sidebar-test-', import.meta.url).pathname);
+const temporaryPrefix = fileURLToPath(new URL('../.map-sidebar-test-', import.meta.url));
+const directory = mkdtempSync(temporaryPrefix);
 let render;
 try {
   const bundle = await build({
@@ -21,7 +23,7 @@ try {
         import { StaticRouter } from 'react-router';
         import MapSidebar from './MapSidebar';
         export const render = props => renderToStaticMarkup(<StaticRouter location="/projects/map/edit"><MapSidebar {...props}/></StaticRouter>);`,
-      resolveDir: shellRoot.pathname, loader: 'tsx',
+      resolveDir: fileURLToPath(shellRoot), loader: 'tsx',
     },
     bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', write: false,
     loader: { '.png': 'dataurl' },
@@ -29,8 +31,10 @@ try {
   });
   const path = join(directory, 'render.mjs');
   writeFileSync(path, bundle.outputFiles[0].text);
-  ({ render } = await import(path));
+  ({ render } = await import(pathToFileURL(path).href));
 } finally {
+  assert.equal(dirname(resolve(directory)), dirname(temporaryPrefix));
+  assert.ok(basename(directory).startsWith(basename(temporaryPrefix)));
   rmSync(directory, { recursive: true });
 }
 const noop = () => {};

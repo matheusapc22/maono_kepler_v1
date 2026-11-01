@@ -12,23 +12,16 @@ import "./Admin/admin.css";
 import AdminUserManager from "./Admin/components/AdminUserManager";
 import AdminSidebar from "./Admin/components/AdminSidebar";
 import AdminOverview from "./Admin/components/AdminOverview";
+import AdminRequests from "./Admin/components/AdminRequests";
+import AdminAudit from "./Admin/components/AdminAudit";
+import AdminSystem from "./Admin/components/AdminSystem";
 import AdminIcon, { type AdminIconName } from "./Admin/components/AdminIcon";
 import "./Admin/admin-workspace.css";
 import AdminOrganizationsSection from "./Admin/organizations/AdminOrganizationsSection";
+import AdminProjects from "./Admin/components/AdminProjects";
+import type { AdminProject } from "./Admin/components/admin-projects-model";
 
 type AdminSection = "overview" | "organizations" | "users" | "projects" | "requests" | "audit" | "system";
-
-type AdminProject = {
-  id: number;
-  name: string;
-  slug: string;
-  description?: string;
-  dropboxRootPath?: string;
-  defaultConfigFile?: string;
-  active?: boolean;
-  accessCount?: number;
-  updatedAt?: string;
-};
 
 type AdminOrganization = {
   id: number;
@@ -188,7 +181,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
         return true;
       } catch (err) {
         if (!isCurrent()) return;
-        const denied = isRegionAccessDenied(err);
+        const denied = isRegionAccessDenied(err) || Number((err as { status?: unknown })?.status) === 404;
         const sessionLost = isRegionAuthenticationError(err);
         if (sessionLost) {
           // Session loss invalidates the entire batch, including companions
@@ -215,12 +208,22 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
       }
     };
     const results = await Promise.allSettled([
-      loadRegion("projects", projectsRead, data => setProjects(data.projects || [])),
+      loadRegion("projects", projectsRead, data => {
+        if (!Array.isArray(data.projects) || data.projects.some((item: unknown) => !item || typeof item !== "object")) throw Object.assign(new Error("Resposta administrativa inválida."), { status: 502 });
+        setProjects(data.projects);
+      }),
       loadRegion("access", accessRead, data => setAccess(data.access || [])),
       // Preserve the existing users endpoint precedence, including [] being
       // authoritative. Access users are only a successful-response fallback.
-      loadRegion("users", usersRead.then(async usersData => usersData.users || (await accessRead).users || []), setUsers),
-      loadRegion("organizations", organizationsRead, data => setOrganizations(data.organizations || [])),
+      loadRegion("users", usersRead.then(async usersData => {
+        const collection = usersData.users === undefined ? (await accessRead).users : usersData.users;
+        if (!Array.isArray(collection) || collection.some((item: unknown) => !item || typeof item !== "object")) throw Object.assign(new Error("Resposta administrativa inválida."), { status: 502 });
+        return collection;
+      }), setUsers),
+      loadRegion("organizations", organizationsRead, data => {
+        if (!Array.isArray(data.organizations) || data.organizations.some((item: unknown) => !item || typeof item !== "object")) throw Object.assign(new Error("Resposta administrativa inválida."), { status: 502 });
+        setOrganizations(data.organizations);
+      }),
     ]);
     if (isCurrent()) controllerRef.current = null;
     return results.every(result => result.status === "fulfilled" && result.value === true);
@@ -264,10 +267,10 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
         structurePending={structurePending}
         onSection={setSection}
         metrics={[
-          { label: "Organizações", value: activeOrganizations.length, icon: "building", state: regions.organizations, contentPending: organizationPresentation.contentPending },
-          { label: "Projetos", value: activeProjects.length, icon: "map", state: regions.projects, contentPending: projectPresentation.contentPending },
-          { label: "Usuários", value: activeUsers.length, icon: "users", state: regions.users, contentPending: userPresentation.contentPending },
-          { label: "Arquivos", value: totalFiles, icon: "file", state: regions.organizations, contentPending: organizationPresentation.contentPending },
+          { label: "Organizações", available: organizations.every(item => typeof item.active === "boolean"), value: activeOrganizations.length, icon: "building", state: regions.organizations, contentPending: organizationPresentation.contentPending },
+          { label: "Projetos", available: projects.every(item => typeof item.active === "boolean"), value: activeProjects.length, icon: "map", state: regions.projects, contentPending: projectPresentation.contentPending },
+          { label: "Usuários", available: users.every(item => typeof item.active === "boolean"), value: activeUsers.length, icon: "users", state: regions.users, contentPending: userPresentation.contentPending },
+          { label: "Arquivos", available: organizations.every(org => typeof org.fileCount === "number" && Number.isSafeInteger(org.fileCount) && org.fileCount >= 0), value: totalFiles, icon: "file", state: regions.organizations, contentPending: organizationPresentation.contentPending },
         ]}
       />
     );
@@ -317,66 +320,19 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   }
 
   function renderProjects() {
-    return (
-      <section className="mm-card mm-section-card">
-        <h2><StaticLoadingText pending={structurePending}>Projetos e Mapas</StaticLoadingText></h2>
-        <p><StaticLoadingText pending={structurePending}>Mapas, configurações, previews e vínculos.</StaticLoadingText></p>
-        <Table state={regions.projects} structurePending={structurePending} contentPending={projectPresentation.contentPending}
-          headers={["Projeto", "Slug", "JSON", "Pasta", "Acessos", "Status"]}
-          rows={projects.map((project) => [
-            project.name,
-            project.slug,
-            project.defaultConfigFile || "config.kepler.json",
-            project.dropboxRootPath || "/projects",
-            String(project.accessCount || 0),
-            statusLabel(project.active),
-          ])}
-        />
-      </section>
-    );
+    return <AdminProjects projects={projects} organizations={organizations} state={regions.projects} organizationsState={regions.organizations} user={user} structurePending={structurePending} contentPending={projectPresentation.contentPending} />;
   }
 
   function renderRequests() {
-    return (
-      <section className="mm-card mm-section-card">
-        <h2><StaticLoadingText pending={structurePending}>Solicitações</StaticLoadingText></h2>
-        <p><StaticLoadingText pending={structurePending}>Criação, revisão e suporte.</StaticLoadingText></p>
-        <section className="mm-metrics-grid compact">
-          <article className="mm-card metric"><span><StaticLoadingText pending={structurePending}>Abertas</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong></article>
-          <article className="mm-card metric"><span><StaticLoadingText pending={structurePending}>Em análise</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong></article>
-          <article className="mm-card metric"><span><StaticLoadingText pending={structurePending}>Concluídas</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong></article>
-        </section>
-      </section>
-    );
+    return <AdminRequests sessionAvailable={!error} />;
   }
 
   function renderAudit() {
-    return (
-      <section className="mm-card mm-section-card">
-        <h2><StaticLoadingText pending={structurePending}>Auditoria</StaticLoadingText></h2>
-        <p><StaticLoadingText pending={structurePending}>Eventos e ações administrativas.</StaticLoadingText></p>
-        <div className="mm-audit-list">
-          <div><strong><StaticLoadingText pending={structurePending}>admin.open</StaticLoadingText></strong><span><StaticLoadingText pending={structurePending}>{`Painel acessado por ${roleLabel(user?.role)}.`}</StaticLoadingText></span></div>
-          <div><strong><StaticLoadingText pending={structurePending}>admin.files.redirect</StaticLoadingText></strong><span><StaticLoadingText pending={structurePending}>/admin/files redireciona para Gestão de Organizações.</StaticLoadingText></span></div>
-          <div><strong><StaticLoadingText pending={structurePending}>projects.thumbnail</StaticLoadingText></strong><span><StaticLoadingText pending={structurePending}>Preview vinculado ao projeto.</StaticLoadingText></span></div>
-        </div>
-      </section>
-    );
+    return <AdminAudit sessionAvailable={!error} />;
   }
 
   function renderSystem() {
-    return (
-      <section className="mm-card mm-section-card">
-        <h2><StaticLoadingText pending={structurePending}>Sistema</StaticLoadingText></h2>
-        <p><StaticLoadingText pending={structurePending}>React, Vite, Cloudflare Pages Functions, D1 e Kepler.gl.</StaticLoadingText></p>
-        <div className="mm-code-panel">
-          <StaticLoadingText pending={structurePending}>/ = /projects</StaticLoadingText><br />
-          <StaticLoadingText pending={structurePending}>/admin = painel administrativo</StaticLoadingText><br />
-          <StaticLoadingText pending={structurePending}>/admin/files = /admin?section=organizations</StaticLoadingText><br />
-          <StaticLoadingText pending={structurePending}>/api/projects/:slug/thumbnail = preview do projeto</StaticLoadingText>
-        </div>
-      </section>
-    );
+    return <AdminSystem sessionAvailable={!error} />;
   }
 
   function renderActiveSection() {

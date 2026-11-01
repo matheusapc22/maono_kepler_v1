@@ -1,3 +1,8 @@
+import { restoreAdminProjectsInventory } from './admin-projects-inventory-preservation.mjs';
+import { restoreAdminRequests } from './admin-requests-preservation.mjs';
+import { restoreAdminAudit } from './admin-audit-preservation.mjs';
+import { restoreAdminSystem } from './admin-system-preservation.mjs';
+import { restoreAdminOverview } from './admin-overview-preservation.mjs';
 import assert from 'node:assert/strict';
 import { restoreOrganizationManagement } from './organization-management-preservation.mjs';
 
@@ -47,6 +52,11 @@ const changes = [
 export function restoreApprovedAdminWorkspace(path, source) {
   source = restoreOrganizationManagement(path, source);
   if (path !== 'src/pages/Admin.tsx') return source;
+  source = restoreAdminProjectsInventory(path, source);
+  source = restoreAdminRequests(source);
+  source = restoreAdminAudit(source);
+  source = restoreAdminSystem(source);
+  source = restoreAdminOverview(source);
   for (const { before, after } of changes) {
     assert.equal(source.split(after).length - 1, 1, `exact approved Admin workspace edit: ${path}`);
     source = source.replace(after, before);

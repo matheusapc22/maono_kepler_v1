@@ -33,13 +33,16 @@ for (const width of [1440, 390]) test(`Admin ${width}px reveals independent metr
 test('Admin static panels never wait for unrelated reads and status stays outside busy regions', async ({ page }) => {
   const gate = deferred(); await setup(page, { section: 'system', beforeRead: () => gate.promise });
   await expect(page.getByRole('heading', { name: 'Sistema', exact: true, level: 1 })).toBeVisible();
-  await expect(page.locator('.mm-code-panel')).toContainText('/ = /projects');
+  await expect(page.locator('.admin-system')).toContainText('Diagnóstico básico');
+  await expect(page.locator('.admin-system')).toContainText('O que não foi verificado');
   await expect(page.locator('.admin-content .mm-skeleton')).toHaveCount(0);
   await expect(page.locator('.admin-main')).not.toHaveAttribute('aria-busy', 'true');
-  const status = page.locator('.admin-content').getByRole('status');
+  const status = page.locator('.admin-content > [role="status"]');
+  await expect(status).toHaveCount(1);
   expect(await status.evaluate(element => element.closest('[aria-busy="true"]') === null)).toBe(true);
   await page.locator('.admin-nav').getByRole('button', { name: 'Auditoria', exact: true }).click();
-  await expect(page.locator('.mm-audit-list')).toContainText('admin.open');
+  await expect(page.locator('.admin-audit')).toContainText('Registros de auditoria');
+  await expect(page.locator('.admin-audit')).not.toContainText('admin.open');
   await page.locator('.admin-nav').getByRole('button', { name: 'Solicitações', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Solicitações', exact: true, level: 2 })).toBeVisible();
   gate.release();

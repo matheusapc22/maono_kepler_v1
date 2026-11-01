@@ -30,6 +30,9 @@ on:
       - 'src/pages/Projects/**'
       - 'src/pages/Kepler/thumbnail/preview-metrics.ts'
       - 'functions/_lib/project-preview-metrics.js'
+      - 'functions/_lib/admin-audit-reader.js'
+      - 'functions/api/admin/audit/**'
+      - 'functions/api/health.js'
       - 'tests/*progressive*.test.mjs'
       - 'tests/initial-loading-presentation.test.mjs'
       - 'tests/helpers/*progressive*.mjs'
@@ -47,7 +50,11 @@ on:
 permissions:
   contents: read
 jobs:
-  progressive-loading:
+  progressive-loading-engines:
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, firefox, webkit]
     runs-on: ubuntu-latest
     # Setup/build plus the complete serial three-engine suite must fit this job.
     # Per-test/expectation timeouts remain in playwright.progressive-loading.config.ts.
@@ -84,6 +91,9 @@ jobs:
           src/components/loading/useInitialLoadingPresentation.ts src/pages/Admin.tsx
           src/pages/Admin/components/AdminSidebar.tsx src/pages/Admin/components/AdminOverview.tsx
           src/pages/Admin/components/AdminIcon.tsx
+          src/pages/Admin/components/AdminRequests.tsx src/pages/Admin/components/admin-request-navigation.ts src/pages/Admin/components/AdminAudit.tsx
+          src/pages/Admin/components/admin-audit-model.ts functions/_lib/admin-audit-reader.js functions/api/admin/audit/index.js
+          src/pages/Admin/components/AdminSystem.tsx src/pages/Admin/components/admin-system-model.ts src/pages/Admin/components/admin-overview-model.ts
           src/pages/Projects/components/ProjectCard.tsx src/pages/Projects/components/ProjectPagesUi.tsx
           src/pages/Projects/components/ProjectsSection.tsx src/pages/Projects/components/ProjectSectionSkeletons.tsx
           src/pages/Projects/components/TicketLoadingSkeletons.tsx
@@ -96,7 +106,10 @@ jobs:
           src/pages/Projects/components/DocumentsUi.tsx
           tests/browser/*progressive-loading.spec.ts playwright.progressive-loading.config.ts
           tests/browser/admin-workspace.spec.ts tests/browser/admin-users-safety.spec.ts tests/browser/fixtures/admin-workspace.ts
-          src/pages/Admin/components/AdminUserManager.tsx src/pages/Admin/components/AdminUserManagerLegacy.tsx
+          src/pages/Admin/components/AdminUserManager.tsx src/pages/Admin/components/AdminUserManagerLegacy.tsx tests/admin-requests-progressive.test.mjs
+          tests/helpers/admin-requests-preservation.mjs tests/admin-audit-progressive.test.mjs tests/helpers/admin-audit-preservation.mjs
+          tests/admin-system-progressive.test.mjs tests/helpers/admin-system-preservation.mjs tests/admin-overview-progressive.test.mjs
+          tests/helpers/admin-overview-preservation.mjs
       - name: Compile actual application
         env:
           VITE_MAONO_MAP_SHELL_V1: "true"
@@ -108,12 +121,12 @@ jobs:
       - name: Three-engine compiled fixture coverage
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: progressive-loading-results.json
-        run: npx playwright test --config=playwright.progressive-loading.config.ts --reporter=list,json
+        run: npx playwright test --config=playwright.progressive-loading.config.ts --project=${{ matrix.engine }} --reporter=list,json
       - name: Preserve browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: progressive-loading-${{ github.sha }}
+          name: progressive-loading-${{ github.sha }}-${{ matrix.engine }}
           path: |
             test-results/progressive-loading/
             progressive-loading-results.json
@@ -123,3 +136,15 @@ jobs:
             tests/browser/fixtures/admin-workspace.ts
           if-no-files-found: warn
           retention-days: 14
+
+  # Retain the original required gate name and require every engine result.
+  progressive-loading:
+    if: ${{ always() }}
+    needs: progressive-loading-engines
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every browser engine
+        env:
+          ENGINE_RESULT: ${{ needs.progressive-loading-engines.result }}
+        run: test "$ENGINE_RESULT" = "success"

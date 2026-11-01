@@ -1,0 +1,51 @@
+name: Admin Projects Inventory
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/pages/Admin.tsx'
+      - 'src/pages/Admin/components/AdminProjects.tsx'
+      - 'src/pages/Admin/components/admin-projects*'
+      - 'tests/admin-projects*'
+      - 'tests/helpers/admin-projects-inventory-preservation.mjs'
+      - 'tests/helpers/admin-workspace-preservation.mjs'
+      - 'tests/browser/admin-projects.spec.ts'
+      - 'playwright.admin-projects.config.ts'
+      - 'playwright.config.ts'
+      - '.github/workflows/admin-projects.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Inventory contracts and strict Admin preservation
+        run: node --experimental-strip-types --test tests/admin-projects*.test.mjs tests/admin-progressive-loading.test.mjs
+      - name: Existing project boundaries
+        run: npm run test:project-lifecycle && npm run test:project-metadata && node --experimental-strip-types --test tests/project-route-semantics.test.mjs tests/map-panel-navigation-api.test.mjs
+      - name: Scoped lint
+        run: npx eslint src/pages/Admin.tsx src/pages/Admin/components/AdminProjects.tsx src/pages/Admin/components/admin-projects-model.ts tests/browser/admin-projects.spec.ts playwright.admin-projects.config.ts playwright.config.ts
+      - name: Compile actual application
+        env:
+          VITE_MAONO_MAP_SHELL_V1: 'true'
+          VITE_MAONO_LAYER_MANAGER_V1: 'true'
+          VITE_MAONO_MAP_OVERLAY_V1: 'true'
+        run: npm run build
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - name: Compiled browser fixtures
+        run: npx playwright test --config=playwright.admin-projects.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: admin-projects-${{ github.sha }}
+          path: test-results/admin-projects/
+          retention-days: 14

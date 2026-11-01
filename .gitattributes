@@ -7,3 +7,20 @@ src/fallback-ui-styles.ts text eol=lf
 
 # PDF fixtures contain significant xref whitespace and are binary assets.
 tests/fixtures/document-preview/*.pdf binary
+output/pdf/*.pdf binary
+
+# Literal preservation contracts must read the canonical Git bytes on Windows too.
+src/pages/Projects/components/DocumentsSection.tsx text eol=lf
+src/pages/Projects/components/DocumentsPagination.tsx text eol=lf
+src/pages/Projects/components/DocumentsUi.tsx text eol=lf
+src/pages/Projects/components/TicketsToolbar.tsx text eol=lf
+src/pages/Login.tsx text eol=lf
+src/pages/Kepler/components/map-overlay/useBufferPreview.ts text eol=lf
+src/pages/Kepler/components/map-overlay/useIsochronePreview.ts text eol=lf
+src/pages/Kepler/components/export-map-modal/export-html-map.tsx text eol=lf
+src/pages/Kepler/components/export-map-modal/export-json-map.tsx text eol=lf
+yarn.lock text eol=lf
+functions/api/projects/\[slug\]/config-stream.js text eol=lf
+src/pages/Kepler/components/load-data-modal/tilesets/tileset-vector-form.tsx text eol=lf
+src/pages/Kepler/components/load-data-modal/tilesets/tileset-raster-form.tsx text eol=lf
+src/pages/Kepler/components/load-data-modal/tilesets/tileset-wms-form.tsx text eol=lf

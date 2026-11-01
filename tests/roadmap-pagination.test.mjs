@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-const compiled = await build({ entryPoints: [new URL('../src/pages/Projects/components/roadmap-pagination.ts', import.meta.url).pathname], bundle: true, platform: 'node', format: 'esm', write: false });
+const compiled = await build({ entryPoints: [fileURLToPath(new URL('../src/pages/Projects/components/roadmap-pagination.ts', import.meta.url))], bundle: true, platform: 'node', format: 'esm', write: false });
 const { paginateRoadmapTasks, reconcileRoadmapPagination, roadmapPaginationKey } = await import(`data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].text).toString('base64')}`);
 const filters = { search: '', status: '', priority: '', assigneeId: '', phaseId: '', periodStart: '', periodEnd: '' };
 

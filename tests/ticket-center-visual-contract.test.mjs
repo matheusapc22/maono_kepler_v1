@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import postcss from 'postcss';
 import { restoreMaonoSelect } from './helpers/maono-select-preservation.mjs';
@@ -99,23 +100,28 @@ function Previous(props) {
 export function compare(props) {
   return [renderToStaticMarkup(<Previous {...props} />), renderToStaticMarkup(<DocumentsPagination status={props.refreshing || props.pendingNext ? 'Atualizando documentos.' : 'Exibindo ' + props.visibleFiles.length + '/' + props.pagination.total + '.'} page={props.safePageIndex + 1} pageSize={props.pageSize} canGoPrevious={props.canGoPrevious} canGoNext={props.canGoNext} disabled={props.refreshing || props.loadingMore || props.pendingNext} onPageSize={() => {}} onPrevious={() => {}} onNext={() => {}} />)];
 }`;
-  const result = await build({ stdin: { contents: source, loader: 'tsx', resolveDir: new URL('../', import.meta.url).pathname }, bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', write: false, loader: { '.css': 'empty', '.png': 'dataurl' }, external: ['react', 'react-dom', 'react-dom/server', 'react/jsx-runtime'],
+  const result = await build({ stdin: { contents: source, loader: 'tsx', resolveDir: fileURLToPath(new URL('../', import.meta.url)) }, bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', write: false, loader: { '.css': 'empty', '.png': 'dataurl' }, external: ['react', 'react-dom', 'react-dom/server', 'react/jsx-runtime'],
     // Ignore only the separately browser-tested, authorized branded select
     // wrapper. All footer values, handlers and other markup stay byte-exact.
     plugins: [{ name: 'preserve-footer-except-branded-select', setup(builder) {
-      builder.onLoad({ filter: /\/DocumentsPagination\.tsx$/ }, ({ path }) => ({ contents: restoreMaonoSelect(restoreTicketDocumentInitialPresentation(readFileSync(path, 'utf8'), 'DocumentsPagination')), loader: 'tsx' }));
+      builder.onLoad({ filter: /[\\/]DocumentsPagination\.tsx$/ }, ({ path }) => ({ contents: restoreMaonoSelect(restoreTicketDocumentInitialPresentation(readFileSync(path, 'utf8'), 'DocumentsPagination')), loader: 'tsx' }));
     } }],
   });
   // A local temporary module resolves the same installed React version as the app.
   const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
-  const { join } = await import('node:path');
-  const directory = mkdtempSync(new URL('../.ticket-pagination-test-', import.meta.url).pathname);
+  const { basename, dirname, join, resolve } = await import('node:path');
+  const temporaryPrefix = fileURLToPath(new URL('../.ticket-pagination-test-', import.meta.url));
+  const directory = mkdtempSync(temporaryPrefix);
   try {
     const modulePath = join(directory, 'compare.mjs'); writeFileSync(modulePath, result.outputFiles[0].text);
-    const { compare } = await import(modulePath);
+    const { compare } = await import(pathToFileURL(modulePath).href);
     for (const patch of [{}, { safePageIndex: 2, canGoPrevious: true }, { refreshing: true }, { pendingNext: true }, { loadingMore: true }, { pageSize: 25 }, { pageSize: 50, canGoNext: false }]) {
       const [oldHtml, sharedHtml] = compare({ refreshing: false, pendingNext: false, loadingMore: false, visibleFiles: Array(10), pagination: { total: 73 }, pageSize: 10, safePageIndex: 0, canGoPrevious: false, canGoNext: true, ...patch });
       assert.equal(sharedHtml, oldHtml);
     }
-  } finally { rmSync(directory, { recursive: true }); }
+  } finally {
+    assert.equal(dirname(resolve(directory)), dirname(temporaryPrefix));
+    assert.ok(basename(directory).startsWith(basename(temporaryPrefix)));
+    rmSync(directory, { recursive: true });
+  }
 });
