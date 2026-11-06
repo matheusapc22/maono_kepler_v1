@@ -71,7 +71,11 @@ export function expectedOrganizationSchema(profile = 'canonical-bootstrap-v1') {
   return reference.schema;
 }
 
-function compareOrganizationSchema(observed, expected) {
+export function compareOrganizationSchema(observed, expected, {
+  queries = ORGANIZATION_SCHEMA_QUERIES, migration = ORGANIZATION_MIGRATION,
+  migrationSha256 = ORGANIZATION_MIGRATION_SHA256,
+  expectedCounts = { addedColumns: 12, tables: 4, namedIndexes: 5, triggers: 11 },
+} = {}) {
   const mismatches = [], checks = [];
   const expectedObjects = expected.objects;
   const actualObjects = observed.objects || [];
@@ -89,7 +93,7 @@ function compareOrganizationSchema(observed, expected) {
   }
   const unexpected = actualObjects.filter(r => !expectedObjects.some(e => e.name === r.name && e.type === r.type));
   if (unexpected.length) mismatches.push('unexpected_namespace_objects');
-  for (const key of Object.keys(ORGANIZATION_SCHEMA_QUERIES).filter(k => k !== 'objects')) {
+  for (const key of Object.keys(queries).filter(k => k !== 'objects')) {
     const want = normalized(key, expected[key]);
     const got = normalized(key, observed[key] || []);
     const ok = JSON.stringify(want) === JSON.stringify(got);
@@ -97,9 +101,9 @@ function compareOrganizationSchema(observed, expected) {
     if (!ok) mismatches.push(key);
   }
   // Export bounded known names/digests only, never raw SQL/default values.
-  return { version: 1, migration: ORGANIZATION_MIGRATION, migrationSha256: ORGANIZATION_MIGRATION_SHA256,
+  return { version: 1, migration, migrationSha256,
     compatible: mismatches.length === 0, mismatches, checks, unexpectedObjectCount: unexpected.length,
-    expectedCounts: { addedColumns: 12, tables: 4, namedIndexes: 5, triggers: 11 },
+    expectedCounts,
     remoteQueriesReadOnly: true, digest: sha256Text(JSON.stringify(checks)) };
 }
 

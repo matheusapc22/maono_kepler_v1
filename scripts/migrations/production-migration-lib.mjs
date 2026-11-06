@@ -191,12 +191,15 @@ export function computePendingState(localMigrations, appliedNames, selectedMigra
   };
 }
 
-export function approvalMaterial({ migration, migrationSha256, gitSha, pendingDigest, databaseId }) {
+export function approvalMaterial({ migration, migrationSha256, gitSha, pendingDigest, databaseId, evidenceDigest }) {
   const normalizedMigration = normalizeMigrationName(migration);
   if (!HEX_64.test(migrationSha256 || '')) throw gateError('MIGRATION_HASH_INVALID', 'SHA-256 da migration inválido.');
   if (!HEX_40.test(gitSha || '')) throw gateError('GIT_SHA_INVALID', 'Git SHA inválido.');
   if (!HEX_64.test(pendingDigest || '')) throw gateError('PENDING_DIGEST_INVALID', 'Digest da fila de migrations inválido.');
   if (!UUID.test(databaseId || '')) throw gateError('DATABASE_ID_INVALID', 'UUID do banco inválido.');
+  if (normalizedMigration === '0043_organization_creation_identity.sql' && !HEX_64.test(evidenceDigest || '')) {
+    throw gateError('IDENTITY_EVIDENCE_REQUIRED', '0043 exige snapshot completo e hash do arquivo de execução.');
+  }
   return [
     `reportVersion=${REPORT_VERSION}`,
     `database=${PRODUCTION_DATABASE_NAME}`,
@@ -205,11 +208,12 @@ export function approvalMaterial({ migration, migrationSha256, gitSha, pendingDi
     `migrationSha256=${migrationSha256}`,
     `gitSha=${gitSha}`,
     `pendingDigest=${pendingDigest}`,
+    ...(evidenceDigest ? [`evidenceDigest=${evidenceDigest}`] : []),
   ].join('\n');
 }
 
-export function buildApproval({ migration, migrationSha256, gitSha, pendingDigest, databaseId = PRODUCTION_DATABASE_ID }) {
-  const approvalHash = sha256Text(approvalMaterial({ migration, migrationSha256, gitSha, pendingDigest, databaseId }));
+export function buildApproval({ migration, migrationSha256, gitSha, pendingDigest, databaseId = PRODUCTION_DATABASE_ID, evidenceDigest }) {
+  const approvalHash = sha256Text(approvalMaterial({ migration, migrationSha256, gitSha, pendingDigest, databaseId, evidenceDigest }));
   const token = `${APPROVAL_PREFIX}:${normalizeMigrationName(migration)}:${approvalHash}`;
   return { approvalHash, token };
 }
@@ -362,7 +366,7 @@ export async function runWranglerApply(configPath, injected = {}) {
   );
 }
 
-export async function makeTemporaryWranglerConfig(accountId, { isolatedMigration = null } = {}) {
+export async function makeTemporaryWranglerConfig(accountId, { isolatedMigration = null, identityExecution = null } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'maono-production-migration-'));
   const configPath = join(root, 'wrangler.json');
   let config;
@@ -371,6 +375,23 @@ export async function makeTemporaryWranglerConfig(accountId, { isolatedMigration
     const migrationDir = join(root, 'migrations');
     await mkdir(migrationDir, { recursive: true });
     await copyFile(isolatedMigration.path, join(migrationDir, migration));
+    if (migration === '0043_organization_creation_identity.sql') {
+      if (!identityExecution || identityExecution.sourceSha256 !== isolatedMigration.sha256 ||
+          sha256Text(identityExecution.sql) !== identityExecution.sha256 ||
+          !identityExecution.sql.endsWith(await readFile(isolatedMigration.path, 'utf8'))) {
+        await rm(root, { recursive:true, force:true });
+        throw gateError('IDENTITY_EXECUTION_REQUIRED', '0043 exige o arquivo guardado exato vinculado ao audit.');
+      }
+      await writeFile(join(migrationDir, migration), identityExecution.sql, { mode:0o600 });
+      const prepared = await readFile(join(migrationDir, migration), 'utf8');
+      if (prepared !== identityExecution.sql || sha256Text(prepared) !== identityExecution.sha256) {
+        await rm(root, { recursive:true, force:true });
+        throw gateError('IDENTITY_EXECUTION_BYTES', 'Arquivo preparado difere dos bytes auditados.');
+      }
+    } else if (identityExecution) {
+      await rm(root, { recursive:true, force:true });
+      throw gateError('IDENTITY_EXECUTION_TARGET', 'Guard 0043 não pode alterar outra migration.');
+    }
     config = createWranglerConfig(accountId, { migrationsDir: 'migrations' });
   } else {
     config = createWranglerConfig(accountId);

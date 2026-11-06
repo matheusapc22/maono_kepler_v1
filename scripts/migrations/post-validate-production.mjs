@@ -1,3 +1,4 @@
+import { IDENTITY_MIGRATION, collectIdentityPostValidation } from './organization-identity-0043.mjs';
 import { resolve } from 'node:path';
 import { ORGANIZATION_MIGRATION, collectOrganizationPostValidation } from './organization-management-schema.mjs';
 import {
@@ -31,7 +32,8 @@ try {
   temporary = await makeTemporaryWranglerConfig(accountId);
   const remote = await readRemoteState(temporary.configPath, migration.name);
   const organizationEvidence = migration.name === ORGANIZATION_MIGRATION
-    ? await collectOrganizationPostValidation(temporary.configPath, remote, migration) : null;
+    ? await collectOrganizationPostValidation(temporary.configPath, remote, migration)
+    : migration.name === IDENTITY_MIGRATION ? await collectIdentityPostValidation(temporary.configPath, remote, migration) : null;
   const ledger = organizationEvidence?.ledger.rows ?? await queryLedger(temporary.configPath);
   const applied = ledger.find((row) => row.name === migration.name) || null;
   const integrity = await queryIntegrity(temporary.configPath);
