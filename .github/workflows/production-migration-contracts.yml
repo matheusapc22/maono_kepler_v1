@@ -13,6 +13,7 @@ on:
       - 'tests/production-migration-organization-schema.test.mjs'
       - 'tests/production-migration-qa-inventory.test.mjs'
       - 'tests/production-migration-identity-*.test.mjs'
+      - 'tests/production-migration-identity-wrangler.contract.mjs'
       - 'tests/helpers/identity-operator-preload.mjs'
       - 'functions/_lib/organization-name.js'
       - 'docs/runbooks/organization-identity-0043.md'
@@ -35,6 +36,7 @@ on:
       - 'tests/production-migration-organization-schema.test.mjs'
       - 'tests/production-migration-qa-inventory.test.mjs'
       - 'tests/production-migration-identity-*.test.mjs'
+      - 'tests/production-migration-identity-wrangler.contract.mjs'
       - 'tests/helpers/identity-operator-preload.mjs'
       - 'functions/_lib/organization-name.js'
       - 'docs/runbooks/organization-identity-0043.md'
@@ -85,4 +87,4 @@ jobs:
         env:
           IDENTITY_WRANGLER_PACKAGE: ${{ runner.temp }}/identity-wrangler/node_modules/wrangler
           WRANGLER_SEND_METRICS: 'false'
-        run: node --test tests/production-migration-identity-wrangler.test.mjs
+        run: node --test tests/production-migration-identity-wrangler.contract.mjs
