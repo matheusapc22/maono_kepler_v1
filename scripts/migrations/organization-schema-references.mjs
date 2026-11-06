@@ -15,6 +15,8 @@ export const ORGANIZATION_SCHEMA_SOURCES = Object.freeze({
   'migrations/0042_organization_management.sql': 'e47d8a1444c8c14681589733867a5f00e2490835ffc588e0de9dde1bcac6aa00',
 });
 export const ORGANIZATION_SCHEMA_PROFILES = Object.freeze(['canonical-bootstrap-v1', 'migrated-0002-0042-v1']);
+export const IDENTITY_MIGRATION = '0043_organization_creation_identity.sql';
+export const IDENTITY_MIGRATION_SHA256 = 'ce53acea032786a27a79b9e917cc774c2309d05ff7f30b0f2c4769738ff1d531';
 const MIGRATION = 'migrations/0042_organization_management.sql';
 const TRIGGERS = Object.freeze({
   'migrations/0035_ticket_report_exports.sql': [
@@ -44,6 +46,17 @@ function attachedTriggers(sql, names) {
 // The historical reference is complete for the collector's six tables and all
 // their attached objects, not a replay/certification of the entire database.
 export function buildOrganizationSchemaReferences(queries, readSource = defaultRead) {
+  return buildReferences(queries, readSource, false);
+}
+
+export function buildOrganizationIdentityReferences(queries, readSource = defaultRead) {
+  return buildReferences(queries, readSource, true);
+}
+
+function buildReferences(queries, readSource, identity) {
+  const identityPath = 'migrations/' + IDENTITY_MIGRATION;
+  const identitySql = identity ? readSource(identityPath) : null;
+  if (identity && sha256Text(identitySql) !== IDENTITY_MIGRATION_SHA256) throw sourceError();
   const sources = Object.fromEntries(Object.entries(ORGANIZATION_SCHEMA_SOURCES).map(([path, digest]) => {
     let sql;
     try { sql = readSource(path); } catch { throw sourceError(); }
@@ -75,8 +88,11 @@ export function buildOrganizationSchemaReferences(queries, readSource = defaultR
           for (const trigger of attachedTriggers(sources[path], names)) db.exec(trigger);
         }
       }
-      return { id: profile.id, requiredMigrations: [...profile.requiredMigrations],
-        sources: profile.paths.map(path => ({ path, sha256: ORGANIZATION_SCHEMA_SOURCES[path] })),
+      if (identity) db.exec(identitySql);
+      return { id: identity ? profile.id.replace('0042', '0043') + '-identity' : profile.id,
+        requiredMigrations: [...profile.requiredMigrations, ...(identity ? [IDENTITY_MIGRATION] : [])],
+        sources: [...profile.paths.map(path => ({ path, sha256: ORGANIZATION_SCHEMA_SOURCES[path] })),
+          ...(identity ? [{ path: identityPath, sha256: IDENTITY_MIGRATION_SHA256 }] : [])],
         schema: Object.fromEntries(Object.entries(queries).map(([key, sql]) => [key, db.prepare(sql).all()])) };
     } finally { db.close(); }
   });

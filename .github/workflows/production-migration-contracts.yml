@@ -12,6 +12,11 @@ on:
       - 'tests/production-migration-actions-workflow.test.mjs'
       - 'tests/production-migration-organization-schema.test.mjs'
       - 'tests/production-migration-qa-inventory.test.mjs'
+      - 'tests/production-migration-identity-*.test.mjs'
+      - 'tests/production-migration-identity-wrangler.contract.mjs'
+      - 'tests/helpers/identity-operator-preload.mjs'
+      - 'functions/_lib/organization-name.js'
+      - 'docs/runbooks/organization-identity-0043.md'
       - 'docs/runbooks/organization-qa-inventory.md'
       - 'tests/helpers/organization-schema-history.mjs'
       - '.github/workflows/production-d1-migration-operator.yml'
@@ -30,6 +35,11 @@ on:
       - 'tests/production-migration-actions-workflow.test.mjs'
       - 'tests/production-migration-organization-schema.test.mjs'
       - 'tests/production-migration-qa-inventory.test.mjs'
+      - 'tests/production-migration-identity-*.test.mjs'
+      - 'tests/production-migration-identity-wrangler.contract.mjs'
+      - 'tests/helpers/identity-operator-preload.mjs'
+      - 'functions/_lib/organization-name.js'
+      - 'docs/runbooks/organization-identity-0043.md'
       - 'docs/runbooks/organization-qa-inventory.md'
       - 'tests/helpers/organization-schema-history.mjs'
       - '.github/workflows/production-d1-migration-operator.yml'
@@ -58,5 +68,23 @@ jobs:
           node --check scripts/migrations/organization-schema-references.mjs
           node --check scripts/migrations/organization-qa-inventory.mjs
           node --check scripts/migrations/inventory-organizations-production.mjs
+          node --check scripts/migrations/organization-identity-0043.mjs
+          node --check scripts/migrations/preflight-organization-identity.mjs
       - name: Validate migration gates
         run: npm run test:production-migration-gate
+
+  identity-wrangler-transport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install exact CLI for offline transport contract
+        run: npm install --prefix "$RUNNER_TEMP/identity-wrangler" --no-save --no-audit --no-fund wrangler@4.140.0
+      - name: Verify real Wrangler against synthetic loopback API only
+        env:
+          IDENTITY_WRANGLER_PACKAGE: ${{ runner.temp }}/identity-wrangler/node_modules/wrangler
+          WRANGLER_SEND_METRICS: 'false'
+        run: node --test tests/production-migration-identity-wrangler.contract.mjs
