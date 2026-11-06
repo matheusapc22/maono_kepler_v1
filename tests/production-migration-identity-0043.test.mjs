@@ -12,13 +12,17 @@ import { IDENTITY_MIGRATION, IDENTITY_MIGRATION_SHA256, IDENTITY_SNAPSHOT_SQL, I
   evaluateIdentitySchema, canonicalOrganizationName } from '../scripts/migrations/organization-identity-0043.mjs';
 import { ORGANIZATION_SCHEMA_QUERIES, evaluateOrganizationSchema } from '../scripts/migrations/organization-management-schema.mjs';
 import { ORGANIZATION_SCHEMA_SOURCES } from '../scripts/migrations/organization-schema-references.mjs';
+import { canonicalOrganizationName as runtimeCanonicalName } from '../functions/_lib/organization-identity.js';
+import { canonicalOrganizationName as sharedCanonicalName } from '../functions/_lib/organization-name.js';
 import { buildApproval, PRODUCTION_DATABASE_ID, PRODUCTION_DATABASE_NAME, makeTemporaryWranglerConfig,
   sha256Text } from '../scripts/migrations/production-migration-lib.mjs';
 
 const source = readFileSync(new URL('../migrations/' + IDENTITY_MIGRATION, import.meta.url), 'utf8');
 const migration = { name:IDENTITY_MIGRATION, sha256:IDENTITY_MIGRATION_SHA256,
   path:new URL('../migrations/' + IDENTITY_MIGRATION, import.meta.url) };
-const canonical = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
+// Exercise migration guards from the certified pre-0043 bootstrap.
+const bootstrap = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
+const canonical = bootstrap.split('-- Organization creation identity (migration 0043)')[0];
 const row = { id:1,name:'Synthetic Équipe',slug:'synthetic-000000001',dropbox_root_path:'/projects/synthetic-000000001' };
 function seed(db, r = row, active = 1) {
   db.prepare('INSERT INTO organizations(id,name,slug,dropbox_root_path,active) VALUES(?,?,?,?,?)')
@@ -57,10 +61,19 @@ function apply(db, sql) {
 }
 
 test('pure normalizer matches the exact functional Unicode rule',()=>{
+  assert.equal(canonicalOrganizationName,sharedCanonicalName);
+  assert.equal(runtimeCanonicalName,sharedCanonicalName);
   const original=name=>String(name).normalize('NFKC').trim().replace(/\s+/gu,' ').toLowerCase().normalize('NFKC');
   for(const s of [' ÉQUIPE ','E\u0301QUIPE','Ｆｕｌｌ　Ｗｉｄｔｈ','K','ﬃ','A\u00a0\u2003B','\t A\n B \r','İ','ẞ','ação','açao','東京','😀',''])assert.equal(canonicalOrganizationName(s),original(s));
   assert.equal(canonicalOrganizationName('E\u0301QUIPE'),canonicalOrganizationName('Équipe'));
   assert.notEqual(canonicalOrganizationName('ação'),canonicalOrganizationName('acao'));
+});
+test('full functional bootstrap is exactly post-0043 and remains rejected by pre-0043 and 0042 collectors',t=>{
+  const db=new DatabaseSync(':memory:');t.after(()=>db.close());db.exec(bootstrap);
+  assert.equal(evaluateIdentitySchema(observe(db),'post').compatible,true);
+  assert.equal(evaluateIdentitySchema(observe(db),'pre').compatible,false);
+  const old=Object.fromEntries(Object.entries(ORGANIZATION_SCHEMA_QUERIES).map(([k,sql])=>[k,db.prepare(sql).all()]));
+  assert.equal(evaluateOrganizationSchema(old).compatible,false);
 });
 for(const invalid of [null,{},'', [null],[[]],[{}], [{...row,id:0}],[{...row,id:1.5}],[{...row,id:'1'}],
   [{...row,name:''}],[{...row,name:5}],[{...row,slug:null}],[{...row,dropbox_root_path:null}],

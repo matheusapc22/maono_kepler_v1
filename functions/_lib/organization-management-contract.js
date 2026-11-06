@@ -28,13 +28,13 @@ export function text(value, label, min = 0, max = 160) {
 export function plan(value) {
   check(Object.hasOwn(PLAN_LABELS, value), 'Plano inválido.'); return value;
 }
-export function createInput(input) {
+export function createInput(input, automatic = false) {
   object(input, ['name', 'slug', 'description', 'plan', 'ownerEmail']);
-  const slug = text(input.slug, 'Identificador', 1, 64);
-  check(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug), 'Identificador: letras minúsculas, números e hífens.');
+  const slug = automatic && input.slug === undefined ? undefined : text(input.slug, 'Identificador', 1, 64);
+  check(slug === undefined || /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug), 'Identificador: letras minúsculas, números e hífens.');
   const email = text(input.ownerEmail, 'E-mail do responsável', 3, 254).toLowerCase();
   check(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), 'E-mail do responsável inválido.');
-  return { name: text(input.name, 'Nome', 1, 160), slug, description: text(input.description ?? '', 'Descrição', 0, 3000), plan: plan(input.plan ?? 'free'), ownerEmail: email };
+  return { name: text(input.name, 'Nome', 1, 160), ...(slug === undefined ? {} : {slug}), description: text(input.description ?? '', 'Descrição', 0, 3000), plan: plan(input.plan ?? 'free'), ownerEmail: email };
 }
 export function changeInput(input) {
   object(input, ['id', 'version', 'name', 'description', 'active', 'ownerId', 'plan', 'projectLimit', 'reason']);

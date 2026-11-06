@@ -80,14 +80,14 @@ test('create uses real lifecycle and owner assignment; repeated step creates no 
   const key=crypto.randomUUID(),op=await f.start('create',[input],key);
   const out=await f.step(op);
   assert.equal(out.items[0].state,'succeeded',JSON.stringify(out));
-  const row=f.db.prepare("SELECT * FROM organizations WHERE slug='created-org'").get();
+  const row=f.db.prepare("SELECT * FROM organizations WHERE name='Created organization'").get();
   assert.equal(row.storage_status,'READY');assert.equal(row.management_owner_id,2);assert.equal(row.project_limit,null);
   assert.equal(f.db.prepare('SELECT role FROM users WHERE id=2').get().role,'client');
   assert.equal(f.db.prepare('SELECT access_level FROM organization_users WHERE organization_id=? AND user_id=2').get(row.id).access_level,'owner');
   const providerCalls=f.calls.length;
   assert.equal((await f.start('create',[input],key)).id,op.id);await f.step(op);
   assert.equal(f.calls.length,providerCalls);
-  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM organizations WHERE slug='created-org'").get().n,1);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM organizations WHERE name='Created organization'").get().n,1);
 });
 
 test('metadata CAS rejects stale version across the actual lifecycle',async t=>{
@@ -147,11 +147,12 @@ test('canonical schema equals additive migration applied to populated previous s
     INSERT INTO organization_users(organization_id,user_id,access_level) VALUES(1,1,'owner');
     INSERT INTO organization_limit_requests(organization_id,request_type,created_by) VALUES(1,'projects_increase',1);`);
   db.exec(readFileSync(new URL('../migrations/0042_organization_management.sql',import.meta.url),'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0043_organization_creation_identity.sql',import.meta.url),'utf8'));
   assert.equal(db.prepare('SELECT name FROM organizations').get().name,'Existing');
   assert.equal(db.prepare('SELECT COUNT(*) n FROM organization_management_events').get().n,0,'No fabricated retrospective history');
   assert.equal(db.prepare('PRAGMA quick_check').get().quick_check,'ok');assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
   const clean=new DatabaseSync(':memory:');t.after(()=>clean.close());clean.exec(schema);
-  const definitions=connection=>connection.prepare("SELECT type,name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").all();
+  const definitions=connection=>connection.prepare("SELECT type,name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").all().map(row=>({...row,sql:row.sql?.replaceAll('\r\n','\n')}));
   assert.deepEqual(definitions(db),definitions(clean));
 });
 
@@ -281,7 +282,8 @@ test('preexisting session loses paused context only and retains access after swi
 test('create replay during an existing storage claim remains partial and resumes the same record',async t=>{
   const f=fixture(t),input={name:'Pending create',slug:'pending-create',plan:'free',ownerEmail:'other@offline.invalid'};
   const op=await f.start('create',[input]);
-  f.db.prepare("INSERT INTO organizations(name,slug,dropbox_root_path,storage_status,storage_checked_at,management_create_key) VALUES('Pending create','pending-create','/projects/pending-create','PENDING',?,?)").run(new Date().toISOString(),`${op.id}:0`);
+  const identity=f.db.prepare('SELECT slug,path FROM organization_creation_identities WHERE operation_id=?').get(op.id);
+  f.db.prepare("INSERT INTO organizations(name,slug,dropbox_root_path,storage_status,storage_checked_at,management_create_key) VALUES('Pending create',?,?,'PENDING',?,?)").run(identity.slug,identity.path,new Date().toISOString(),`${op.id}:0`);
   let result=await f.step(op);
   assert.equal(result.items[0].state,'partial');assert.equal(result.items[0].retryable,true);
   const id=result.items[0].result.id;
@@ -289,5 +291,5 @@ test('create replay during an existing storage claim remains partial and resumes
   result=await f.step(op,true);
   assert.equal(result.items[0].state,'succeeded',JSON.stringify(result));
   assert.equal(result.items[0].result.id,id);
-  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM organizations WHERE slug='pending-create'").get().n,1);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM organizations WHERE name='Pending create'").get().n,1);
 });
