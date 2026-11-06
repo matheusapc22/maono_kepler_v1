@@ -5,12 +5,12 @@ import {StaticLoadingText} from '../../../components/loading/Skeleton';
 import {api,dateLabel,errorText,denied,storageLabel} from './organizations-api';
 import {PLAN_LABELS,type Detail,type EventRow,type FileRow,type LimitRequest,type Operation,type OperationInput,type Person,type Plan} from './organizations-types';
 
-export function Dialog({title,children,onClose,dirty=false,busy=false,wide=false}:{title:string;children:ReactNode;onClose:()=>void;dirty?:boolean;busy?:boolean;wide?:boolean}){
+export function Dialog({title,children,onClose,dirty=false,busy=false,wide=false,loadingOnly=false}:{title:string;children:ReactNode;onClose:()=>void;dirty?:boolean;busy?:boolean;wide?:boolean;loadingOnly?:boolean}){
   const ref=useRef<HTMLDialogElement>(null),heading=useId();
   useEffect(()=>{const before=document.activeElement as HTMLElement|null,dialog=ref.current;dialog?.showModal();return()=>{dialog?.close();if(before?.isConnected)before.focus();};},[]);
   function close(){if(busy)return;if(dirty&&!window.confirm('Descartar as alterações não salvas?'))return;onClose();}
-  return createPortal(<dialog ref={ref} className={`admin-organizations-dialog${wide?' is-wide':''}`} aria-labelledby={heading} onCancel={e=>{e.preventDefault();close();}}>
-    <header><div><small>ADMINISTRAÇÃO MAÕNO</small><h2 id={heading}>{title}</h2></div><button type="button" onClick={close} disabled={busy} aria-label="Fechar painel">×</button></header>
+  return createPortal(<dialog ref={ref} className={`admin-organizations-dialog${wide?' is-wide':''}${loadingOnly?' is-processing':''}`} aria-labelledby={heading} onCancel={e=>{e.preventDefault();close();}}>
+    <header hidden={loadingOnly}><div><small>ADMINISTRAÇÃO MAÕNO</small><h2 id={heading}>{title}</h2></div><button type="button" onClick={close} disabled={busy} aria-label="Fechar painel">×</button></header>
     <div className="aog-dialog-body">{children}</div>
   </dialog>,document.body);
 }
@@ -21,19 +21,6 @@ export function OperationStatus({operation,onContinue,onRetry,busy,error}:{opera
     <Notice message={error}/><ul className="aog-operation-items">{operation.items.map(item=><li key={item.index}><strong>{item.label}</strong><span>{labels[item.state]}</span>{item.error&&<p>{item.error}</p>}{item.result?.id&&<small>Registro #{item.result.id}</small>}</li>)}</ul>
     <footer>{operation.items.some(i=>i.state==='pending'||i.state==='running')&&<button type="button" disabled={busy} onClick={onContinue}><StaticLoadingText pending={busy}>Continuar pendências</StaticLoadingText></button>}{operation.items.some(i=>i.retryable)&&<button type="button" disabled={busy} onClick={onRetry}>Retomar próximo item recuperável</button>}</footer>
   </section>;
-}
-export function CreateForm({onSubmit,busy}:{onSubmit:(value:Record<string,unknown>)=>void;busy:boolean}){
-  const [name,setName]=useState(''),[slug,setSlug]=useState(''),[custom,setCustom]=useState(false),[description,setDescription]=useState(''),[plan,setPlan]=useState<Plan>('free'),[email,setEmail]=useState(''),[confirmed,setConfirmed]=useState(false);
-  const makeSlug=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,64);
-  return <form onSubmit={e=>{e.preventDefault();onSubmit({name,slug,description,plan,ownerEmail:email});}} className="aog-form">
-    <label>Nome<input required maxLength={160} value={name} onChange={e=>{setName(e.target.value);if(!custom)setSlug(makeSlug(e.target.value));}} disabled={busy}/></label>
-    <label>Identificador<input required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={64} value={slug} onChange={e=>{setCustom(true);setSlug(e.target.value);}} disabled={busy}/><small>Define a pasta técnica. Não é alterado ao renomear a organização.</small></label>
-    <label>Descrição<textarea maxLength={3000} value={description} onChange={e=>setDescription(e.target.value)} disabled={busy}/></label>
-    <label>Plano<MaonoSelect value={plan} onChange={e=>setPlan(e.target.value as Plan)} disabled={busy}>{Object.entries(PLAN_LABELS).map(([key,label])=><option key={key} value={key}>{label}</option>)}</MaonoSelect></label>
-    <label>E-mail do responsável<input type="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)} disabled={busy}/><small>Usuário existente e ativo. Receberá vínculo de proprietário, sem mudança de papel global.</small></label>
-    <label className="aog-check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Confirmo o cadastro e o vínculo de proprietário.</label>
-    <button className="aog-primary" type="submit" disabled={busy||!confirmed}><StaticLoadingText pending={busy}>Criar organização</StaticLoadingText></button>
-  </form>;
 }
 export function OrganizationEditor({detail,tab,onTab,onSubmit,onPeople,onDocuments,busy,onDenied}:{detail:Detail;tab:string;onTab:(v:string)=>void;onSubmit:(input:OperationInput)=>void;onPeople:()=>void;onDocuments:()=>void;busy:boolean;onDenied:()=>void}){
   const org=detail.organization;

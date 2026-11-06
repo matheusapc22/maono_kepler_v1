@@ -66,10 +66,10 @@ for(const scenario of [
     await dialog.getByLabel('Nome',{exact:true}).fill('Cadastro não disponível');
     await dialog.getByLabel('E-mail do responsável',{exact:false}).fill('other@offline.invalid');
     await dialog.getByRole('checkbox',{name:'Confirmo o cadastro',exact:false}).check();
-    const write=page.waitForResponse(response=>response.request().method()==='POST'&&new URL(response.url()).pathname==='/api/admin/organization-management/operations');
-    await dialog.getByRole('button',{name:'Criar organização',exact:true}).click();
-    expect((await write).status()).toBe(scenario.status);
-    await expect(dialog.getByRole('alert')).toBeVisible();
+    await expect(dialog.getByRole('button',{name:'Criar organização',exact:true})).toBeDisabled();
+    await expect(dialog.getByText('Não foi possível verificar o nome.',{exact:true})).toBeVisible();
+    const rejected=await page.request.post('/api/admin/organization-management/operations',{headers:{Origin:backend.http.origin,'X-Maono-Management':'1','Idempotency-Key':'disabled-schema-attempt'},data:{kind:'create',items:[{name:'Blocked',ownerEmail:'other@offline.invalid',plan:'free'}]}});
+    expect(rejected.status()).toBe(scenario.status);
     await expect(dialog.getByText('Concluído',{exact:true})).toHaveCount(0);
     expect(backend.db.prepare('SELECT total_changes() AS writes').get().writes).toBe(before);
     expect(backend.calls).toHaveLength(0);
@@ -85,8 +85,10 @@ test('cadastro compilado grava organização, responsável e operação pelo han
   await dialog.getByLabel('E-mail do responsável',{exact:false}).fill('other@offline.invalid');
   await dialog.getByRole('checkbox',{name:'Confirmo o cadastro',exact:false}).check();
   await dialog.getByRole('button',{name:'Criar organização',exact:true}).click();
-  await expect(dialog.getByText('Concluído',{exact:true})).toBeVisible();
-  const row=backend.db.prepare("SELECT * FROM organizations WHERE slug='organizacao-da-interface'").get();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText('Organização criada com sucesso.',{exact:true})).toBeVisible();
+  const row=backend.db.prepare("SELECT * FROM organizations WHERE name='Organização da interface'").get();
+  expect(row.slug).toMatch(/^organizacao-da-interface-\d{9}$/);
   expect(row.management_owner_id).toBe(2);expect(row.storage_status).toBe('READY');
   expect(backend.db.prepare('SELECT access_level FROM organization_users WHERE organization_id=? AND user_id=2').get(row.id).access_level).toBe('owner');
 });

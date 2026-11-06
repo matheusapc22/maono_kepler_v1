@@ -4,7 +4,7 @@ import { gateError, sha256Text } from './production-migration-lib.mjs';
 
 // Public, versioned sources only. Never derive a reference from remote metadata.
 export const ORGANIZATION_SCHEMA_SOURCES = Object.freeze({
-  'schema.sql': '84007790e4e1969d69737dfbaf46193563965619e0a038ca79bbd6551f6e5e18',
+  'schema.sql': '09307ce3c68d7c92b8374e54c5476bf2ec38f6548dd33f80dc16a53892d8477e',
   'migrations/0002_organizations_files.sql': '4fd20c1d27a6e7030e28ffa84188b3fd5193ffe57b33dee3063467e68d26bd4d',
   'migrations/0007_create_organization_limit_requests.sql': 'b1f3c6c598fd54bcd8e6a52f05b27b1131a117ffbafad90b0383579b34319ebb',
   'migrations/0009_organization_storage_invariant.sql': '1dd135c0e516598025ae79d6de0c7a1dfedbcee24cf1d73682584dfb2ddb82fb',

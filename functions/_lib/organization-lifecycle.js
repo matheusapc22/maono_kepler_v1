@@ -1,3 +1,4 @@
+import { assertOrganizationNameAvailable, canonicalOrganizationName, nameConstraintError, identitySchemaReady } from './organization-identity.js';
 import { normalizeDropboxFolderPath } from "./dropbox.js";
 import { createCorrelationId } from "./maono-error.js";
 import { organizationStoragePathPolicy } from "./organization-storage-policy.js";
@@ -238,14 +239,16 @@ function canResumeCreate(row) {
 }
 
 async function insertOrganization(env, payload, nowIso) {
+  const protectedNames = await identitySchemaReady(env);
+  const nameKey = protectedNames ? await assertOrganizationNameAvailable(env, payload.name) : null;
   const management = payload.__management;
   const columns = management ? ', management_create_key, management_actor_id, management_request_id, management_reason' : '';
   const placeholders = management ? ', ?, ?, ?, ?' : '';
   return env.DB.prepare(
-    `INSERT INTO organizations (name, slug, description, dropbox_root_path, active,
+    `INSERT INTO organizations (name${protectedNames ? ', canonical_name' : ''}, slug, description, dropbox_root_path, active,
       storage_status, storage_error, storage_checked_at${columns})
-     VALUES (?, ?, ?, ?, ?, ?, NULL, ?${placeholders}) RETURNING *`,
-  ).bind(payload.name, payload.slug, payload.description || null, payload.dropboxRootPath,
+     VALUES (?${protectedNames ? ', ?' : ''}, ?, ?, ?, ?, ?, NULL, ?${placeholders}) RETURNING *`,
+  ).bind(payload.name, ...(protectedNames ? [nameKey] : []), payload.slug, payload.description || null, payload.dropboxRootPath,
     payload.active, payload.active ? ORGANIZATION_STORAGE_STATUS.PENDING : ORGANIZATION_STORAGE_STATUS.DISABLED,
     payload.active ? null : nowIso,
     ...(management ? [management.creationKey, management.actorId, management.requestId, management.reason || null] : []),
@@ -253,14 +256,16 @@ async function insertOrganization(env, payload, nowIso) {
 }
 
 async function persistOrganizationManagementFields(env, organizationId, payload, mode, nowIso, snapshot) {
+  const protectedNames = await identitySchemaReady(env);
+  if (protectedNames && payload.name !== snapshot.name) await assertOrganizationNameAvailable(env, payload.name, organizationId);
   const management = payload.__management;
   let guard = ` AND active IS ? AND dropbox_root_path IS ? AND storage_status IS ?
     AND storage_error IS ? AND storage_checked_at IS ? AND updated_at IS ?`;
   const expected = [snapshot.active, snapshot.dropbox_root_path, snapshot.storage_status ?? null,
     snapshot.storage_error ?? null, snapshot.storage_checked_at ?? null, snapshot.updated_at ?? null];
   if (management) { guard += ' AND management_version IS ?'; expected.push(snapshot.management_version); }
-  let assignments = 'name = ?, slug = ?, description = ?, dropbox_root_path = ?, active = ?';
-  const values = [payload.name, payload.slug, payload.description || null, payload.dropboxRootPath, mode === 'disabled' ? 0 : 1];
+  let assignments = `name = ?${protectedNames ? ', canonical_name = ?' : ''}, slug = ?, description = ?, dropbox_root_path = ?, active = ?`;
+  const values = [payload.name, ...(protectedNames ? [canonicalOrganizationName(payload.name)] : []), payload.slug, payload.description || null, payload.dropboxRootPath, mode === 'disabled' ? 0 : 1];
   if (mode === 'disabled') { assignments += ", storage_status = 'DISABLED', storage_error = NULL, storage_checked_at = ?"; values.push(nowIso); }
   else if (mode === 'reset-pending') { assignments += ", storage_status = 'PENDING', storage_error = NULL, storage_checked_at = NULL"; }
   assignments += ', updated_at = ?'; values.push(nowIso);
@@ -280,7 +285,7 @@ async function persistOrganizationFields(
   nowIso,
   snapshot,
 ) {
-  if (payload.__management) {
+  if (payload.__management || await identitySchemaReady(env)) {
     return persistOrganizationManagementFields(env, organizationId, payload, mode, nowIso, snapshot);
   }
   const guard = ` AND active IS ? AND dropbox_root_path IS ?
@@ -395,6 +400,7 @@ async function persistOrganizationFieldsSafely(
     }
     return persisted;
   } catch (error) {
+    if (nameConstraintError(error)) throw lifecycleError('Este nome já está em uso por outra organização.', 409, 'ORGANIZATION_NAME_EXISTS', { correlationId });
     if (isUniqueConstraintError(error)) {
       throw lifecycleError(
         "Já existe outra organização com este identificador ou pasta Dropbox.",
@@ -545,6 +551,7 @@ export async function createOrganizationLifecycle(
       organization = await insertOrganization(env, payload, nowIso);
       created = true;
     } catch (error) {
+      if (nameConstraintError(error)) throw lifecycleError('Este nome já está em uso por outra organização.', 409, 'ORGANIZATION_NAME_EXISTS', { correlationId });
       if (!isUniqueConstraintError(error)) throw error;
 
       matches = await getIdentityMatches(

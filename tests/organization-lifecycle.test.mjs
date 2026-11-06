@@ -37,6 +37,7 @@ function createFakeEnv(initialRows = []) {
           },
           async first() {
             calls.push({ sql: normalized, args: [...args] });
+            if (normalized.startsWith("SELECT 1 FROM pragma_table_info")) return null;
 
             if (
               normalized.startsWith("SELECT * FROM organizations") &&
