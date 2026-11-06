@@ -1,6 +1,6 @@
 import {readFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
-import {canonicalOrganizationName} from '../../functions/_lib/organization-identity.js';
+import {canonicalOrganizationName} from '../../functions/_lib/organization-name.js';
 
 // Input is a fresh read-only export of id,name,slug,dropbox_root_path from ALL
 // organizations (including paused). This tool never connects or writes to D1.

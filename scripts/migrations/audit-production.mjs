@@ -1,3 +1,4 @@
+import { IDENTITY_MIGRATION, collectIdentityEvidence, guardedIdentityMigration, identityApprovalEvidence } from './organization-identity-0043.mjs';
 import {CC15_MIGRATION,readCC15Schema,assertCC15Schema} from './cc15-schema-preflight.mjs';
 import {CC13_MIGRATION,readCC13Schema,assertCC13Schema} from './cc13-schema-preflight.mjs';
 import {CC12_MIGRATION,readCC12Schema,assertCC12Schema} from './cc12-schema-preflight.mjs';
@@ -58,12 +59,17 @@ try {
     await writeJsonReport(blockedPath,{phase:'schema-preflight-blocked',writesPerformed:false,readyForAuthorization:false,git,database:remote.identity,schemaPreflight,integrity,backup});
     if(migration.name===CC15_MIGRATION) assertCC15Schema(schemaPreflight); else if(migration.name===CC13_MIGRATION) assertCC13Schema(schemaPreflight); else if(migration.name===CC12_MIGRATION) assertCC12Schema(schemaPreflight); else if(migration.name===CC11_MIGRATION) assertCC11Schema(schemaPreflight); else if(migration.name===CC10_MIGRATION) assertCC10Schema(schemaPreflight); else if(migration.name===CC09_MIGRATION) assertCC09Schema(schemaPreflight); else assertCC08Schema(schemaPreflight);
   }
+  const identityEvidence = migration.name === IDENTITY_MIGRATION
+    ? await collectIdentityEvidence(temporary.configPath, remote, migration, 'pre') : null;
+  const identityExecution = identityEvidence ? guardedIdentityMigration(identityEvidence) : null;
+  const evidenceDigest = identityEvidence ? identityApprovalEvidence(identityEvidence, identityExecution) : undefined;
   const approval = buildApproval({
     migration: migration.name,
     migrationSha256: migration.sha256,
     gitSha: git.sha,
     pendingDigest: remote.pending.pendingDigest,
     databaseId: remote.identity.id,
+    evidenceDigest,
   });
 
   await ensureReportDir();
@@ -103,6 +109,14 @@ try {
     integrity,
     backup,
     schemaPreflight,
+    ...(identityEvidence ? {
+      identityEvidence:identityEvidence.report,
+      execution:{ sha256:identityExecution.sha256, sourceSha256:identityExecution.sourceSha256,
+        requestSha256:identityExecution.requestSha256,
+        assertionCount:identityExecution.assertionCount, bytes:identityExecution.bytes,
+        atomic:true, kind:'0043-equality-guards-and-exact-source-v1' },
+      evidenceDigest,
+    } : {}),
     approval: {
       required: true,
       hash: approval.approvalHash,
@@ -111,6 +125,7 @@ try {
     },
     readyForAuthorization: true,
   };
+  if (identityExecution) report.approval.humanText += ` Arquivo isolado com guards SHA-256 ${identityExecution.sha256}; evidência ${evidenceDigest}.`;
   report.applyCommand = `npm run migration:apply:production -- --migration ${migration.name} --audit-report ${reportPath} --approval '${approval.token}'`;
 
   await writeJsonReport(reportPath, report);

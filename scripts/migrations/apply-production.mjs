@@ -1,3 +1,5 @@
+import { IDENTITY_MIGRATION, collectIdentityEvidence, guardedIdentityMigration, identityApprovalEvidence,
+  assertIdentityEvidenceUnchanged, collectIdentityPostValidation } from './organization-identity-0043.mjs';
 import {CC15_MIGRATION,readCC15Schema,assertCC15Schema} from './cc15-schema-preflight.mjs';
 import {CC13_MIGRATION,readCC13Schema,assertCC13Schema} from './cc13-schema-preflight.mjs';
 import {CC12_MIGRATION,readCC12Schema,assertCC12Schema} from './cc12-schema-preflight.mjs';
@@ -91,12 +93,24 @@ try {
     const currentSchema=await readCC10Schema(preflightTemporary.configPath,remote.ledger);assertCC10Schema(currentSchema);
     if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC10_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
   }
+  let identityEvidence = migration.name === IDENTITY_MIGRATION
+    ? await collectIdentityEvidence(preflightTemporary.configPath, remote, migration, 'pre') : null;
+  let identityExecution = identityEvidence ? guardedIdentityMigration(identityEvidence) : null;
+  const evidenceDigest = identityEvidence ? identityApprovalEvidence(identityEvidence, identityExecution) : undefined;
+  if (identityEvidence) {
+    assertIdentityEvidenceUnchanged(audit.identityEvidence, identityEvidence.report);
+    if (audit.evidenceDigest !== evidenceDigest || audit.execution?.sha256 !== identityExecution.sha256 ||
+        audit.execution?.requestSha256 !== identityExecution.requestSha256) {
+      throw gateError('IDENTITY_EXECUTION_DRIFT', 'Arquivo de execução ou evidência mudou; novo audit e autorização obrigatórios.');
+    }
+  }
   const approval = buildApproval({
     migration: migration.name,
     migrationSha256: migration.sha256,
     gitSha: git.sha,
     pendingDigest: remote.pending.pendingDigest,
     databaseId: remote.identity.id,
+    evidenceDigest,
   });
 
   assertAuditMatchesCurrent(audit, {
@@ -120,10 +134,25 @@ try {
   // Capture a fresh recovery point immediately before the only remote write.
   backup = await captureTimeTravelBookmark(preflightTemporary.configPath);
 
+  if (identityEvidence) {
+    const finalEvidence = await collectIdentityEvidence(preflightTemporary.configPath, remote, migration, 'pre');
+    assertIdentityEvidenceUnchanged(identityEvidence.report, finalEvidence.report);
+    identityEvidence = finalEvidence;
+    identityExecution = guardedIdentityMigration(finalEvidence);
+    if (identityApprovalEvidence(finalEvidence, identityExecution) !== evidenceDigest) {
+      throw gateError('IDENTITY_EXECUTION_DRIFT', 'Arquivo de execução divergiu antes da escrita.');
+    }
+    const finalGit = await readGitSnapshot();
+    const finalSource = await ensureMigrationFile(migration.name);
+    if (!finalGit.clean || finalGit.sha !== git.sha || finalSource.sha256 !== migration.sha256) {
+      throw gateError('IDENTITY_LOCAL_DRIFT', 'Git ou SQL local mudou antes da escrita; novo audit obrigatório.');
+    }
+  }
+
   // Critical safety property: the config used for `migrations apply` contains
   // exactly one SQL file, the explicitly authorized migration. The repository's
   // complete migrations directory is never passed to the write command.
-  applyTemporary = await makeTemporaryWranglerConfig(accountId, { isolatedMigration: migration });
+  applyTemporary = await makeTemporaryWranglerConfig(accountId, { isolatedMigration: migration, identityExecution });
   applyStarted = true;
   const applyResult = await runWranglerApply(applyTemporary.configPath);
   applyCompleted = true;
@@ -137,6 +166,10 @@ try {
   if (!postIntegrity.quickCheckOk || !postIntegrity.foreignKeyCheckOk) {
     throw gateError('POST_APPLY_INTEGRITY_FAILED', 'A migration consta aplicada, mas a validação de integridade falhou. Use o bookmark registrado para investigação/recuperação.');
   }
+
+  const identityPostValidation = identityEvidence
+    ? await collectIdentityPostValidation(preflightTemporary.configPath,
+      await readRemoteState(preflightTemporary.configPath, migration.name), migration) : null;
 
   await ensureReportDir();
   reportPath = args.report ? resolve(args.report) : defaultPostReportPath(migration.name, git.sha);
@@ -175,10 +208,13 @@ try {
     },
     preIntegrity,
     postIntegrity,
+    ...(identityPostValidation ? { identityPostValidation, evidenceDigest,
+      execution:{ sha256:identityExecution.sha256, sourceSha256:identityExecution.sourceSha256,
+        requestSha256:identityExecution.requestSha256, atomic:true } } : {}),
     writesPerformed: true,
     complete: true,
     ok: true,
-    applyOutput: applyResult.stdout.trim().slice(-4000),
+    applyOutput: identityEvidence ? 'Wrangler completed; raw output withheld for inventory privacy.' : applyResult.stdout.trim().slice(-4000),
   };
   await writeJsonReport(reportPath, report);
 

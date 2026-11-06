@@ -1,10 +1,8 @@
 import { ManagementError } from './organization-management-contract.js';
+import { canonicalOrganizationName } from './organization-name.js';
 
-// One comparison rule for availability, imports, lifecycle writes and audit.
-// Display names are deliberately not replaced by this key.
-export function canonicalOrganizationName(name) {
-  return String(name).normalize('NFKC').trim().replace(/\s+/gu, ' ').toLowerCase().normalize('NFKC');
-}
+// Runtime writers and the protected operator share the exact same pure rule.
+export { canonicalOrganizationName };
 export function organizationIdentity(name, random = crypto) {
   const base = String(name).normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 54).replace(/-+$/g, '') || 'organizacao';
