@@ -23,6 +23,8 @@ O arquivo realmente autorizado para aplicação tem o mesmo nome `0043_organizat
 
 O texto de autorização emitido pelo audit identifica explicitamente o arquivo guardado e seu hash. Aprovar apenas o hash da fonte não autoriza o derivado. Não há autorização de produção nesta preparação. O arquivo derivado contém dados privados codificados em hexadecimal: fica somente no diretório temporário restrito do runner, não em artifacts/logs. Hexadecimal evita injeção e preserva bytes; não é anonimização.
 
+Os subprocessos de leitura e aplicação forçam `WRANGLER_WRITE_LOGS=false`, sobrescrevendo qualquer configuração herdada. Isso é necessário porque o [logger do Wrangler](https://github.com/cloudflare/workers-sdk/blob/wrangler@4.140.0/packages/wrangler/src/logger.ts) normalmente persiste respostas completas em um [arquivo global](https://github.com/cloudflare/workers-sdk/blob/wrangler@4.140.0/packages/wrangler/src/utils/log-file.ts), fora do cleanup do diretório temporário. O contrato com CLI real consulta o snapshot privado e aplica o payload contra loopback, com logs herdados habilitados, e exige ausência de arquivos de log tanto em sucesso quanto em falha. stdout/stderr permanecem capturados em memória e somente os relatórios sanitizados são publicados.
+
 O `apply` reobtém o snapshot, compara digests com o audit, verifica autorização, integridade e bookmark, e repete a coleta antes da escrita. Regera os mesmos bytes, confere seu hash e lê novamente o arquivo preparado para igualdade byte a byte. Qualquer diferença exige **novo audit, novo relatório e nova autorização**, inclusive quando o dispatcher substitui o relatório anterior pelo `fresh-audit`. Não existe fallback para aplicação sem guards ou para outra migration.
 
 ## Concorrência e prova do executor

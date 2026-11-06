@@ -5,15 +5,18 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { runProcess, WRANGLER_VERSION, sha256Text } from '../scripts/migrations/production-migration-lib.mjs';
+import { runProcess, runWranglerJson, runWranglerApply, WRANGLER_VERSION, sha256Text } from '../scripts/migrations/production-migration-lib.mjs';
 import { IDENTITY_MIGRATION, IDENTITY_SNAPSHOT_SQL, validateIdentitySnapshot, guardedIdentityMigration } from '../scripts/migrations/organization-identity-0043.mjs';
 const packageDir=resolve(process.env.IDENTITY_WRANGLER_PACKAGE || '.tmp/wrangler-0043/node_modules/wrangler');
 assert.equal(JSON.parse(readFileSync(join(packageDir,'package.json'),'utf8')).version,WRANGLER_VERSION);
 
 for(const fault of ['none','inventory-drift','late-ledger-failure'])test('Wrangler '+WRANGLER_VERSION+' one atomic migration payload: '+fault,async t=>{
+  const inherited=process.env.WRANGLER_WRITE_LOGS;
+  process.env.WRANGLER_WRITE_LOGS='true';
+  t.after(()=>{if(inherited===undefined)delete process.env.WRANGLER_WRITE_LOGS;else process.env.WRANGLER_WRITE_LOGS=inherited;});
   const root=mkdtempSync(join(tmpdir(),'wrangler-0043-offline-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
   const db=new DatabaseSync(':memory:');t.after(()=>db.close());
   db.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));
@@ -37,17 +40,37 @@ for(const fault of ['none','inventory-drift','late-ledger-failure'])test('Wrangl
         if(fault==='inventory-drift')db.exec("UPDATE organizations SET name='Changed after audit' WHERE id=1");
         if(fault==='late-ledger-failure')db.exec("CREATE TRIGGER synthetic_ledger_failure BEFORE INSERT ON d1_migrations BEGIN SELECT RAISE(ABORT,'synthetic failure after DDL'); END");
         db.exec('BEGIN IMMEDIATE');try{db.exec(sql);db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
-      } else if(/CREATE TABLE IF NOT EXISTS/.test(sql))db.exec(sql);
+      } else if(sql===IDENTITY_SNAPSHOT_SQL)rows=[db.prepare(sql).get()];
+      else if(/CREATE TABLE IF NOT EXISTS/.test(sql))db.exec(sql);
       else {assert.match(sql,/SELECT \*\s+FROM "d1_migrations"/);rows=db.prepare(sql).all();}
       res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({success:true,result:[{success:true,results:rows,meta:{duration:1}}]}));
     } catch(error){failures.push(error.message);res.writeHead(400,{'content-type':'application/json'});res.end(JSON.stringify({success:false,errors:[{code:7500,message:'synthetic SQL failure'}]}));}
   });
   server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(r=>server.close(r)));
+  const logPath=join(root,'wrangler.log');
+  // Exercise the production library's env merge, replacing only the launcher
+  // and database name for the pinned package and synthetic loopback fixture.
+  const cli={runProcess:async(command,args,options)=>{
+    assert.equal(command,'npx');assert.deepEqual(args.slice(0,2),['--yes',`wrangler@${WRANGLER_VERSION}`]);
+    assert.equal(options.env.WRANGLER_WRITE_LOGS,'false');
+    return await runProcess(process.execPath,[join(packageDir,'bin/wrangler.js'),...args.slice(2).map(a=>a==='maono_maps'?'offline_identity_test':a)],{
+      ...options,cwd:root,env:{CLOUDFLARE_API_TOKEN:'synthetic-token-not-valid',CLOUDFLARE_ACCOUNT_ID:accountId,
+        CLOUDFLARE_API_BASE_URL:`http://127.0.0.1:${server.address().port}`,WRANGLER_LOG_PATH:logPath,
+        XDG_CONFIG_HOME:root,...options.env}});
+  }};
+  const read=await runWranglerJson(['d1','execute','offline_identity_test','--remote','--command',IDENTITY_SNAPSHOT_SQL],configPath,cli);
+  assert.ok(JSON.stringify(read).includes('PRIVATE offline é'));
+  assert.equal(existsSync(logPath),false,'Sensitive snapshot must not create a Wrangler disk log');
   let error;
-  try{await runProcess(process.execPath,[join(packageDir,'bin/wrangler.js'),'d1','migrations','apply','offline_identity_test','--remote','--config',configPath],{
-    cwd:root,env:{CI:'true',CLOUDFLARE_API_TOKEN:'synthetic-token-not-valid',CLOUDFLARE_ACCOUNT_ID:accountId,
-      CLOUDFLARE_API_BASE_URL:`http://127.0.0.1:${server.address().port}`,WRANGLER_SEND_METRICS:'false',
-      WRANGLER_LOG_PATH:join(root,'wrangler.log'),XDG_CONFIG_HOME:root}});}catch(e){error=e;}
+  try{await runWranglerApply(configPath,cli);}catch(e){error=e;}
+  const logFiles=readdirSync(root,{recursive:true}).filter(p=>p.endsWith('.log'));
+  for(const file of logFiles) {
+    const contents=readFileSync(join(root,file),'utf8');
+    for(const value of ['PRIVATE offline é','synthetic','/synthetic']) {
+      assert.equal(contents.includes(value),false);assert.equal(contents.includes(Buffer.from(value).toString('hex')),false);
+    }
+  }
+  assert.deepEqual(logFiles,[],'No disk log even when inherited WRANGLER_WRITE_LOGS=true or apply fails');
   assert.equal(batches.length,1,JSON.stringify({failures,error:error?.details?.stderr}));
   assert.equal(batches[0],execution.sql+`\nINSERT INTO "d1_migrations" (name)\nvalues ('${IDENTITY_MIGRATION}');`);
   assert.equal(sha256Text(batches[0]),execution.requestSha256);

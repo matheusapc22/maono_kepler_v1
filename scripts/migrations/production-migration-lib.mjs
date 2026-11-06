@@ -339,7 +339,9 @@ export async function runWranglerJson(args, configPath, injected = {}) {
     'npx',
     ['--yes', `wrangler@${WRANGLER_VERSION}`, ...args, '--config', configPath, '--json'],
     {
-      env: { WRANGLER_SEND_METRICS: 'false' },
+      // Wrangler persists full JSON responses at its global log path by
+      // default. Override inherited settings; sensitive reads stay in memory.
+      env: { WRANGLER_SEND_METRICS: 'false', WRANGLER_WRITE_LOGS: 'false' },
       errorCode: 'WRANGLER_COMMAND_FAILED',
       safeMessage: 'O Wrangler falhou durante uma etapa remota. Nenhuma identidade ou sucesso foi presumido.',
     },
@@ -359,7 +361,7 @@ export async function runWranglerApply(configPath, injected = {}) {
     'npx',
     ['--yes', `wrangler@${WRANGLER_VERSION}`, 'd1', 'migrations', 'apply', PRODUCTION_DATABASE_NAME, '--remote', '--config', configPath],
     {
-      env: { WRANGLER_SEND_METRICS: 'false', CI: 'true' },
+      env: { WRANGLER_SEND_METRICS: 'false', WRANGLER_WRITE_LOGS: 'false', CI: 'true' },
       errorCode: 'WRANGLER_APPLY_FAILED',
       safeMessage: 'A aplicação da migration falhou. Verifique o relatório pós-falha e o D1 antes de qualquer repetição.',
     },
