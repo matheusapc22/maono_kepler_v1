@@ -14,6 +14,8 @@ Antes de autorizar 0043, obtenha inventário **completo e atual** de `id,name,sl
 node scripts/migrations/preflight-organization-identity.mjs inventario.json
 ```
 
+O inventário deve ser um array de linhas com `id`, `name`, `slug` e `dropbox_root_path` explícitos. IDs devem ser inteiros positivos e únicos; os três campos textuais devem conter texto não vazio. Pastas ausentes ou nulas são rejeitadas, pois o schema exige `dropbox_root_path NOT NULL`. Entradas malformadas interrompem a auditoria sem emitir aprovação.
+
 O relatório contém IDs e tipos de conflito, sem nomes/e-mails. Qualquer conflito canônico, numérico ou de pasta bloqueia a aplicação; a ferramenta não corrige, renomeia, move ou exclui dados. O índice SQL também recusa sufixos históricos duplicados. SQLite/D1 não fornece a normalização Unicode do JavaScript: o preflight Unicode é obrigatório, e não pode ser substituído por `lower(trim(name))`.
 
 Siga integralmente o operador protegido e as etapas de `AGENTS.md`, incluindo auditoria, SHA-256, inventário de pendências e autorização humana específica. A referência estrutural de 0042 continua certificando exclusivamente o schema até 0042 e rejeita os novos objetos de 0043. O hash da fonte canônica foi atualizado sem ampliar os objetos aceitos por esse coletor. **A extensão revisada do operador para auditar e pós-validar 0043 é uma dependência de publicação**, não uma autorização para aplicar a migration ou ignorar o coletor de 0042.

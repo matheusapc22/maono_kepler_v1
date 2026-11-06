@@ -33,6 +33,22 @@ test('read-only migration preflight reports Unicode names, numeric suffixes and 
   assert.equal(report.ok,false);assert.deepEqual(report.conflicts.map(c=>c.kind),['name','suffix','path']);
   assert.equal(JSON.stringify(rows),before);assert.equal(JSON.stringify(report).includes('CAFÉ'),false);
 });
+test('migration preflight rejects missing paths, malformed rows and duplicate inventory IDs',()=>{
+  const row={id:1,name:'Synthetic',slug:'synthetic',dropbox_root_path:'/projects/synthetic'};
+  assert.deepEqual(auditOrganizationIdentities([row]),{ok:true,organizations:1,conflicts:[]});
+  assert.deepEqual(auditOrganizationIdentities([]),{ok:true,organizations:0,conflicts:[]});
+  for(const input of [null,{},'inventory',42])assert.throws(()=>auditOrganizationIdentities(input),/Invalid organization inventory/);
+  const invalid=[null,[],42,Object.create(row),{id:1,name:'Synthetic',slug:'synthetic'}];
+  for(const key of ['id','name','slug','dropbox_root_path']){
+    const missing={...row};delete missing[key];invalid.push(missing);
+    for(const value of [undefined,null,{},[]])invalid.push({...row,[key]:value});
+  }
+  for(const id of [0,-1,1.5,'1',NaN,Number.MAX_SAFE_INTEGER+1])invalid.push({...row,id});
+  for(const key of ['name','slug','dropbox_root_path'])for(const value of ['', '   ',42])invalid.push({...row,[key]:value});
+  for(const invalidRow of invalid)assert.throws(()=>auditOrganizationIdentities([invalidRow]),/Invalid organization inventory/);
+  assert.throws(()=>auditOrganizationIdentities([row,{...row,name:'Another',slug:'another',dropbox_root_path:'/projects/another'}]),/Invalid organization inventory/);
+  assert.equal(row.dropbox_root_path,'/projects/synthetic');
+});
 test('crypto identity has exactly nine digits, bounded normalized base and safe fallback',()=>{
   const rng={getRandomValues:array=>{array[0]=42;return array;}};
   for(const name of [' Máõno -- Gestão / ação ', 'Á'.repeat(160), '🌍🧭']){
