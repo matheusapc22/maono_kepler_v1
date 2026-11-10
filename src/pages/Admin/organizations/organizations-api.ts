@@ -3,8 +3,9 @@ import { ApiError as ManagementApiError } from '../../../lib/error-contract.ts';
 import { normalizeUserError } from '../../../lib/user-error-catalog.ts';
 export { ManagementApiError };
 const BASE='/api/admin/organization-management';
-export async function api<T>(path:string,options:{signal?:AbortSignal;body?:unknown;key?:string}={}):Promise<T>{
-  const response=await fetchWithNetworkGuard(`${BASE}${path}`,{method:options.body===undefined?'GET':'POST',credentials:'include',signal:options.signal,
+export async function api<T>(path:string,options:{signal?:AbortSignal;body?:unknown;key?:string;timeoutMs?:number}={}):Promise<T>{
+  const signal=options.timeoutMs?AbortSignal.any([...(options.signal?[options.signal]:[]),AbortSignal.timeout(options.timeoutMs)]):options.signal;
+  const response=await fetchWithNetworkGuard(`${BASE}${path}`,{method:options.body===undefined?'GET':'POST',credentials:'include',signal,
     headers:{Accept:'application/json',...(options.body===undefined?{}:{'Content-Type':'application/json','X-Maono-Management':'1'}),...(options.key?{'Idempotency-Key':options.key}:{})},
     body:options.body===undefined?undefined:JSON.stringify(options.body)});
   const parsed=await parseResponseJson(response);

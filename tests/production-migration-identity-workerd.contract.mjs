@@ -47,7 +47,8 @@ async function fixture(t,profile='canonical',count=2) {
     if(statements.length)await d1.batch(statements);
   }
   const schema=[];
-  if(profile==='canonical')schema.push(read('schema.sql'));
+  // The functional bootstrap already includes 0043; audit/apply fixtures start at 0042.
+  if(profile==='canonical')schema.push(read('schema.sql').split('-- Organization creation identity (migration 0043)')[0]);
   else installMigratedOrganizationSchema({exec:sql=>schema.push(sql)});
   for(const sql of [...schema,ledgerTable])await setup(sql);
   const names=profile==='canonical'?['0007_create_organization_limit_requests.sql','0016_map_panel_navigation_and_quota.sql','0042_organization_management.sql']

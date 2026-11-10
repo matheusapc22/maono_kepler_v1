@@ -20,6 +20,7 @@ export function fixture(){
     INSERT INTO organization_limit_requests(id,organization_id,request_type,requested_plan,reason,created_by) VALUES(1,1,'projects_increase',NULL,'Precisamos de capacidade',2),(2,1,'users_increase',NULL,'Mais pessoas',2);
   `);
   sqlite.exec(readFileSync(new URL('../../migrations/0042_organization_management.sql',import.meta.url),'utf8'));
+  sqlite.exec(readFileSync(new URL('../../migrations/0043_organization_creation_identity.sql',import.meta.url),'utf8'));
   let queryCount=0;
   const DB={prepare(sql){queryCount++;const statement=sqlite.prepare(sql);let parameters=[];const execute=()=>statement.columns().length?{results:statement.all(...parameters)}:{results:[],meta:statement.run(...parameters)};return {bind(...args){parameters=args;return this;},first:async()=>statement.get(...parameters)||null,all:async()=>({results:statement.all(...parameters)}),run:async()=>({meta:statement.run(...parameters)}),_execute:execute};},async batch(statements){sqlite.exec('BEGIN');try{const result=statements.map(s=>s._execute());sqlite.exec('COMMIT');return result;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
   const env={DB,ORGANIZATION_MANAGEMENT_V1:'true',PROJECT_QUOTA_RESERVATION_V1:'true',testStorageFailure:false};

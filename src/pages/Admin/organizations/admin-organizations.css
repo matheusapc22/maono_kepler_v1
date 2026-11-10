@@ -57,3 +57,12 @@
 @media(max-width:760px){.aog-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.aog-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.aog-dialog-body{padding:14px}#admin-organizations-actions{width:100%;margin:0}.aog-header-actions{display:grid;grid-template-columns:repeat(3,1fr)}.aog-header-actions button{font-size:12px;padding:7px}.aog-selection{gap:6px}}
 @media(max-width:460px){.aog-filters{grid-template-columns:1fr}.aog-header-actions{grid-template-columns:1fr}.aog-metric{align-items:start}.aog-metric-icon{display:none}.aog-policy-summary{grid-template-columns:1fr}.aog-pagination label{width:100%}.admin-organizations-dialog{max-height:calc(100dvh - 16px)}}
 @media(pointer:coarse),(max-width:760px){.admin-organizations-workspace button,.admin-organizations-dialog button,.aog-header-actions button{min-height:44px}.admin-organizations-workspace .aog-actions button{min-width:44px;min-height:44px}}
+
+.admin-organizations-dialog.is-processing>header{display:none}
+.aog-create-loading{min-height:300px;display:grid;place-items:center}
+.aog-owner-combobox{position:relative}
+.aog-owner-combobox label{display:grid;gap:6px}
+.aog-candidates{position:absolute;z-index:2;inset-inline:0;top:100%;list-style:none;margin:4px 0 0;padding:4px;max-height:210px;overflow:auto;border:1px solid #394555;border-radius:8px;background:#0c1219}
+.aog-candidates li{display:grid;gap:3px;padding:9px 10px;cursor:pointer;border-radius:5px}
+.aog-candidates li[aria-selected=true],.aog-candidates li:hover{background:#241e10;outline:1px solid #b98a36}
+.aog-candidates li span{font-size:12px;color:#acb5c2}

@@ -1,6 +1,8 @@
 # Preparação operacional de 0043
 
-Este procedimento prepara `0043_organization_creation_identity.sql` para o operador protegido. Não ativa a funcionalidade da PR #270, não altera rotas/UI e não aplica a migration ao integrar o código. `schema.sql` permanece na referência 0042 nesta preparação; o perfil pós-0043 é construído offline aplicando o SQL fixado sobre cada perfil histórico certificado. A atualização do bootstrap integra a publicação funcional posterior.
+Este procedimento prepara `0043_organization_creation_identity.sql` para o operador protegido. A preparação original (#271, SHA `4386083dec4522f380559d3871e3140451e7e8d7`) não ativou a funcionalidade da PR #270, não alterou rotas/UI e manteve `schema.sql` na referência 0042. Integrar código não aplica a migration.
+
+Na reconciliação funcional da #270, o bootstrap passa a incluir 0043 e o runtime reutiliza a função pura `organization-name.js`. O perfil pós-0043 continua sendo construído offline aplicando o SQL fixado sobre cada perfil histórico certificado de 0042; o coletor antigo não passa a aceitar objetos novos. Os contratos preservam o runtime e testes originais da preparação no SHA fixado, além de provar que o runtime funcional recusa 0042 e usa identidades canônicas em 0043. A publicação funcional continua dependendo da sequência protegida abaixo.
 
 A fonte SQL é idêntica à PR #270 no SHA `93f18b06ac2b2703e499df8ced450a8938c52f20`: SHA-256 `ce53acea032786a27a79b9e917cc774c2309d05ff7f30b0f2c4769738ff1d531`. Ela acrescenta `canonical_name` nullable, dois índices únicos, `organization_creation_identities` e três triggers. Nenhum nome, slug ou caminho histórico é reescrito. Os históricos conservam a chave canônica nula. Os índices podem rejeitar dados conflitantes e passam a restringir escritas antigas: isso exige planejamento de publicação.
 

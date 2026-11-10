@@ -92,7 +92,7 @@ for (const profile of ['canonical','historical']) {
     const db = new DatabaseSync(':memory:');
     t.after(() => db.close());
     if (profile === 'historical') installMigratedOrganizationSchema(db);
-    else db.exec(source('schema.sql'));
+    else db.exec(source('schema.sql').split('-- Organization creation identity (migration 0043)')[0]);
     db.exec(source('migrations/0006_create_organization_exports.sql'));
     db.exec(source('migrations/0011_roadmap_gantt.sql'));
     db.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY,name TEXT,applied_at TEXT);');

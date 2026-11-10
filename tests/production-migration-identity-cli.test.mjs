@@ -11,7 +11,8 @@ const preload=new URL('./helpers/identity-operator-preload.mjs',import.meta.url)
 function fixture(t){
   const root=mkdtempSync(join(tmpdir(),'identity-cli-offline-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
   const db=new DatabaseSync(join(root,'fixture.sqlite'));
-  db.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));
+  // This fixture audits/applies 0043, so start from its certified pre-state.
+  db.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8').split('-- Organization creation identity (migration 0043)')[0]);
   db.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY,name TEXT,applied_at TEXT);');
   for(const n of ['0007_create_organization_limit_requests.sql','0016_map_panel_navigation_and_quota.sql','0042_organization_management.sql'])
     db.prepare('INSERT INTO d1_migrations(name,applied_at) VALUES(?,?)').run(n,'2026-11-06 20:00:00');

@@ -39,11 +39,13 @@ export async function handleOrganizationManagement(context,deps) {
       else if(route[2]==='activity') result=await service.activity(env,id,request.url);
       else throw new ManagementError('Rota não encontrada.',404,'NOT_FOUND');
     } else if(method==='GET' && route.join('/')==='candidates') result={users:await service.candidates(env,request.url)};
+    else if(method==='GET' && route.join('/')==='name-availability') result=await service.nameAvailability(env,request.url);
     else if(method==='GET' && route.join('/')==='requests') result=await service.requests(env,request.url);
     else if(method==='POST' && route.join('/')==='import/validate') {object(body,['csv']);result=await service.validateImport(env,body.csv);}
     else if(route.join('/')==='operations') {
       result=method==='GET'?{operations:await service.operations(env,actor)}:await service.startOperation(env,actor,request.headers.get('Idempotency-Key'),body);
-    } else if(route[0]==='operations' && route.length===2 && method==='GET') result=await service.operation(env,actor,text(route[1],'Operação',1,80));
+    } else if(route.join('/')==='operations/by-key' && method==='GET') result=await service.operationByKey(env,actor,url.searchParams.get('key'));
+    else if(route[0]==='operations' && route.length===2 && method==='GET') result=await service.operation(env,actor,text(route[1],'Operação',1,80));
     else if(route[0]==='operations' && route.length===3 && route[2]==='step' && method==='POST') {
       object(body,['retry']);check(body.retry===undefined || typeof body.retry==='boolean','Retomada inválida.');
       result=await service.stepOperation(env,actor,text(route[1],'Operação',1,80),body.retry===true,bound);

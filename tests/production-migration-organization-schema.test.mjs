@@ -10,6 +10,13 @@ import { PRODUCTION_DATABASE_NAME, PRODUCTION_DATABASE_ID, safeError } from '../
 import { ORGANIZATION_SCHEMA_PROFILES, ORGANIZATION_SCHEMA_SOURCES, buildOrganizationSchemaReferences } from '../scripts/migrations/organization-schema-references.mjs';
 import { installMigratedOrganizationSchema } from './helpers/organization-schema-history.mjs';
 
+test('0042 collector still rejects the later 0043 identity schema', t => {
+  const db=new DatabaseSync(':memory:');t.after(()=>db.close());
+  db.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));
+  const observed=Object.fromEntries(Object.entries(ORGANIZATION_SCHEMA_QUERIES).map(([key,sql])=>[key,db.prepare(sql).all()]));
+  assert.equal(evaluateOrganizationSchema(observed).compatible,false);
+});
+
 for (const profile of ORGANIZATION_SCHEMA_PROFILES) {
 const reference = expectedOrganizationSchema(profile);
 const migration = { name: ORGANIZATION_MIGRATION, sha256: ORGANIZATION_MIGRATION_SHA256 };
@@ -26,7 +33,7 @@ function fixture(t, prepare = () => {}) {
   const db = new DatabaseSync(':memory:');
   t.after(() => db.close());
   if (profile === 'migrated-0002-0042-v1') installMigratedOrganizationSchema(db);
-  else db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+  else db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8').split('-- Organization creation identity (migration 0043)')[0]);
   db.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY,name TEXT,applied_at TEXT);');
   for (const row of ledger) db.prepare('INSERT INTO d1_migrations VALUES(?,?,?)').run(row.id, row.name, row.appliedAt);
   db.exec("INSERT INTO users(email,password_hash) VALUES('synthetic-only@example.test','SYNTHETIC_SECRET');");

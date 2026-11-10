@@ -1,4 +1,5 @@
 import { check, object, integer, text, createInput, changeInput, queryInput, requestHash, parseImportCsv, ManagementError } from './organization-management-contract.js';
+import { assertOrganizationNameAvailable, canonicalOrganizationName, organizationIdentity } from './organization-identity.js';
 import { resolveProjectQuotaPolicy } from './organization-limit-service.js';
 
 const db = env => env.DB;
@@ -29,12 +30,14 @@ const SELECT = `SELECT o.*,COALESCE(pc.total,0) project_count,COALESCE(uc.total,
 export async function requireManagementReady(env) {
   check(String(env.ORGANIZATION_MANAGEMENT_V1).toLowerCase() === 'true', 'A nova gestão aguarda ativação neste ambiente.', 503, 'ORGANIZATION_MANAGEMENT_DISABLED');
   const columns = await all(env, 'PRAGMA table_info(organizations)');
-  check(['management_version','management_create_key','management_owner_id','management_actor_id','management_request_id','management_action','management_reason','project_limit','plan'].every(c => columns.some(r => r.name === c)), 'A gestão aguarda a migration 0042 validada.', 503, 'ORGANIZATION_MANAGEMENT_SCHEMA_REQUIRED');
-  const tables = await all(env, `SELECT name FROM sqlite_master WHERE type='table' AND name IN ('organization_management_events','organization_management_operations','organization_management_operation_items','organization_resource_reservations','organization_management_assertions')`);
-  check(tables.length === 5, 'Schema de gestão incompleto.', 503, 'ORGANIZATION_MANAGEMENT_SCHEMA_REQUIRED');
+  check(['canonical_name','management_version','management_create_key','management_owner_id','management_actor_id','management_request_id','management_action','management_reason','project_limit','plan'].every(c => columns.some(r => r.name === c)), 'A gestão aguarda as migrations 0042 e 0043 validadas.', 503, 'ORGANIZATION_MANAGEMENT_SCHEMA_REQUIRED');
+  const tables = await all(env, `SELECT name FROM sqlite_master WHERE type='table' AND name IN ('organization_management_events','organization_management_operations','organization_management_operation_items','organization_resource_reservations','organization_management_assertions','organization_creation_identities')`);
+  check(tables.length === 6, 'Schema de gestão incompleto.', 503, 'ORGANIZATION_MANAGEMENT_SCHEMA_REQUIRED');
+  const identityIndexes = await all(env, 'PRAGMA index_list(organizations)');
+  check(['idx_organization_canonical_name','idx_organization_numeric_suffix'].every(name=>identityIndexes.some(index=>index.name===name&&index.unique===1)), 'Proteções de identidade incompletas.', 503, 'ORGANIZATION_MANAGEMENT_SCHEMA_REQUIRED');
   const requests = await all(env, 'PRAGMA table_info(organization_limit_requests)');
   check(['created_by','reviewed_by','reviewed_at','review_notes','requested_limits_json','review_operation_key','management_version'].every(c=>requests.some(r=>r.name===c)), 'Schema de solicitações incompleto.', 503, 'ORGANIZATION_MANAGEMENT_SCHEMA_REQUIRED');
-  const requiredTriggers=['org_management_created','org_management_updated','org_management_legacy_version','org_management_owner_insert','org_management_owner_valid','org_management_owner_delete','org_management_owner_change','org_management_owner_deactivate','org_management_assertion_cleanup','org_management_quota_reserve_insert','org_management_quota_reserve_update'];
+  const requiredTriggers=['org_identity_reservation','org_identity_insert','org_identity_update','org_management_created','org_management_updated','org_management_legacy_version','org_management_owner_insert','org_management_owner_valid','org_management_owner_delete','org_management_owner_change','org_management_owner_deactivate','org_management_assertion_cleanup','org_management_quota_reserve_insert','org_management_quota_reserve_update'];
   const triggers=await all(env, `SELECT name FROM sqlite_master WHERE type='trigger' AND name IN (${requiredTriggers.map(()=>'?').join(',')})`,...requiredTriggers);
   check(triggers.length===requiredTriggers.length, 'Proteções de integridade da gestão incompletas.', 503, 'ORGANIZATION_MANAGEMENT_SCHEMA_REQUIRED');
 
@@ -72,7 +75,13 @@ async function usage(env, id) {
 export async function detail(env, id, deps) {
   const rows = await all(env, `${CTE}${SELECT} WHERE o.id=?`, integer(id)); check(rows[0], 'Organização não encontrada.', 404, 'ORGANIZATION_NOT_FOUND');
   const row = rows[0], used = await usage(env, row.id), policy = deps.resolvePolicy(row, env);
-  return { organization: publicRow(row, env, deps), policy: { ...policy, projectSource: resolveProjectQuotaPolicy(row, env).source, projectOverride: row.project_limit ?? null, used: Number(used.used), reserved: Number(used.reserved), remaining: Math.max(0, policy.projects - used.used - used.reserved), storageUsedMb: Number(used.bytes) / 1048576, projectQuotaEnforced: deps.quotaEnabled(env), informational: ['storageMb', 'users', 'exports'] } };
+  const configured = await one(env, "SELECT after_json FROM organization_management_events WHERE organization_id=? AND request_id=? AND action='organization.configured'", row.id, `${row.management_create_key}:configured`);
+  const creationOperationId = row.management_create_key?.replace(/:\d+$/, '') || null;
+  const original = creationOperationId ? await one(env, 'SELECT payload_json FROM organization_management_operations WHERE id=?', creationOperationId) : null;
+  const expected = parse(original?.payload_json, [])[Number(row.management_create_key?.split(':').at(-1))];
+  const initial = parse(configured?.after_json);
+  const creationConfirmed = Boolean(expected && initial && initial.plan === expected.plan && initial.ownerId === row.owner_id && row.owner_email?.toLowerCase() === expected.ownerEmail && row.plan === expected.plan && row.active === 1);
+  return { creationConfirmed, creationOperationId, organization: publicRow(row, env, deps), policy: { ...policy, projectSource: resolveProjectQuotaPolicy(row, env).source, projectOverride: row.project_limit ?? null, used: Number(used.used), reserved: Number(used.reserved), remaining: Math.max(0, policy.projects - used.used - used.reserved), storageUsedMb: Number(used.bytes) / 1048576, projectQuotaEnforced: deps.quotaEnabled(env), informational: ['storageMb', 'users', 'exports'] } };
 }
 export async function people(env, id) {
   await organizationRow(env, id);
@@ -89,8 +98,14 @@ export async function activity(env, id, url) {
   const rows = await all(env, `SELECT e.id,e.action,e.reason,e.created_at createdAt,e.version,u.name actorName FROM organization_management_events e LEFT JOIN users u ON u.id=e.actor_id WHERE e.organization_id=? AND e.id<? ORDER BY e.id DESC LIMIT 21`, integer(id), before);
   return { events: rows.slice(0,20), next: rows.length > 20 ? rows[19].id : null, source: 'management-v1' };
 }
+export async function nameAvailability(env, url) {
+  const name = text(new URL(url).searchParams.get('name') || '', 'Nome', 1, 160);
+  try { await assertOrganizationNameAvailable(env, name); return { available: true, name: canonicalOrganizationName(name) }; }
+  catch (e) { if (e.code === 'ORGANIZATION_NAME_EXISTS') return { available: false, name: canonicalOrganizationName(name) }; throw e; }
+}
 export async function candidates(env, url) {
-  const term = text(new URL(url).searchParams.get('q') || '', 'Busca', 2, 160);
+  const term = text(new URL(url).searchParams.get('q') || '', 'Busca', 2, 254);
+  if (new URL(url).searchParams.get('exact') === '1') return all(env, 'SELECT id,name,email FROM users WHERE active=1 AND lower(email)=? LIMIT 1', term.toLowerCase());
   return all(env, `SELECT id,name,email FROM users WHERE active=1 AND (name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\') ORDER BY email,id LIMIT 20`, `%${term.replace(/[\\%_]/g,'\\$&')}%`, `%${term.replace(/[\\%_]/g,'\\$&')}%`);
 }
 async function ownerByEmail(env, email) {
@@ -98,10 +113,12 @@ async function ownerByEmail(env, email) {
   check(user, 'Responsável não encontrado ou inativo.', 422, 'ORGANIZATION_OWNER_INELIGIBLE'); return user;
 }
 export async function validateImport(env, csv) {
-  const rows = parseImportCsv(csv), seen = new Set();
+  const rows = parseImportCsv(csv), seen = new Set(), names = new Set();
   for (const row of rows) {
     if (row.error) continue;
     try {
+      const nameKey = await assertOrganizationNameAvailable(env, row.input.name);
+      check(!names.has(nameKey), 'Nome repetido no arquivo.', 409, 'ORGANIZATION_NAME_EXISTS'); names.add(nameKey);
       check(!seen.has(row.input.slug), 'Identificador repetido no arquivo.'); seen.add(row.input.slug);
       const duplicate = await one(env, 'SELECT id FROM organizations WHERE slug=? OR lower(dropbox_root_path)=lower(?)', row.input.slug, `/projects/${row.input.slug}`);
       check(!duplicate, 'Já existe organização com este identificador ou pasta.', 409, 'ORGANIZATION_EXISTS');
@@ -115,7 +132,7 @@ function operationInput(input) {
   check(Array.isArray(input.items) && input.items.length > 0 && input.items.length <= 100, 'Selecione de 1 a 100 itens.');
   check(['import','pause','resume'].includes(input.kind) || input.items.length === 1, 'A operação exige um item.');
   let items;
-  if (['create','import'].includes(input.kind)) items = input.items.map(createInput);
+  if (['create','import'].includes(input.kind)) items = input.items.map(item => createInput(item, input.kind === 'create'));
   else if (input.kind === 'review') items = input.items.map(value => {
     object(value, ['id','version','decision','reason','organizationVersion','projectLimit']);
     check(['approved','rejected'].includes(value.decision), 'Decisão inválida.');
@@ -131,14 +148,32 @@ export async function startOperation(env, actor, key, input) {
   if (current) { check(current.payload_hash === hash, 'Chave já usada para outra solicitação.', 409, 'ORGANIZATION_IDEMPOTENCY_CONFLICT'); return operation(env, actor, current.id); }
   const recent = await one(env, `SELECT COUNT(*) total FROM organization_management_operations WHERE actor_id=? AND created_at>datetime('now','-1 hour')`, actor.id);
   check(recent.total < 100, 'Limite temporário de operações atingido.', 429, 'ORGANIZATION_OPERATION_RATE_LIMIT', true);
-  const id = crypto.randomUUID();
-  await db(env).batch([
-    db(env).prepare(`INSERT INTO organization_management_operations(id,actor_id,idempotency_key,payload_hash,kind,payload_json) VALUES(?,?,?,?,?,?) ON CONFLICT(actor_id,idempotency_key) DO NOTHING`).bind(id,actor.id,key,hash,payload.kind,JSON.stringify(payload.items)),
-    ...payload.items.map((_,i) => db(env).prepare(`INSERT INTO organization_management_operation_items(operation_id,item_index) SELECT ?,? WHERE EXISTS(SELECT 1 FROM organization_management_operations WHERE id=?)`).bind(id,i,id)),
-  ]);
+  // Hash the logical input before generating anything. The operation and its
+  // reserved identity commit together; losing a response cannot allocate again.
+  const automatic = payload.kind === 'create';
+  let persisted = false;
+  for (let attempt = 0; attempt < (automatic ? 12 : 1); attempt++) {
+    const id = crypto.randomUUID(), identity = automatic ? organizationIdentity(payload.items[0].name) : null;
+    const items = identity ? [{...payload.items[0], slug: identity.slug}] : payload.items;
+    try {
+      await db(env).batch([
+        db(env).prepare(`INSERT INTO organization_management_operations(id,actor_id,idempotency_key,payload_hash,kind,payload_json) VALUES(?,?,?,?,?,?) ON CONFLICT(actor_id,idempotency_key) DO NOTHING`).bind(id,actor.id,key,hash,payload.kind,JSON.stringify(items)),
+        ...(identity ? [db(env).prepare(`INSERT INTO organization_creation_identities(operation_id,suffix,slug,path) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM organization_management_operations WHERE id=?)`).bind(id,identity.suffix,identity.slug,identity.path,id)] : []),
+        ...items.map((_,i) => db(env).prepare(`INSERT INTO organization_management_operation_items(operation_id,item_index) SELECT ?,? WHERE EXISTS(SELECT 1 FROM organization_management_operations WHERE id=?)`).bind(id,i,id)),
+      ]);
+      persisted = true; break;
+    } catch (e) {
+      if (!automatic || !/organization_creation_identities\.|ORGANIZATION_IDENTITY_COLLISION/.test(String(e))) throw e;
+    }
+  }
+  check(persisted, 'Não foi possível reservar um identificador. Tente novamente.', 503, 'ORGANIZATION_IDENTITY_EXHAUSTED', true);
   const saved = await one(env, 'SELECT id,payload_hash FROM organization_management_operations WHERE actor_id=? AND idempotency_key=?', actor.id,key);
   check(saved.payload_hash === hash, 'Chave já usada para outra solicitação.', 409, 'ORGANIZATION_IDEMPOTENCY_CONFLICT');
   return operation(env, actor, saved.id);
+}
+export async function operationByKey(env, actor, key) {
+  const found = await one(env, 'SELECT id FROM organization_management_operations WHERE actor_id=? AND idempotency_key=?', actor.id, text(key, 'Chave', 16, 160));
+  return { operation: found ? await operation(env, actor, found.id) : null };
 }
 export async function operation(env, actor, id) {
   const op = await one(env, 'SELECT * FROM organization_management_operations WHERE id=? AND actor_id=?', text(id,'Operação',1,80),actor.id);
@@ -182,7 +217,14 @@ function assertion(env, requestId, orgId) {
 }
 async function createItem(env,actor,payload,key,deps) {
   check(deps.quotaEnabled(env), 'A quota de projetos precisa estar habilitada antes da criação gerencial.', 409, 'PROJECT_QUOTA_REQUIRED');
-  const owner = await ownerByEmail(env,payload.ownerEmail); let row, storageError;
+  let owner, row, storageError;
+  try { owner = await ownerByEmail(env,payload.ownerEmail); }
+  catch (e) {
+    const saved = await one(env,'SELECT * FROM organizations WHERE management_create_key=?',key);
+    if (!saved) throw e;
+    return {state:'partial',result:{id:saved.id,name:saved.name,storageStatus:saved.storage_status},code:e.code,
+      error:'Organização cadastrada, mas o responsável está inativo. Reative o usuário e retome a preparação.',retryable:true};
+  }
   try {
     const result = await deps.createLifecycle(env,{name:payload.name,slug:payload.slug,description:payload.description,active:true},
       {correlationId:key,management:{actorId:actor.id,requestId:`${key}:lifecycle`,action:'organization.created',creationKey:key,reason:'Criação de organização confirmada'}});
@@ -195,7 +237,7 @@ async function createItem(env,actor,payload,key,deps) {
   if(!configured) {
     try { await applyPolicy(env,actor,row,{version:row.management_version,plan:payload.plan,projectLimit:null,ownerId:owner.id},`${key}:configured`,deps,true); }
     catch(e) { return {state:'partial',result:{id:row.id,name:row.name,storageStatus:row.storage_status},code:e.code||'ORGANIZATION_CONFIGURATION_UNCONFIRMED',
-      error:'Cadastro criado, mas a configuração inicial não foi confirmada. Consulte a organização antes de retomar.',retryable:e.retryable===true}; }
+      error:'Cadastro criado, mas a configuração inicial não foi confirmada. Consulte a organização antes de retomar.',retryable:e.retryable===true||['ORGANIZATION_OWNER_INELIGIBLE','ORGANIZATION_VERSION_CONFLICT'].includes(e.code)}; }
   }
   row=await organizationRow(env,row.id);
   const result={id:row.id,name:row.name,storageStatus:row.storage_status,active:Boolean(row.active)};

@@ -159,3 +159,19 @@ test('control-plane403 is propagated without retry or application endpoint fallb
   assert.equal(attempts,2); // The two independent initial GETs, no retry.
   assert.equal(report.acceptanceExecuted,false);
 });
+
+// Functional #270 requires 0043. Control-plane readiness cannot certify it.
+test('functional identity gate remains pending after a successful Pages-only preflight', async () => {
+  const f=fixture();
+  const project=await readProduction('SYNTHETIC_TOKEN',manifest,{fetchImpl:f.fetchImpl});
+  const evidence=verifyPreflight(project);
+  assert.ok(manifest.prerequisites.some(value=>value.includes('0043') && value.includes('post profile')));
+  assert.ok(evidence.pendingGates.includes('D1_0043_IDENTITY_POSTVALIDATION'));
+  assert.ok(evidence.pendingGates.includes('REGISTERED_FUNCTIONAL_SUITE'));
+  assert.equal(evidence.databaseSchemaVerified,false);
+  assert.equal(evidence.applicationRuntimeVerified,false);
+  assert.equal(evidence.functionalAcceptanceExecuted,false);
+  assert.equal(evidence.rolloutAuthorized,false);
+  assert.deepEqual(activeFlags(manifest),{});
+  assert.equal(f.calls.length,2);
+});

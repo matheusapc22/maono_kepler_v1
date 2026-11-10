@@ -152,3 +152,19 @@ defaults, nullability, drift do ledger, queries recusadas, allowlists, sigilo,
 flags ausentes/secretas/inválidas, diferença configuração/canônico e recusa de
 run/closure antes da rede. As suites anteriores e seus asserts/timeouts ficam
 preservados. Resultados locais não são evidência de Produção.
+
+## Atualizacao funcional: identidade 0043
+
+A criacao individual da PR #270 exige a estrutura 0043, inclusive para leitura
+da gestao. O relatorio de readiness agora explicita
+`D1_0043_IDENTITY_POSTVALIDATION` como pendencia. Isso nao executa nenhuma
+consulta D1 nem transforma o preflight Pages em aceite funcional.
+
+A secao Estrutura 0042 acima descreve a certificacao historica pre-0043.
+Depois de aplicar 0043, use o postvalidate protegido especifico de
+`0043_organization_creation_identity.sql`; nao execute o coletor exclusivo
+0042 esperando que ele aceite os objetos novos. Preserve o relatorio baseline
+0042 e exija o perfil post-0043 completo, ledger e integridade atuais.
+
+Veja a [especificacao de aceite controlado](organization-management-functional-acceptance-plan.md).
+Ela e preparacao offline e nao registra uma suite executavel em producao.
