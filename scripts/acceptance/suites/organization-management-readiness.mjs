@@ -13,7 +13,7 @@ export const manifest = Object.freeze({
   managedFlags: {},
   observedFlags: ORGANIZATION_OBSERVED_FLAGS,
   prerequisites: [
-    "0042 structure/ledger/integrity must be verified separately through the protected D1 postvalidate operator",
+    "0042 baseline and 0043 identity structure/ledger/integrity must be verified separately through the protected D1 postvalidate operator; after 0043 use its exact post profile, not the 0042-only collector",
     "The organization input is a reserved synthetic scope, not proof of QA ownership or identity readiness",
     "A future functional suite and explicit window approval remain required",
   ],
@@ -45,7 +45,7 @@ export function verifyPreflight(project) {
     qaIdentitiesVerified: false,
     functionalAcceptanceExecuted: false,
     rolloutAuthorized: false,
-    pendingGates: ["D1_0042_STRUCTURE_REPORT", "RUNTIME_AND_COMPILED_UI_EVIDENCE",
+    pendingGates: ["D1_0042_STRUCTURE_REPORT", "D1_0043_IDENTITY_POSTVALIDATION", "RUNTIME_AND_COMPILED_UI_EVIDENCE",
       "REGISTERED_FUNCTIONAL_SUITE", "APPROVED_SYNTHETIC_SCOPE", "EXPLICIT_ACCEPTANCE_WINDOW"],
   };
 }
