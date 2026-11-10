@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { collectQaInventory, validateQaInventoryContext, qaInventoryFailure, QA_INVENTORY_QUERIES } from '../scripts/migrations/organization-qa-inventory.mjs';
 import { ORGANIZATION_MIGRATION, ORGANIZATION_MIGRATION_SHA256, ORGANIZATION_SCHEMA_QUERIES } from '../scripts/migrations/organization-management-schema.mjs';
-import { PRODUCTION_DATABASE_NAME, PRODUCTION_DATABASE_ID } from '../scripts/migrations/production-migration-lib.mjs';
+import { PRODUCTION_DATABASE_NAME, PRODUCTION_DATABASE_ID, gateError, safeError } from '../scripts/migrations/production-migration-lib.mjs';
 import { installMigratedOrganizationSchema } from './helpers/organization-schema-history.mjs';
 
 const source = path => readFileSync(new URL('../' + path, import.meta.url),'utf8');
@@ -139,6 +139,19 @@ for (const profile of ['canonical','historical']) {
     assert.throws(() => f.db.exec('UPDATE organizations SET active=0'),/readonly/);
     assert.doesNotMatch(JSON.stringify(result),/PRIVATE|example\.test|private-slug|dropbox|token|password|before_json|payload_json/);
     assert.equal(JSON.stringify(result).includes('"id":2'),false);
+  });
+  for(const [key,query] of Object.entries(QA_INVENTORY_QUERIES))test(profile+': QA read failures remain code-only: '+key,async t=>{
+    const f=fixture(t,()=>{},(sql,rows)=>{
+      if(sql===query)throw gateError('WRANGLER_COMMAND_FAILED','PRIVATE_MESSAGE',{
+        exitCode:17,stdout:'PRIVATE_TOKEN SQLITE_AUTH',stderr:'PRIVATE_PATH ETIMEDOUT',stage:'PRIVATE_STAGE'});
+      return rows;
+    });
+    await assert.rejects(collectQaInventory('synthetic-config',remote,migration,f.injected),error=>{
+      assert.equal(safeError(error).diagnostic.stage,'ORGANIZATION_QA_INVENTORY');
+      assert.deepEqual(qaInventoryFailure(error),{ok:false,writesPerformed:false,code:'WRANGLER_COMMAND_FAILED'});
+      assert.doesNotMatch(JSON.stringify(qaInventoryFailure(error)),/PRIVATE|diagnostic|stage|exitCode/);return true;
+    });
+    assert.equal(f.snapshot(),f.before);
   });
   test(profile + ': ranks existing resources before link count and ID, counts inactive resources too', async t => {
     const f=fixture(t,db => db.exec("INSERT INTO organization_file_folders(organization_id,name,deleted_at) VALUES(1,'PRIVATE_FOLDER','2020-01-01');"));

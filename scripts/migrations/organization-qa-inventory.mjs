@@ -339,7 +339,7 @@ export async function collectQaInventory(configPath, remote, migration, injected
   const query = async key => {
     const json = await runWranglerJson([
       'd1','execute',PRODUCTION_DATABASE_NAME,'--remote','--command',QA_INVENTORY_QUERIES[key],
-    ],configPath,injected);
+    ],configPath,injected,'ORGANIZATION_QA_INVENTORY');
     if ([json,...(Array.isArray(json) ? json : [])].some(r => r?.success === false || r?.result?.success === false)) fail('QA_INVENTORY_RESPONSE_INVALID');
     return rowsFromD1Json(json);
   };

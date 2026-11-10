@@ -68,7 +68,7 @@ export function evaluateCC12Schema(objects, ledger) {
     digest: createHash("sha256").update(JSON.stringify(objects)).digest("hex"),
   };
 }
-export async function readCC12Schema(configPath, ledger) {
+export async function readCC12Schema(configPath, ledger, injected = {}) {
   return evaluateCC12Schema(
     rowsFromD1Json(
       await runWranglerJson(
@@ -80,7 +80,7 @@ export async function readCC12Schema(configPath, ledger) {
           "--command",
           CC12_SCHEMA_QUERY,
         ],
-        configPath,
+        configPath, injected, "CC12_SCHEMA",
       ),
     ),
     ledger,
