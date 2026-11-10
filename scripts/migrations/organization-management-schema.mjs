@@ -130,7 +130,7 @@ export async function readOrganizationSchema(configPath, injected = {}, referenc
   const observed = {};
   for (const [key, sql] of Object.entries(ORGANIZATION_SCHEMA_QUERIES)) {
     observed[key] = rowsFromD1Json(await runWranglerJson(
-      ['d1', 'execute', PRODUCTION_DATABASE_NAME, '--remote', '--command', sql], configPath, injected));
+      ['d1', 'execute', PRODUCTION_DATABASE_NAME, '--remote', '--command', sql], configPath, injected, 'ORGANIZATION_SCHEMA'));
   }
   return evaluateProfiles(observed, references);
 }
@@ -159,7 +159,7 @@ export async function queryOrganizationLedger(configPath, injected) {
   const json = await runWranglerJson([
     'd1', 'execute', PRODUCTION_DATABASE_NAME, '--remote',
     '--command', 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id;',
-  ], configPath, injected);
+  ], configPath, injected, 'ORGANIZATION_LEDGER');
   // Do not use queryLedger: its legacy normalization filters empty names. Other
   // consumers retain that behavior; this completeness claim requires raw rows.
   return checkedLedger(rowsFromD1Json(json), 'applied_at');

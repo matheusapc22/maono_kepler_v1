@@ -8,12 +8,12 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { runProcess, runWranglerJson, runWranglerApply, WRANGLER_VERSION, sha256Text } from '../scripts/migrations/production-migration-lib.mjs';
+import { runProcess, runWranglerJson, runWranglerApply, WRANGLER_VERSION, sha256Text, safeError } from '../scripts/migrations/production-migration-lib.mjs';
 import { IDENTITY_MIGRATION, IDENTITY_SNAPSHOT_SQL, validateIdentitySnapshot, guardedIdentityMigration } from '../scripts/migrations/organization-identity-0043.mjs';
 const packageDir=resolve(process.env.IDENTITY_WRANGLER_PACKAGE || '.tmp/wrangler-0043/node_modules/wrangler');
 assert.equal(JSON.parse(readFileSync(join(packageDir,'package.json'),'utf8')).version,WRANGLER_VERSION);
 
-for(const fault of ['none','inventory-drift','late-ledger-failure'])test('Wrangler '+WRANGLER_VERSION+' one atomic migration payload: '+fault,async t=>{
+for(const fault of ['none','inventory-drift','late-ledger-failure','snapshot-failure'])test('Wrangler '+WRANGLER_VERSION+' one atomic migration payload: '+fault,async t=>{
   const inherited=process.env.WRANGLER_WRITE_LOGS;
   process.env.WRANGLER_WRITE_LOGS='true';
   t.after(()=>{if(inherited===undefined)delete process.env.WRANGLER_WRITE_LOGS;else process.env.WRANGLER_WRITE_LOGS=inherited;});
@@ -40,11 +40,11 @@ for(const fault of ['none','inventory-drift','late-ledger-failure'])test('Wrangl
         if(fault==='inventory-drift')db.exec("UPDATE organizations SET name='Changed after audit' WHERE id=1");
         if(fault==='late-ledger-failure')db.exec("CREATE TRIGGER synthetic_ledger_failure BEFORE INSERT ON d1_migrations BEGIN SELECT RAISE(ABORT,'synthetic failure after DDL'); END");
         db.exec('BEGIN IMMEDIATE');try{db.exec(sql);db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
-      } else if(sql===IDENTITY_SNAPSHOT_SQL)rows=[db.prepare(sql).get()];
+      } else if(sql===IDENTITY_SNAPSHOT_SQL){if(fault==='snapshot-failure')throw new Error('synthetic snapshot failure');rows=[db.prepare(sql).get()];}
       else if(/CREATE TABLE IF NOT EXISTS/.test(sql))db.exec(sql);
       else {assert.match(sql,/SELECT \*\s+FROM "d1_migrations"/);rows=db.prepare(sql).all();}
       res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({success:true,result:[{success:true,results:rows,meta:{duration:1}}]}));
-    } catch(error){failures.push(error.message);res.writeHead(400,{'content-type':'application/json'});res.end(JSON.stringify({success:false,errors:[{code:7500,message:'synthetic SQL failure'}]}));}
+    } catch(error){failures.push(error.message);res.writeHead(400,{'content-type':'application/json'});res.end(JSON.stringify({success:false,errors:[{code:7500,message:fault==='snapshot-failure'?'SQLITE_AUTH PRIVATE offline á /synthetic Bearer PRIVATE_TOKEN':'synthetic SQL failure'}]}));}
   });
   server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(r=>server.close(r)));
   const logPath=join(root,'wrangler.log');
@@ -58,7 +58,19 @@ for(const fault of ['none','inventory-drift','late-ledger-failure'])test('Wrangl
         CLOUDFLARE_API_BASE_URL:`http://127.0.0.1:${server.address().port}`,WRANGLER_LOG_PATH:logPath,
         XDG_CONFIG_HOME:root,...options.env}});
   }};
-  const read=await runWranglerJson(['d1','execute','offline_identity_test','--remote','--command',IDENTITY_SNAPSHOT_SQL],configPath,cli);
+  const readPromise=runWranglerJson(['d1','execute','offline_identity_test','--remote','--command',IDENTITY_SNAPSHOT_SQL],configPath,cli,'ORGANIZATION_IDENTITY_SNAPSHOT');
+  if(fault==='snapshot-failure') {
+    await assert.rejects(readPromise,error=>{
+      const safe=safeError(error);
+      assert.equal(safe.code,'WRANGLER_COMMAND_FAILED');assert.equal(safe.diagnostic.stage,'ORGANIZATION_IDENTITY_SNAPSHOT');
+      assert.ok(safe.diagnostic.categories.includes('SQLITE_AUTH'));
+      assert.doesNotMatch(JSON.stringify({ok:false,writesPerformed:false,error:safe}),/PRIVATE|Bearer|\/synthetic/);return true;
+    });
+    assert.equal(batches.length,0);
+    assert.deepEqual(readdirSync(root,{recursive:true}).filter(p=>p.endsWith('.log')),[],'Read failure also suppresses inherited disk logging');
+    return;
+  }
+  const read=await readPromise;
   assert.ok(JSON.stringify(read).includes('PRIVATE offline é'));
   assert.equal(existsSync(logPath),false,'Sensitive snapshot must not create a Wrangler disk log');
   let error;

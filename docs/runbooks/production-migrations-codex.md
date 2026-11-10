@@ -108,6 +108,10 @@ npm run migration:postvalidate:production -- --migration 0027_example.sql
 
 ## Falhas e resultado desconhecido
 
+Falhas de leitura do Wrangler (`WRANGLER_COMMAND_FAILED`, `WRANGLER_EMPTY_JSON` e `WRANGLER_INVALID_JSON`) incluem somente uma mensagem fixa e `diagnostic`: etapa de uma lista fechada, `exitCode` inteiro entre 0 e 255 (ou `null` se indisponível, sinal ou fora desse domínio), categorias fixas e booleanos `stdoutCaptured`/`stderrCaptured`. As categorias são heurísticas sobre os streams capturados em memória; não comprovam a causa remota. SQL, argumentos, tokens, nomes, caminhos e respostas brutas não são serializados. O subprocesso continua com `WRANGLER_WRITE_LOGS=false`, inclusive quando herdaria outro valor.
+
+Em falhas, audit e postvalidate mantêm apenas o JSON mínimo no stderr, com `writesPerformed=false`, sem criar arquivo em `--report`. O inventário QA preserva seu contrato mais restrito, somente código. Para `WRANGLER_APPLY_FAILED`, o apply mantém os booleanos de captura e identifica a etapa como `MIGRATION_APPLY`; falhas de leitura durante o apply identificam a etapa de leitura. Esses diagnósticos não concedem autorização para repetir operações.
+
 Se o apply chegou a iniciar e qualquer etapa posterior falhar, não repita automaticamente. Considere `writesMayHaveOccurred=true`, preserve o bookmark e faça apenas verificação read-only até determinar o estado real do ledger e do schema.
 
 Se qualquer dado auditado divergir antes do apply, o executor encerra com `AUDIT_DRIFT_DETECTED`; é obrigatório gerar um novo audit e obter nova autorização.

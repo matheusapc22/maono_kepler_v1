@@ -80,7 +80,7 @@ export function evaluateCC15Schema(objects, ledger) {
     digest: createHash("sha256").update(JSON.stringify(objects)).digest("hex"),
   };
 }
-export async function readCC15Schema(configPath, ledger) {
+export async function readCC15Schema(configPath, ledger, injected = {}) {
   return evaluateCC15Schema(
     rowsFromD1Json(
       await runWranglerJson(
@@ -92,7 +92,7 @@ export async function readCC15Schema(configPath, ledger) {
           "--command",
           CC15_SCHEMA_QUERY,
         ],
-        configPath,
+        configPath, injected, "CC15_SCHEMA",
       ),
     ),
     ledger,

@@ -13,6 +13,8 @@ import {
   createWranglerConfig,
   normalizeMigrationName,
   rowsFromD1Json,
+  runWranglerJson, runWranglerApply, classifyWranglerFailure, safeError, gateError,
+  readRemoteState, queryLedger, queryIntegrity, captureTimeTravelBookmark, WRANGLER_VERSION,
 } from '../scripts/migrations/production-migration-lib.mjs';
 
 const MIGRATION_HASH = 'a'.repeat(64);
@@ -162,4 +164,132 @@ test('apply failure evidence is retained separately without retrying writes', as
   assert.match(failure, /writeJsonReport\(failurePath, failure\)/);
   assert.match(failure, /failure\.json/);
   assert.doesNotMatch(failure, /runWranglerApply\(/);
+});
+
+const privateDiagnostic = 'PRIVATE_TOKEN Bearer PRIVATE_CREDENTIAL SELECT PRIVATE_SQL /private/path https://private.example.test';
+const privateFailure = () => gateError('WRANGLER_COMMAND_FAILED', privateDiagnostic, {
+  exitCode: 17, stdout: 'SQLITE_AUTH ' + privateDiagnostic, stderr: 'ETIMEDOUT ' + privateDiagnostic,
+  args: [privateDiagnostic], command: privateDiagnostic, stage: privateDiagnostic,
+  categories: [privateDiagnostic], response: { privateDiagnostic },
+});
+const failingReader = { runProcess: async () => { throw privateFailure(); } };
+function verifyPrivateDiagnostic(error, stage) {
+  const safe = safeError(error);
+  assert.equal(safe.code, 'WRANGLER_COMMAND_FAILED');
+  assert.equal(safe.diagnostic.stage, stage);
+  assert.equal(safe.diagnostic.exitCode, 17);
+  assert.deepEqual(safe.diagnostic.categories, ['SQLITE_AUTH', 'NETWORK_TIMEOUT']);
+  assert.equal(safe.diagnostic.stdoutCaptured, true);
+  assert.equal(safe.diagnostic.stderrCaptured, true);
+  assert.doesNotMatch(JSON.stringify(safe), /PRIVATE|Bearer|SELECT|private\.example|\/private\/path|"args"|"response"/);
+  return true;
+}
+
+test('Wrangler read diagnostics preserve argv, SQL bytes and log suppression without retries', async () => {
+  const args = ['d1', 'execute', PRODUCTION_DATABASE_NAME, '--remote', '--command', 'SELECT 1;\n'];
+  let calls = 0;
+  await assert.rejects(runWranglerJson(args, '/private/config', { runProcess: async (command, actual, options) => {
+    calls++;
+    assert.equal(command, 'npx');
+    assert.deepEqual(actual, ['--yes', `wrangler@${WRANGLER_VERSION}`, ...args, '--config', '/private/config', '--json']);
+    assert.deepEqual(options.env, { WRANGLER_SEND_METRICS: 'false', WRANGLER_WRITE_LOGS: 'false' });
+    throw privateFailure();
+  } }, 'D1_QUICK_CHECK'), error => verifyPrivateDiagnostic(error, 'D1_QUICK_CHECK'));
+  assert.equal(calls, 1);
+  const result = { success: true, results: [{ name: privateDiagnostic }] };
+  assert.deepEqual(await runWranglerJson(args, 'fixture', { runProcess: async () => ({ code: 0, stdout: JSON.stringify(result) }) }, 'D1_QUICK_CHECK'), result);
+});
+
+for (const [stage, read] of [
+  ['D1_INFO', () => readRemoteState('fixture', '0043_organization_creation_identity.sql', failingReader)],
+  ['D1_LEDGER', () => queryLedger('fixture', failingReader)],
+  ['D1_TIME_TRAVEL_INFO', () => captureTimeTravelBookmark('fixture', failingReader)],
+  ['D1_QUICK_CHECK', () => queryIntegrity('fixture', failingReader)],
+]) test('read helper attaches its fixed stage: ' + stage, async () => {
+  await assert.rejects(read(), error => verifyPrivateDiagnostic(error, stage));
+});
+
+test('foreign-key check keeps the original quick-check then foreign-key order', async () => {
+  const queries = [];
+  await assert.rejects(queryIntegrity('fixture', { runProcess: async (_, args) => {
+    queries.push(args[args.indexOf('--command') + 1]);
+    if (queries.length === 1) return { stdout: '[{"results":[{"quick_check":"ok"}]}]' };
+    throw privateFailure();
+  } }), error => verifyPrivateDiagnostic(error, 'D1_FOREIGN_KEY_CHECK'));
+  assert.deepEqual(queries, ['PRAGMA quick_check;', 'PRAGMA foreign_key_check;']);
+});
+
+for (const cc of ['08', '09', '10', '11', '12', '13', '15']) {
+  test('CC schema reader has a fixed stage: ' + cc, async () => {
+    const mod = await import(`../scripts/migrations/cc${cc}-schema-preflight.mjs`);
+    await assert.rejects(mod[`readCC${cc}Schema`]('fixture', [], failingReader), error => verifyPrivateDiagnostic(error, `CC${cc}_SCHEMA`));
+  });
+}
+
+test('organization schema, strict ledger and identity snapshot label their own reads', async () => {
+  const { readOrganizationSchema, queryOrganizationLedger } = await import('../scripts/migrations/organization-management-schema.mjs');
+  const { collectIdentityEvidence, IDENTITY_MIGRATION, IDENTITY_MIGRATION_SHA256 } = await import('../scripts/migrations/organization-identity-0043.mjs');
+  await assert.rejects(readOrganizationSchema('fixture', failingReader, []), error => verifyPrivateDiagnostic(error, 'ORGANIZATION_SCHEMA'));
+  await assert.rejects(queryOrganizationLedger('fixture', failingReader), error => verifyPrivateDiagnostic(error, 'ORGANIZATION_LEDGER'));
+  await assert.rejects(collectIdentityEvidence('fixture', { identity: { name: PRODUCTION_DATABASE_NAME, id: PRODUCTION_DATABASE_ID } },
+    { name: IDENTITY_MIGRATION, sha256: IDENTITY_MIGRATION_SHA256 }, 'pre', failingReader), error => verifyPrivateDiagnostic(error, 'ORGANIZATION_IDENTITY_SNAPSHOT'));
+});
+
+test('null, primitives and non-string streams never coerce arbitrary objects', () => {
+  const hostile = { toString() { throw new Error('Object coercion forbidden'); }, toJSON() { throw new Error('Object serialization forbidden'); } };
+  for (const details of [null, undefined, 3, true, 'PRIVATE', Symbol('PRIVATE'), [],
+    { stdout: hostile, stderr: hostile, exitCode: hostile, stage: hostile }]) {
+    const safe = safeError(gateError('WRANGLER_COMMAND_FAILED', privateDiagnostic, details));
+    assert.deepEqual(safe.diagnostic, { exitCode: null, categories: ['UNCLASSIFIED'], stdoutCaptured: false, stderrCaptured: false, stage: 'UNSPECIFIED_READ' });
+    assert.doesNotThrow(() => JSON.stringify(safe));
+    assert.doesNotMatch(JSON.stringify(safe), /PRIVATE/);
+    assert.deepEqual(classifyWranglerFailure(details).categories, ['UNCLASSIFIED']);
+  }
+});
+
+test('exit codes are numeric integers 0..255 only and stages are revalidated when serialized', async () => {
+  for (const value of ['1', '', false, true, NaN, Infinity, -Infinity, 1.5, -1, 256, 2 ** 32, null, undefined, {}, []]) {
+    assert.equal(classifyWranglerFailure({ exitCode: value }).exitCode, null);
+  }
+  for (const value of [0, 1, 17, 255]) assert.equal(classifyWranglerFailure({ exitCode: value }).exitCode, value);
+  for (const stage of [privateDiagnostic, 'd1_info', 'MIGRATION_APPLY', null, {}, ['D1_INFO']]) {
+    let captured;
+    try { await runWranglerJson(['PRIVATE_ARG'], 'PRIVATE_CONFIG', failingReader, stage); } catch (error) { captured = error; }
+    captured.details.stage = stage; // Defense in depth against mutation after the wrapper.
+    assert.equal(safeError(captured).diagnostic.stage, 'UNSPECIFIED_READ');
+    assert.doesNotMatch(JSON.stringify(safeError(captured)), /PRIVATE/);
+  }
+});
+
+test('spawn failures and empty/invalid JSON keep their stage and fixed safe messages', async () => {
+  for (const [code, runner] of [
+    ['WRANGLER_COMMAND_FAILED', async () => { throw Object.assign(new Error(privateDiagnostic), { code: 'ENOENT', path: privateDiagnostic }); }],
+    ['WRANGLER_EMPTY_JSON', async () => ({ code: 0, stdout: ' \n', stderr: privateDiagnostic })],
+    ['WRANGLER_INVALID_JSON', async () => ({ code: 0, stdout: '<html>' + privateDiagnostic, stderr: privateDiagnostic })],
+    ['WRANGLER_INVALID_JSON', async () => ({ code: 0, stdout: { privateDiagnostic }, stderr: { privateDiagnostic } })],
+  ]) {
+    await assert.rejects(runWranglerJson(['PRIVATE_ARG'], 'PRIVATE_CONFIG', { runProcess: runner }, 'D1_INFO'), error => {
+      const safe = safeError(error);
+      assert.equal(safe.code, code); assert.equal(safe.diagnostic.stage, 'D1_INFO');
+      assert.doesNotMatch(JSON.stringify(safe), /PRIVATE|Bearer|private\.example/);
+      assert.equal(safe.diagnostic.exitCode, code === 'WRANGLER_COMMAND_FAILED' ? null : 0);
+      return true;
+    });
+  }
+});
+
+test('apply keeps capture booleans and uncertainty-compatible diagnostics with a fixed message', async () => {
+  let calls = 0;
+  await assert.rejects(runWranglerApply('PRIVATE_CONFIG', { runProcess: async (_, args, options) => {
+    calls++; assert.ok(args.includes('apply')); assert.equal(options.env.WRANGLER_WRITE_LOGS, 'false');
+    throw gateError('WRANGLER_APPLY_FAILED', privateDiagnostic, { exitCode: 1, stdout: privateDiagnostic, stderr: 'constraint failed', stage: privateDiagnostic });
+  } }), error => {
+    const safe = safeError(error);
+    assert.equal(safe.diagnostic.stage, 'MIGRATION_APPLY');
+    assert.deepEqual(safe.diagnostic.categories, ['SQLITE_CONSTRAINT']);
+    assert.equal(safe.diagnostic.stdoutCaptured, true); assert.equal(safe.diagnostic.stderrCaptured, true);
+    assert.doesNotMatch(JSON.stringify(safe), /PRIVATE|Bearer|private\.example/); return true;
+  });
+  assert.equal(calls, 1);
+  assert.deepEqual(classifyWranglerFailure({ stderr: 'Unknown arguments: PRIVATE_SQL --PRIVATE_ARG' }).categories, ['CLI_ARGUMENT']);
 });

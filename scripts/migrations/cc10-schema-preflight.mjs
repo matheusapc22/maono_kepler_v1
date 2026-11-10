@@ -10,6 +10,6 @@ export function evaluateCC10Schema(objects, ledger) {
     const conflicting = objects.filter(x => /^ticket_sla_/.test(x.name) || /^ticket_sla_/.test(x.tbl_name)).map(x => x.name);
     return { compatible: !missingLedger.length && !missingColumns.length && !conflicting.length, missingLedger, missingColumns, conflicting, objects, digest: createHash('sha256').update(JSON.stringify(objects)).digest('hex') };
 }
-export async function readCC10Schema(configPath, ledger) { return evaluateCC10Schema(rowsFromD1Json(await runWranglerJson(['d1', 'execute', PRODUCTION_DATABASE_NAME, '--remote', '--command', CC10_SCHEMA_QUERY], configPath)), ledger); }
+export async function readCC10Schema(configPath, ledger, injected = {}) { return evaluateCC10Schema(rowsFromD1Json(await runWranglerJson(['d1', 'execute', PRODUCTION_DATABASE_NAME, '--remote', '--command', CC10_SCHEMA_QUERY], configPath, injected, 'CC10_SCHEMA')), ledger); }
 export function assertCC10Schema(report) { if (!report.compatible)
     throw gateError('CC10_SCHEMA_PREFLIGHT_BLOCKED', 'Schema/ledger incompatível com 0033; revisar relatório read-only antes de autorizar.', { missingLedger: report.missingLedger, missingColumns: report.missingColumns, conflicting: report.conflicting }); }

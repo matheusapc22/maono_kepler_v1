@@ -134,7 +134,7 @@ export async function collectIdentityEvidence(configPath, remote, migration, pha
       remote.identity.name !== PRODUCTION_DATABASE_NAME || remote.identity.id !== PRODUCTION_DATABASE_ID) {
     fail('TARGET_INVALID', 'Alvo fixo ou hash da migration 0043 divergente.');
   }
-  const value = await runWranglerJson(['d1','execute',PRODUCTION_DATABASE_NAME,'--remote','--command',IDENTITY_SNAPSHOT_SQL], configPath, injected);
+  const value = await runWranglerJson(['d1','execute',PRODUCTION_DATABASE_NAME,'--remote','--command',IDENTITY_SNAPSHOT_SQL], configPath, injected, 'ORGANIZATION_IDENTITY_SNAPSHOT');
   const evidence = validateIdentitySnapshot(strictResponse(value), phase);
   if (JSON.stringify(remote.ledger) !== JSON.stringify(evidence.report.ledger.rows)) {
     fail('LEDGER_DRIFT', 'Ledger mudou durante a coleta; novo audit obrigatório.');

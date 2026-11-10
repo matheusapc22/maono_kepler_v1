@@ -9,6 +9,6 @@ export function evaluateCC11Schema(objects, ledger) {
     const conflicting = objects.filter(o => /^ticket_metric_/.test(o.name) || /^ticket_metric_/.test(o.tbl_name)).map(o => o.name);
     return { compatible: !missingLedger.length && !missingColumns.length && !conflicting.length, missingLedger, missingColumns, conflicting, objects, digest: createHash('sha256').update(JSON.stringify(objects)).digest('hex') };
 }
-export async function readCC11Schema(configPath, ledger) { return evaluateCC11Schema(rowsFromD1Json(await runWranglerJson(['d1', 'execute', PRODUCTION_DATABASE_NAME, '--remote', '--command', CC11_SCHEMA_QUERY], configPath)), ledger); }
+export async function readCC11Schema(configPath, ledger, injected = {}) { return evaluateCC11Schema(rowsFromD1Json(await runWranglerJson(['d1', 'execute', PRODUCTION_DATABASE_NAME, '--remote', '--command', CC11_SCHEMA_QUERY], configPath, injected, 'CC11_SCHEMA')), ledger); }
 export function assertCC11Schema(report) { if (!report.compatible)
     throw gateError('CC11_SCHEMA_PREFLIGHT_BLOCKED', 'Schema/ledger incompatível com 0034; revisar auditoria antes de autorizar.', { missingLedger: report.missingLedger, missingColumns: report.missingColumns, conflicting: report.conflicting }); }

@@ -68,7 +68,7 @@ export function evaluateCC08Schema(objects, ledger) {
     objects,
   };
 }
-export async function readCC08Schema(configPath, ledger) {
+export async function readCC08Schema(configPath, ledger, injected = {}) {
   const json = await runWranglerJson(
     [
       "d1",
@@ -78,7 +78,7 @@ export async function readCC08Schema(configPath, ledger) {
       "--command",
       CC08_SCHEMA_QUERY,
     ],
-    configPath,
+    configPath, injected, "CC08_SCHEMA",
   );
   return evaluateCC08Schema(rowsFromD1Json(json), ledger);
 }
