@@ -26,6 +26,34 @@ const HEX_40 = /^[0-9a-f]{40}$/i;
 const HEX_64 = /^[0-9a-f]{64}$/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Call-site labels only: never infer a diagnostic stage from SQL, argv or CLI output.
+const WRANGLER_READ_STAGES = new Set([
+  'UNSPECIFIED_READ', 'D1_INFO', 'D1_LEDGER', 'D1_QUICK_CHECK',
+  'D1_FOREIGN_KEY_CHECK', 'D1_TIME_TRAVEL_INFO',
+  'CC08_SCHEMA', 'CC09_SCHEMA', 'CC10_SCHEMA', 'CC11_SCHEMA',
+  'CC12_SCHEMA', 'CC13_SCHEMA', 'CC15_SCHEMA',
+  'ORGANIZATION_SCHEMA', 'ORGANIZATION_LEDGER', 'ORGANIZATION_QA_INVENTORY',
+  'ORGANIZATION_IDENTITY_SNAPSHOT',
+]);
+const WRANGLER_FAILURE_MESSAGES = Object.freeze({
+  WRANGLER_COMMAND_FAILED: 'O Wrangler falhou durante uma etapa remota. Nenhuma identidade ou sucesso foi presumido.',
+  WRANGLER_EMPTY_JSON: 'O Wrangler não devolveu JSON; a operação foi bloqueada.',
+  WRANGLER_INVALID_JSON: 'O Wrangler devolveu uma resposta que não pôde ser validada como JSON.',
+  WRANGLER_APPLY_FAILED: 'A aplicação da migration falhou. Verifique o relatório pós-falha e o D1 antes de qualquer repetição.',
+});
+const readStage = stage => WRANGLER_READ_STAGES.has(stage) ? stage : 'UNSPECIFIED_READ';
+const exitCode = value => Number.isInteger(value) && value >= 0 && value <= 255 ? value : null;
+
+function wranglerReadError(code, stage, details) {
+  return gateError(code, WRANGLER_FAILURE_MESSAGES[code], {
+    stage: readStage(stage),
+    exitCode: exitCode(details?.exitCode),
+    // Keep only streams in memory for classification, never arbitrary error properties.
+    stdout: typeof details?.stdout === 'string' ? details.stdout : '',
+    stderr: typeof details?.stderr === 'string' ? details.stderr : '',
+  });
+}
+
 export class MigrationGateError extends Error {
   constructor(code, message, details = null) {
     super(message);
@@ -333,25 +361,33 @@ export async function readGitSnapshot(injected = {}) {
   return { sha, clean: lines.length === 0, dirtyEntries: lines.slice(0, 100) };
 }
 
-export async function runWranglerJson(args, configPath, injected = {}) {
+export async function runWranglerJson(args, configPath, injected = {}, stage = 'UNSPECIFIED_READ') {
   const runner = injected.runProcess || runProcess;
-  const result = await runner(
-    'npx',
-    ['--yes', `wrangler@${WRANGLER_VERSION}`, ...args, '--config', configPath, '--json'],
-    {
-      // Wrangler persists full JSON responses at its global log path by
-      // default. Override inherited settings; sensitive reads stay in memory.
-      env: { WRANGLER_SEND_METRICS: 'false', WRANGLER_WRITE_LOGS: 'false' },
-      errorCode: 'WRANGLER_COMMAND_FAILED',
-      safeMessage: 'O Wrangler falhou durante uma etapa remota. Nenhuma identidade ou sucesso foi presumido.',
-    },
-  );
-  const raw = result.stdout.trim();
-  if (!raw) throw gateError('WRANGLER_EMPTY_JSON', 'O Wrangler não devolveu JSON; a operação foi bloqueada.');
+  let result;
+  try {
+    result = await runner(
+      'npx',
+      ['--yes', `wrangler@${WRANGLER_VERSION}`, ...args, '--config', configPath, '--json'],
+      {
+        // Wrangler persists full JSON responses at its global log path by
+        // default. Override inherited settings; sensitive reads stay in memory.
+        env: { WRANGLER_SEND_METRICS: 'false', WRANGLER_WRITE_LOGS: 'false' },
+        errorCode: 'WRANGLER_COMMAND_FAILED',
+        safeMessage: WRANGLER_FAILURE_MESSAGES.WRANGLER_COMMAND_FAILED,
+      },
+    );
+  } catch (error) {
+    throw wranglerReadError('WRANGLER_COMMAND_FAILED', stage,
+      error instanceof MigrationGateError ? error.details : null);
+  }
+  const details = { exitCode: result?.code, stdout: result?.stdout, stderr: result?.stderr };
+  if (typeof details.stdout !== 'string') throw wranglerReadError('WRANGLER_INVALID_JSON', stage, details);
+  const raw = details.stdout.trim();
+  if (!raw) throw wranglerReadError('WRANGLER_EMPTY_JSON', stage, details);
   try {
     return JSON.parse(raw);
   } catch {
-    throw gateError('WRANGLER_INVALID_JSON', 'O Wrangler devolveu uma resposta que não pôde ser validada como JSON.');
+    throw wranglerReadError('WRANGLER_INVALID_JSON', stage, details);
   }
 }
 
@@ -363,7 +399,7 @@ export async function runWranglerApply(configPath, injected = {}) {
     {
       env: { WRANGLER_SEND_METRICS: 'false', WRANGLER_WRITE_LOGS: 'false', CI: 'true' },
       errorCode: 'WRANGLER_APPLY_FAILED',
-      safeMessage: 'A aplicação da migration falhou. Verifique o relatório pós-falha e o D1 antes de qualquer repetição.',
+      safeMessage: WRANGLER_FAILURE_MESSAGES.WRANGLER_APPLY_FAILED,
     },
   );
 }
@@ -410,7 +446,7 @@ export async function queryLedger(configPath, injected = {}) {
   const json = await runWranglerJson([
     'd1', 'execute', PRODUCTION_DATABASE_NAME, '--remote',
     '--command', 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id;'
-  ], configPath, injected);
+  ], configPath, injected, 'D1_LEDGER');
   return rowsFromD1Json(json).map((row) => ({
     id: row.id ?? null,
     name: String(row.name || ''),
@@ -421,10 +457,10 @@ export async function queryLedger(configPath, injected = {}) {
 export async function queryIntegrity(configPath, injected = {}) {
   const quickJson = await runWranglerJson([
     'd1', 'execute', PRODUCTION_DATABASE_NAME, '--remote', '--command', 'PRAGMA quick_check;'
-  ], configPath, injected);
+  ], configPath, injected, 'D1_QUICK_CHECK');
   const foreignJson = await runWranglerJson([
     'd1', 'execute', PRODUCTION_DATABASE_NAME, '--remote', '--command', 'PRAGMA foreign_key_check;'
-  ], configPath, injected);
+  ], configPath, injected, 'D1_FOREIGN_KEY_CHECK');
   const quickRows = rowsFromD1Json(quickJson);
   const foreignRows = rowsFromD1Json(foreignJson);
   const quickValue = quickRows[0]?.quick_check ?? quickRows[0]?.['quick_check'] ?? null;
@@ -437,7 +473,7 @@ export async function queryIntegrity(configPath, injected = {}) {
 }
 
 export async function readRemoteState(configPath, selectedMigration, injected = {}) {
-  const info = await runWranglerJson(['d1', 'info', PRODUCTION_DATABASE_NAME], configPath, injected);
+  const info = await runWranglerJson(['d1', 'info', PRODUCTION_DATABASE_NAME], configPath, injected, 'D1_INFO');
   const identity = extractD1Identity(info);
   assertProductionIdentity(identity);
   const ledger = await queryLedger(configPath, injected);
@@ -447,7 +483,7 @@ export async function readRemoteState(configPath, selectedMigration, injected = 
 }
 
 export async function captureTimeTravelBookmark(configPath, injected = {}) {
-  const info = await runWranglerJson(['d1', 'time-travel', 'info', PRODUCTION_DATABASE_NAME], configPath, injected);
+  const info = await runWranglerJson(['d1', 'time-travel', 'info', PRODUCTION_DATABASE_NAME], configPath, injected, 'D1_TIME_TRAVEL_INFO');
   return {
     bookmark: extractBookmark(info),
     capturedAt: new Date().toISOString(),
@@ -478,7 +514,9 @@ export async function writeJsonReport(path, value) {
 export function classifyWranglerFailure(details = {}) {
   // Only fixed labels escape this boundary. Never return SQL, credentials, URLs,
   // process arguments, identifiers or arbitrary text from the CLI streams.
-  const output = `${details.stdout || ''}\n${details.stderr || ''}`;
+  const stdout = typeof details?.stdout === 'string' ? details.stdout : '';
+  const stderr = typeof details?.stderr === 'string' ? details.stderr : '';
+  const output = `${stdout}\n${stderr}`;
   const patterns = [
     ['SQLITE_AUTH', /SQLITE_AUTH|not authorized/i],
     ['SQLITE_CONSTRAINT', /SQLITE_CONSTRAINT|constraint failed/i],
@@ -489,16 +527,23 @@ export function classifyWranglerFailure(details = {}) {
     ['SQLITE_BUSY', /SQLITE_BUSY|database is locked/i],
     ['CLOUDFLARE_AUTH', /authentication error|authorization failed|\b10000\b/i],
     ['NETWORK_TIMEOUT', /timed? ?out|ETIMEDOUT|ECONNRESET|fetch failed/i],
+    ['CLI_ARGUMENT', /unknown argument|unrecognized option|unexpected argument|not enough non-option arguments/i],
   ];
   const categories = patterns.filter(([, re]) => re.test(output)).map(([label]) => label);
-  return { exitCode: Number.isInteger(details.exitCode) ? details.exitCode : null,
+  return { exitCode: exitCode(details?.exitCode),
     categories: categories.length ? categories : ['UNCLASSIFIED'],
-    stdoutCaptured: Boolean(details.stdout), stderrCaptured: Boolean(details.stderr) };
+    stdoutCaptured: Boolean(stdout), stderrCaptured: Boolean(stderr) };
 }
 
 export function safeError(error) {
   if (error instanceof MigrationGateError) {
-    return { code: error.code, message: error.message, ...(error.code === 'WRANGLER_APPLY_FAILED' ? { diagnostic: classifyWranglerFailure(error.details) } : {}) };
+    if (Object.hasOwn(WRANGLER_FAILURE_MESSAGES, error.code)) {
+      return { code: error.code, message: WRANGLER_FAILURE_MESSAGES[error.code],
+        diagnostic: { ...classifyWranglerFailure(error.details),
+          // Revalidate at the serialization boundary, even for forged/mutated errors.
+          stage: error.code === 'WRANGLER_APPLY_FAILED' ? 'MIGRATION_APPLY' : readStage(error.details?.stage) } };
+    }
+    return { code: error.code, message: error.message };
   }
   return { code: 'MIGRATION_GATE_UNEXPECTED', message: 'Falha inesperada no operador; revise o ambiente antes de repetir.' };
 }

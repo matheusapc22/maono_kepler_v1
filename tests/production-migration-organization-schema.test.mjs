@@ -6,7 +6,7 @@ import {
   ORGANIZATION_MIGRATION, ORGANIZATION_MIGRATION_SHA256, ORGANIZATION_SCHEMA_QUERIES,
   expectedOrganizationSchema, evaluateOrganizationSchema, readOrganizationSchema, collectOrganizationPostValidation,
 } from '../scripts/migrations/organization-management-schema.mjs';
-import { PRODUCTION_DATABASE_NAME, PRODUCTION_DATABASE_ID } from '../scripts/migrations/production-migration-lib.mjs';
+import { PRODUCTION_DATABASE_NAME, PRODUCTION_DATABASE_ID, safeError } from '../scripts/migrations/production-migration-lib.mjs';
 import { ORGANIZATION_SCHEMA_PROFILES, ORGANIZATION_SCHEMA_SOURCES, buildOrganizationSchemaReferences } from '../scripts/migrations/organization-schema-references.mjs';
 import { installMigratedOrganizationSchema } from './helpers/organization-schema-history.mjs';
 
@@ -152,9 +152,14 @@ test('0042 detects ledger drift before collection and does not retry', async t =
   assert.equal(f.calls.length,1);
 });
 
-test('0042 collector propagates a denied query without trying another route', async () => {
+test('0042 collector sanitizes a denied query without trying another route', async () => {
   let calls=0;
-  await assert.rejects(readOrganizationSchema('synthetic',{runProcess:async()=>{calls++;throw new Error('denied');}}),/denied/);
+  await assert.rejects(readOrganizationSchema('synthetic',{runProcess:async()=>{calls++;throw new Error('denied PRIVATE_TOKEN');}}),error=>{
+    const safe=safeError(error);
+    assert.equal(safe.code,'WRANGLER_COMMAND_FAILED');
+    assert.deepEqual(safe.diagnostic,{exitCode:null,categories:['UNCLASSIFIED'],stdoutCaptured:false,stderrCaptured:false,stage:'ORGANIZATION_SCHEMA'});
+    assert.doesNotMatch(JSON.stringify(safe),/denied|PRIVATE/);return true;
+  });
   assert.equal(calls,1);
 });
 

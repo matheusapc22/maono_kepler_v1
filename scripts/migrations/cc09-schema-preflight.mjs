@@ -11,5 +11,5 @@ export function evaluateCC09Schema(objects,ledger) {
  if(/\bqueue_entered_at\b/.test(base))conflicting.push('organization_tickets.queue_entered_at');
  return {compatible:!missingLedger.length&&!missingColumns.length&&!conflicting.length,missingLedger,missingColumns,conflicting,objects,digest:createHash('sha256').update(JSON.stringify(objects)).digest('hex')};
 }
-export async function readCC09Schema(configPath,ledger){return evaluateCC09Schema(rowsFromD1Json(await runWranglerJson(['d1','execute',PRODUCTION_DATABASE_NAME,'--remote','--command',CC09_SCHEMA_QUERY],configPath)),ledger);}
+export async function readCC09Schema(configPath,ledger,injected={}){return evaluateCC09Schema(rowsFromD1Json(await runWranglerJson(['d1','execute',PRODUCTION_DATABASE_NAME,'--remote','--command',CC09_SCHEMA_QUERY],configPath,injected,'CC09_SCHEMA')),ledger);}
 export function assertCC09Schema(report){if(!report.compatible)throw gateError('CC09_SCHEMA_PREFLIGHT_BLOCKED','Schema/ledger incompatível com 0032; revisar relatório read-only antes de autorizar.',{missingLedger:report.missingLedger,missingColumns:report.missingColumns,conflicting:report.conflicting});}
