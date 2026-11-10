@@ -227,3 +227,31 @@ test('snapshot uses SQL function argument counts supported by D1',()=>{
   for(const args of IDENTITY_SNAPSHOT_SQL.matchAll(/json_object\(([^()]*)\)/g))assert.ok(args[1].split(',').length<=32);
   assert.ok(Buffer.byteLength(IDENTITY_SNAPSHOT_SQL)<90000);
 });
+
+// Frozen query from product 1577a2bb, independent of the replacement builder.
+const previousSnapshot = readFileSync(new URL('./fixtures/organization-identity-snapshot-union.sql',import.meta.url),'utf8');
+test('negative control preserves the original 36-term snapshot',()=>{
+  assert.equal(sha256Text(previousSnapshot),'792befd8be2c58cac25b8eb66e87d078b41f6dd20faf2da6ad33884bbb4e2fb6');
+  assert.equal((previousSnapshot.match(/ UNION ALL /g)||[]).length,35);
+});
+for(const profile of ['canonical','historical'])for(const population of ['empty','populated'])for(const phase of ['pre','post']) {
+  test(`${profile} ${population} ${phase}: replacement preserves JSON bytes, evidence and executable hashes`,t=>{
+    const db=fixture(t,profile);
+    if(population==='empty')db.exec('DELETE FROM organizations');
+    else {
+      seed(db,{id:9,name:'\uFF21lpha\u00a0Team',slug:'alpha-000000009',dropbox_root_path:'/synthetic/alpha'},0);
+      seed(db,{id:4,name:"E\u0301quipe 'Deux'",slug:'two-000000004',dropbox_root_path:'/synthetic/\u00e9quipe'});
+      for(let id=300;id>40;id--)seed(db,{id,name:'Synthetic '+id,slug:'synthetic-'+id,dropbox_root_path:'/synthetic/'+id},id%2);
+    }
+    if(phase==='post')apply(db,guardedIdentityMigration(evidence(db)).sql);
+    const oldRaw=db.prepare(previousSnapshot).get(),newRaw=snapshot(db);
+    assert.deepEqual(newRaw,oldRaw); // Includes exact serialized JSON and key order.
+    const oldEvidence=validateIdentitySnapshot(oldRaw,phase),newEvidence=validateIdentitySnapshot(newRaw,phase);
+    assert.deepEqual(newEvidence,oldEvidence); // All inventory/ledger/schema/combined digests.
+    if(phase==='pre') {
+      const oldExecution=guardedIdentityMigration(oldEvidence),newExecution=guardedIdentityMigration(newEvidence);
+      assert.deepEqual(newExecution,oldExecution); // Exact guard/source bytes and request hashes.
+      assert.equal(identityApprovalEvidence(newEvidence,newExecution),identityApprovalEvidence(oldEvidence,oldExecution));
+    }
+  });
+}

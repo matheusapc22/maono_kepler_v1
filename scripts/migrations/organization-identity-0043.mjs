@@ -40,11 +40,12 @@ function jsonRows(sql, names) {
 const inventoryFields = ['id','name','slug','dropbox_root_path'];
 const inventorySql = 'SELECT id,name,slug,dropbox_root_path FROM organizations ORDER BY id';
 const ledgerSql = 'SELECT id,name,applied_at FROM d1_migrations ORDER BY id';
-// D1 limits SQL functions to 32 arguments. Aggregate key/value rows instead of
-// constructing one json_object with two arguments per metadata query.
-const schemaJson = '(SELECT json_group_object(k,json(v)) FROM (' +
+// Keep below D1's 32 function arguments and workerd's 5 compound SELECT terms.
+// VALUES has no compound SELECT limit; retain key order and nested JSON values.
+const schemaJson = '(WITH metadata(k,v) AS (VALUES ' +
   Object.entries(IDENTITY_SCHEMA_QUERIES).map(([key, sql]) =>
-    `SELECT ${quote(key)} AS k, ${jsonRows(sql, fields[key.split(':')[0]])} AS v`).join(' UNION ALL ') + '))';
+    `(${quote(key)}, ${jsonRows(sql, fields[key.split(':')[0]])})`).join(',') +
+  ') SELECT json_group_object(k,json(v)) FROM metadata)';
 // ONE fixed read-only statement: the count, all organizations, ledger and all
 // certified metadata share one SQLite read snapshot. No LIMIT, active filter,
 // caller-supplied SQL or use of the minimized QA inventory.
