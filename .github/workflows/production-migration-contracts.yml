@@ -13,7 +13,8 @@ on:
       - 'tests/production-migration-organization-schema.test.mjs'
       - 'tests/production-migration-qa-inventory.test.mjs'
       - 'tests/production-migration-identity-*.test.mjs'
-      - 'tests/production-migration-identity-wrangler.contract.mjs'
+      - 'tests/production-migration-identity-*.contract.mjs'
+      - 'tests/fixtures/organization-identity-snapshot-union.sql'
       - 'tests/helpers/identity-operator-preload.mjs'
       - 'functions/_lib/organization-name.js'
       - 'docs/runbooks/organization-identity-0043.md'
@@ -36,7 +37,8 @@ on:
       - 'tests/production-migration-organization-schema.test.mjs'
       - 'tests/production-migration-qa-inventory.test.mjs'
       - 'tests/production-migration-identity-*.test.mjs'
-      - 'tests/production-migration-identity-wrangler.contract.mjs'
+      - 'tests/production-migration-identity-*.contract.mjs'
+      - 'tests/fixtures/organization-identity-snapshot-union.sql'
       - 'tests/helpers/identity-operator-preload.mjs'
       - 'functions/_lib/organization-name.js'
       - 'docs/runbooks/organization-identity-0043.md'
@@ -90,3 +92,8 @@ jobs:
           IDENTITY_WRANGLER_PACKAGE: ${{ runner.temp }}/identity-wrangler/node_modules/wrangler
           WRANGLER_SEND_METRICS: 'false'
         run: node --test tests/production-migration-identity-wrangler.contract.mjs
+      - name: Verify pinned workerd compound limit and exact snapshot parity offline
+        env:
+          IDENTITY_WRANGLER_PACKAGE: ${{ runner.temp }}/identity-wrangler/node_modules/wrangler
+          WRANGLER_SEND_METRICS: 'false'
+        run: node --test tests/production-migration-identity-workerd.contract.mjs
