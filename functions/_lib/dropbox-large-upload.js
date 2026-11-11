@@ -1,6 +1,6 @@
 import { getDropboxClient } from "./dropbox-client.js";
 import { DROPBOX_CONTENT_HASH_BLOCK_BYTES } from "./dropbox-content-hash.js";
-import { joinDropboxPath } from "./dropbox.js";
+import { assertDropboxPathWritable, joinDropboxPath } from "./dropbox.js";
 
 const DROPBOX_UPLOAD_SESSION_START_URL =
   "https://content.dropboxapi.com/2/files/upload_session/start";
@@ -58,15 +58,18 @@ async function sessionRequest(
     url,
     timeoutMs: DROPBOX_SESSION_TIMEOUT_MS,
     maxRetries,
-    buildInit: ({ accessToken }) => ({
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
-        "Dropbox-API-Arg": JSON.stringify(apiArgument),
-      },
-      body,
-    }),
+    buildInit: async ({ accessToken }) => {
+      if (apiArgument.commit?.path) await assertDropboxPathWritable(env, apiArgument.commit.path);
+      return {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
+          "Dropbox-API-Arg": JSON.stringify(apiArgument),
+        },
+        body,
+      };
+    },
   });
 
   if (response.ok) {

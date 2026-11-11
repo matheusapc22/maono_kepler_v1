@@ -1,5 +1,6 @@
-import { check, object, integer, text, createInput, changeInput, queryInput, requestHash, parseImportCsv, ManagementError } from './organization-management-contract.js';
+import { check, object, integer, text, createInput, changeInput, queryInput, requestHash, ManagementError } from './organization-management-contract.js';
 import { assertOrganizationNameAvailable, canonicalOrganizationName, organizationIdentity } from './organization-identity.js';
+import { deletionEnabled } from './organization-permanent-deletion.js';
 import { resolveProjectQuotaPolicy } from './organization-limit-service.js';
 
 const db = env => env.DB;
@@ -59,7 +60,7 @@ export async function workspace(env, url, deps) {
   const total = Number(count.results[0].total), pages = Math.max(1, Math.ceil(total / q.size)); q.page = Math.min(q.page, pages);
   const rows = await all(env, `${CTE}${SELECT} WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`, ...values, q.size, (q.page - 1) * q.size);
   return { organizations: rows.map(r => publicRow(r, env, deps)), pagination: { total, page: q.page, size: q.size, pages }, summary: summary.results[0],
-    capabilities: { projectQuotaEnforced: deps.quotaEnabled(env), edits: true, imports: true, permanentDelete: false,
+    capabilities: { projectQuotaEnforced: deps.quotaEnabled(env), edits: true, imports: false, permanentDelete: await deletionEnabled(env),
       usersLimitEditable: false, storageLimitEditable: false, exportsLimitEditable: false } };
 }
 export async function organizationRow(env, id) {
@@ -112,27 +113,12 @@ async function ownerByEmail(env, email) {
   const user = await one(env, 'SELECT id,name,email FROM users WHERE lower(email)=? AND active=1', email);
   check(user, 'Responsável não encontrado ou inativo.', 422, 'ORGANIZATION_OWNER_INELIGIBLE'); return user;
 }
-export async function validateImport(env, csv) {
-  const rows = parseImportCsv(csv), seen = new Set(), names = new Set();
-  for (const row of rows) {
-    if (row.error) continue;
-    try {
-      const nameKey = await assertOrganizationNameAvailable(env, row.input.name);
-      check(!names.has(nameKey), 'Nome repetido no arquivo.', 409, 'ORGANIZATION_NAME_EXISTS'); names.add(nameKey);
-      check(!seen.has(row.input.slug), 'Identificador repetido no arquivo.'); seen.add(row.input.slug);
-      const duplicate = await one(env, 'SELECT id FROM organizations WHERE slug=? OR lower(dropbox_root_path)=lower(?)', row.input.slug, `/projects/${row.input.slug}`);
-      check(!duplicate, 'Já existe organização com este identificador ou pasta.', 409, 'ORGANIZATION_EXISTS');
-      const owner = await ownerByEmail(env, row.input.ownerEmail); row.ownerId = owner.id;
-    } catch (e) { row.error = e.message; }
-  }
-  return { rows, valid: rows.every(r => !r.error), hash: await requestHash(rows.filter(r => r.input).map(r => r.input)) };
-}
 function operationInput(input) {
-  object(input, ['kind', 'items']); check(['create','import','change','pause','resume','review'].includes(input.kind), 'Operação inválida.');
+  object(input, ['kind', 'items']); check(['create','change','pause','resume','review'].includes(input.kind), 'Operação inválida.');
   check(Array.isArray(input.items) && input.items.length > 0 && input.items.length <= 100, 'Selecione de 1 a 100 itens.');
-  check(['import','pause','resume'].includes(input.kind) || input.items.length === 1, 'A operação exige um item.');
+  check(['pause','resume'].includes(input.kind) || input.items.length === 1, 'A operação exige um item.');
   let items;
-  if (['create','import'].includes(input.kind)) items = input.items.map(item => createInput(item, input.kind === 'create'));
+  if (input.kind==='create') items = input.items.map(item => createInput(item, input.kind === 'create'));
   else if (input.kind === 'review') items = input.items.map(value => {
     object(value, ['id','version','decision','reason','organizationVersion','projectLimit']);
     check(['approved','rejected'].includes(value.decision), 'Decisão inválida.');
@@ -143,6 +129,7 @@ function operationInput(input) {
   return { kind: input.kind, items };
 }
 export async function startOperation(env, actor, key, input) {
+  check(input?.kind!=='import','A importação de organizações foi descontinuada.',410,'ORGANIZATION_IMPORT_RETIRED');
   key = text(key || '', 'Chave de idempotência', 16, 160); const payload = operationInput(input), hash = await requestHash(payload);
   const current = await one(env, 'SELECT * FROM organization_management_operations WHERE actor_id=? AND idempotency_key=?', actor.id, key);
   if (current) { check(current.payload_hash === hash, 'Chave já usada para outra solicitação.', 409, 'ORGANIZATION_IDEMPOTENCY_CONFLICT'); return operation(env, actor, current.id); }
@@ -313,6 +300,7 @@ async function reviewItem(env,actor,payload,key,deps) {
 }
 export async function stepOperation(env,actor,id,retry,deps) {
   const op=await one(env,'SELECT * FROM organization_management_operations WHERE id=? AND actor_id=?',id,actor.id); check(op,'Operação não encontrada.',404,'ORGANIZATION_OPERATION_NOT_FOUND');
+  check(op.kind!=='import','A importação foi descontinuada. O histórico permanece disponível, sem retomar gravações.',410,'ORGANIZATION_IMPORT_RETIRED');
   const payload=parse(op.payload_json,[]), timestamp=now();
   const item=await one(env,`SELECT * FROM organization_management_operation_items WHERE operation_id=? AND (state='pending' OR (state='running' AND lease_until<?) OR (?=1 AND state IN ('partial','failed') AND retryable=1)) ORDER BY item_index LIMIT 1`,id,timestamp,retry?1:0);
   if(!item) return operation(env,actor,id);
@@ -325,7 +313,7 @@ export async function stepOperation(env,actor,id,retry,deps) {
       const req=await one(env,'SELECT organization_id FROM organization_limit_requests WHERE id=?',input.id); check(req,'Pedido não encontrado.',404);
       await deps.authorizeOrganization(req.organization_id);
       outcome=await reviewItem(env,actor,input,key,deps);
-    } else if(['create','import'].includes(op.kind)) {
+    } else if(op.kind==='create') {
       await deps.authorizeGlobal(); outcome=await createItem(env,actor,input,key,deps);
     } else { await deps.authorizeOrganization(input.id); outcome=await changeItem(env,actor,input,key,deps); }
   } catch(e) {

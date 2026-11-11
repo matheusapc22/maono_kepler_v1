@@ -56,6 +56,9 @@ jobs:
           tests/organization-lifecycle-concurrency.test.mjs
           tests/organization-lifecycle-wiring.test.mjs
           tests/organization-lifecycle.test.mjs
+          tests/organization-permanent-deletion.test.mjs
+          tests/organization-deletion-storage-fence.test.mjs
+          tests/organization-deletion-review.test.mjs
           tests/organization-management-integration.test.mjs
           tests/organization-management.test.mjs
           tests/organization-creation-identity.test.mjs

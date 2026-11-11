@@ -92,7 +92,12 @@ test("sync não importa arquivos antes do storage READY", () => {
   assert.match(syncSource, /stableFolderSuffix/);
 });
 
-test("update mantém caminho de delete isolado do lifecycle de ativação", () => {
-  assert.match(updateSource, /SET active = 0,[\s\S]*storage_status = 'DISABLED'/);
+test("DELETE legado retorna 410 protegido sem mutação e mantém ativação no lifecycle", () => {
+  const deletionBlock = updateSource.match(/if \(request\.method === "DELETE"\) \{([\s\S]*?)\n    \}/)?.[1];
+  assert.ok(deletionBlock, "A rota legada deve responder explicitamente, sem cair em outro handler");
+  assert.match(deletionBlock, /await requireOrganizationAdminPanelAccess/);
+  assert.match(deletionBlock, /return errorResponse\([\s\S]*?,\s*410,\s*'ORGANIZATION_PERMANENT_DELETE_REQUIRED'/);
+  assert.doesNotMatch(deletionBlock, /env\.DB|\.prepare\(|\.batch\(|updateOrganizationLifecycle|deleteDropbox|DELETE FROM|UPDATE organizations/);
+  assert.doesNotMatch(updateSource, /deleteOrganization\(|deleteDropboxPath/);
   assert.doesNotMatch(updateSource, /SET[\s\S]{0,200}active = 1/);
 });

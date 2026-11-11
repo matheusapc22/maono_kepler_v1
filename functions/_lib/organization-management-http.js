@@ -1,4 +1,5 @@
 import { ManagementError, check, object, integer, text } from './organization-management-contract.js';
+import * as deletion from './organization-permanent-deletion.js';
 import * as service from './organization-management-service.js';
 
 const base = '/api/admin/organization-management';
@@ -34,6 +35,7 @@ export async function handleOrganizationManagement(context,deps) {
     else if(method==='GET' && route[0]==='organizations' && route.length>=2 && route.length<=3) {
       const id=integer(route[1]);await bound.authorizeOrganization(id);
       if(route.length===2) result=await service.detail(env,id,bound);
+      else if(route[2]==='deletion-preview') result=await deletion.deletionPreview(env,id);
       else if(route[2]==='people') result={people:await service.people(env,id)};
       else if(route[2]==='documents') result=await service.documents(env,id,request.url);
       else if(route[2]==='activity') result=await service.activity(env,id,request.url);
@@ -41,7 +43,12 @@ export async function handleOrganizationManagement(context,deps) {
     } else if(method==='GET' && route.join('/')==='candidates') result={users:await service.candidates(env,request.url)};
     else if(method==='GET' && route.join('/')==='name-availability') result=await service.nameAvailability(env,request.url);
     else if(method==='GET' && route.join('/')==='requests') result=await service.requests(env,request.url);
-    else if(method==='POST' && route.join('/')==='import/validate') {object(body,['csv']);result=await service.validateImport(env,body.csv);}
+    else if(method==='POST' && route.join('/')==='import/validate') throw new ManagementError('A importação de organizações foi descontinuada.',410,'ORGANIZATION_IMPORT_RETIRED');
+    else if(method==='POST' && route.length===3 && route[0]==='organizations' && route[2]==='permanent-delete') {
+      const id=integer(route[1]);await bound.authorizeOrganization(id);result=await deletion.startDeletion(env,actor,id,request.headers.get('Idempotency-Key'),body);
+    } else if(method==='GET' && route.join('/')==='deletions/by-key') result=await deletion.deletionByKey(env,actor,url.searchParams.get('key'));
+    else if(route[0]==='deletions' && route.length===2 && method==='GET') result=await deletion.deletionStatus(env,actor,route[1]);
+    else if(route[0]==='deletions' && route.length===3 && route[2]==='step' && method==='POST') {object(body,[]);result=await deletion.stepDeletion(env,actor,route[1],bound);}
     else if(route.join('/')==='operations') {
       result=method==='GET'?{operations:await service.operations(env,actor)}:await service.startOperation(env,actor,request.headers.get('Idempotency-Key'),body);
     } else if(route.join('/')==='operations/by-key' && method==='GET') result=await service.operationByKey(env,actor,url.searchParams.get('key'));
