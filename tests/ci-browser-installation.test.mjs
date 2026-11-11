@@ -231,3 +231,21 @@ test('linked, nonregular and missing referenced mirror files fail closed before 
   const fs = syntheticAptFiles({ '/etc/apt/sources.list': files['/etc/apt/sources.list'] });
   assert.throws(() => readRunnerSources(fs.io), /apt-mirrors.txt/);
 });
+
+
+test('browser installer jobs pin Ubuntu 24.04 supported by Playwright 1.55 instead of ubuntu-latest', () => {
+  let browserJobs = 0;
+  for (const name of readdirSync('.github/workflows')) {
+    if (!name.endsWith('.yml')) continue;
+    const source = readFileSync(`.github/workflows/${name}`, 'utf8');
+    // Repository workflow jobs use two-space keys; inspect each job separately
+    // so an unrelated pinned job cannot hide an unsupported browser runner.
+    for (const job of source.split(/(?=^  [\w-]+:\s*$)/m)) {
+      if (!job.includes('run: node scripts/install-ci-browsers.mjs')) continue;
+      browserJobs++;
+      assert.match(job, /^    runs-on: ubuntu-24\.04\s*$/m, `${name}: browser job must pin its supported OS`);
+      assert.doesNotMatch(job, /^    runs-on: ubuntu-latest\s*$/m, name);
+    }
+  }
+  assert.equal(browserJobs, 15);
+});

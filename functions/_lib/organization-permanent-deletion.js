@@ -1,3 +1,4 @@
+import {classifyProtectedMetadata, protectedMetadataName} from './d1-protected-metadata.js';
 import {check, integer, object, text, ManagementError} from './organization-management-contract.js';
 import {getDropboxMetadata, listDropboxFolderAll} from './dropbox.js';
 import {getDropboxClient} from './dropbox-client.js';
@@ -40,7 +41,10 @@ async function readStatementBatch(env, statements) {
   return rows;
 }
 async function inventory(env,id) {
-  const tables=await all(env,"SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'");
+  const objects=await all(env,"SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT GLOB 'sqlite_*'");
+  const classification=classifyProtectedMetadata(objects);
+  check(classification.issues.length===0,'Schema interno desconhecido.',503,'ORGANIZATION_DELETE_SCHEMA_REQUIRED');
+  const tables=objects.filter(row=>row.type==='table'&&!classification.recognized.includes(row.name));
   const guards=new Set((await all(env,"SELECT name FROM sqlite_master WHERE type='trigger'")).map(r=>r.name));
   const metadata=await readStatementBatch(env,tables.flatMap(({name})=>[
     statement(env,`PRAGMA table_info(${quote(name)})`),
@@ -49,6 +53,7 @@ async function inventory(env,id) {
   const blockers=[],business=[];
   for(let index=0;index<tables.length;index++) {
     const {name}=tables[index],columns=metadata[index*2],foreignKeys=metadata[index*2+1];
+    check(!foreignKeys.some(fk=>protectedMetadataName(fk.table)),'Dependência interna desconhecida.',503,'ORGANIZATION_DELETE_SCHEMA_REQUIRED');
     check(columns.length>0,'Schema de dependências mudou durante a consulta.',503,'ORGANIZATION_DELETE_SCHEMA_REQUIRED');
     if(foreignKeys.some(fk=>fk.table==='organizations' && fk.from!=='organization_id' && !(name==='sessions'&&fk.from==='active_organization_id')))blockers.push({code:'UNGUARDED_DEPENDENCY',count:1});
     if(!columns.some(c=>c.name==='organization_id') || retained.has(name))continue;

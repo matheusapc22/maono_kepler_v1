@@ -72,7 +72,7 @@ permissions:
   contents: read
 jobs:
   project-pages:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Preserve the complete three-engine suite plus focused gesture feedback.
     # Browser dependency downloads can be slow; no individual test timeout or
     # assertion is relaxed to fit the combined build/evidence job.

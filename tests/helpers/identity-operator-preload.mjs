@@ -17,6 +17,9 @@ function readFault(child,args) {
   const sql=args.includes('--command')?args[args.indexOf('--command')+1]:'';
   const stage=args.includes('time-travel')?'D1_TIME_TRAVEL_INFO':args.includes('info')?'D1_INFO':
     sql.includes('inventory_json')?'ORGANIZATION_IDENTITY_SNAPSHOT':
+    sql.startsWith('SELECT s.type,s.name,s.tbl_name,s.sql FROM sqlite_schema')?'DELETION_OBJECTS':
+    sql.includes('JOIN pragma_table_xinfo(s.name)')?'DELETION_COLUMNS':
+    sql.includes('JOIN pragma_foreign_key_list(s.name)')?'DELETION_FOREIGN_KEYS':
     sql==='SELECT id, name, applied_at FROM d1_migrations ORDER BY id;'?'D1_LEDGER':
     sql==='PRAGMA quick_check;'?'D1_QUICK_CHECK':sql==='PRAGMA foreign_key_check;'?'D1_FOREIGN_KEY_CHECK':null;
   const [kind,target]=String(process.env.IDENTITY_FIXTURE_FAULT||'').split(':');

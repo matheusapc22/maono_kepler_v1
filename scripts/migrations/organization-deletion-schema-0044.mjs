@@ -1,3 +1,4 @@
+import {classifyProtectedMetadata, protectedMetadataName} from '../../functions/_lib/d1-protected-metadata.js';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { PRODUCTION_DATABASE_NAME, runWranglerJson, rowsFromD1Json, gateError, sha256Text } from './production-migration-lib.mjs';
@@ -12,8 +13,8 @@ const SOURCE_HASHES = Object.freeze({
 const scope = "s.name NOT GLOB 'sqlite_*'";
 export const DELETION_SCHEMA_QUERIES = Object.freeze({
   objects:`SELECT s.type,s.name,s.tbl_name,s.sql FROM sqlite_schema s WHERE ${scope} ORDER BY s.type,s.name;`,
-  columns:`SELECT s.name AS table_name,p.cid,p.name,p.type,p.\"notnull\",p.dflt_value,p.pk,p.hidden FROM sqlite_schema s JOIN pragma_table_xinfo(s.name) p WHERE s.type='table' AND ${scope} ORDER BY s.name,p.cid;`,
-  foreignKeys:`SELECT s.name AS table_name,p.id,p.seq,p.\"table\" AS parent_table,p.\"from\" AS from_column,p.\"to\" AS to_column,p.on_update,p.on_delete,p.match FROM sqlite_schema s JOIN pragma_foreign_key_list(s.name) p WHERE s.type='table' AND ${scope} ORDER BY s.name,p.id,p.seq;`,
+  columns:`SELECT s.name AS table_name,p.cid,p.name,p.type,p.\"notnull\",p.dflt_value,p.pk,p.hidden FROM sqlite_schema s JOIN pragma_table_xinfo(s.name) p WHERE s.type='table' AND ${scope} AND s.name NOT IN ('_cf_METADATA','_cf_KV') ORDER BY s.name,p.cid;`,
+  foreignKeys:`SELECT s.name AS table_name,p.id,p.seq,p.\"table\" AS parent_table,p.\"from\" AS from_column,p.\"to\" AS to_column,p.on_update,p.on_delete,p.match FROM sqlite_schema s JOIN pragma_foreign_key_list(s.name) p WHERE s.type='table' AND ${scope} AND s.name NOT IN ('_cf_METADATA','_cf_KV') ORDER BY s.name,p.id,p.seq;`,
 });
 const identifier = value => typeof value==='string' && /^[A-Za-z_][A-Za-z_0-9]{0,127}$/.test(value);
 const fail = code => { throw gateError(code,'0044 metadata audit blocked; no production writes performed.'); };
@@ -34,7 +35,8 @@ function validate(snapshot) {
   const tables=new Set(snapshot.objects.filter(r=>r.type==='table').map(r=>r.name));
   if(!tables.has('organizations'))fail('DELETION_METADATA_INCOMPLETE');
   for(const row of snapshot.columns)if(!tables.has(row.table_name)||!identifier(row.name)||!Number.isSafeInteger(row.cid)||row.cid<0||typeof row.type!=='string'||![0,1].includes(row.notnull)||!Number.isSafeInteger(row.pk)||![0,1,2,3].includes(row.hidden)||(row.dflt_value!==null&&typeof row.dflt_value!=='string'))fail('DELETION_METADATA_INVALID');
-  for(const table of tables)if(!snapshot.columns.some(r=>r.table_name===table))fail('DELETION_METADATA_INCOMPLETE');
+  const protectedNames=new Set(classifyProtectedMetadata(snapshot.objects).recognized);
+  for(const table of tables)if(!protectedNames.has(table)&&!snapshot.columns.some(r=>r.table_name===table))fail('DELETION_METADATA_INCOMPLETE');
   if(new Set(snapshot.columns.map(r=>r.table_name+':'+r.cid)).size!==snapshot.columns.length)fail('DELETION_METADATA_INVALID');
   for(const row of snapshot.foreignKeys)if(!tables.has(row.table_name)||!identifier(row.parent_table)||!identifier(row.from_column)||(row.to_column!==null&&!identifier(row.to_column))||!Number.isSafeInteger(row.id)||row.id<0||!Number.isSafeInteger(row.seq)||row.seq<0||!['NO ACTION','RESTRICT','SET NULL','SET DEFAULT','CASCADE'].includes(row.on_delete)||!['NO ACTION','RESTRICT','SET NULL','SET DEFAULT','CASCADE'].includes(row.on_update)||row.match!=='NONE')fail('DELETION_METADATA_INVALID');
   return tables;
@@ -55,7 +57,9 @@ export function deletionSchemaReference(read=readSource){
 }
 export function evaluateDeletionSchema(snapshot,reference=deletionSchemaReference()){
   const tables=validate(snapshot);validate(reference.before);
-  const mismatches=[];
+  const classification=classifyProtectedMetadata(snapshot.objects);
+  const mismatches=[...classification.issues];
+  for(const fk of snapshot.foreignKeys)if(protectedMetadataName(fk.parent_table))mismatches.push({code:'PROTECTED_METADATA_REFERENCE',name:fk.table_name});
   // The ledger is outside schema.sql but has a fixed, narrow non-business shape.
   // Do not exclude a prefix: arbitrary d1_ and _cf_ objects can reference tenants.
   const ledger=snapshot.objects.find(r=>r.name==='d1_migrations');
@@ -69,6 +73,7 @@ export function evaluateDeletionSchema(snapshot,reference=deletionSchemaReferenc
     if(!valid)mismatches.push({code:'LEDGER_SCHEMA',name:'d1_migrations'});
     else compared={objects:snapshot.objects.filter(r=>r.name!=='d1_migrations'),columns:snapshot.columns.filter(r=>r.table_name!=='d1_migrations'),foreignKeys:snapshot.foreignKeys};
   }
+  compared={...compared,objects:compared.objects.filter(r=>!classification.recognized.includes(r.name))};
   const expected=new Map(reference.before.objects.map(r=>[r.name,r]));
   const observed=new Map(compared.objects.map(r=>[r.name,r]));
   for(const [name,want] of expected){const got=observed.get(name);if(!got||got.type!==want.type||got.tbl_name!==want.tbl_name||digest(sqlTokens(got.sql))!==digest(sqlTokens(want.sql)))mismatches.push({code:'OBJECT_DEFINITION',name});}
@@ -89,6 +94,7 @@ export function evaluateDeletionSchema(snapshot,reference=deletionSchemaReferenc
   });
   // Raw definitions/default literals never leave the runner in the evidence.
   const report={version:1,migration:DELETION_MIGRATION,compatible:mismatches.length===0,mismatches,
+    protectedInternals:classification.recognized.map(name=>({name,classification:'workerd-protected',introspection:'not-permitted',definitionDigest:digest(sqlTokens(snapshot.objects.find(r=>r.name===name).sql))})),
     tableCount:tables.size,tables:[...tables].sort(),dependencies,
     objects:snapshot.objects.map(({type,name,tbl_name,sql})=>({type,name,table:tbl_name,definitionDigest:digest(sqlTokens(sql))})),
     metadataDigest:digest(snapshot),plannedGuards:reference.guards.map(r=>({name:r.name,definitionDigest:digest(sqlTokens(r.sql))})),
@@ -98,7 +104,11 @@ export function evaluateDeletionSchema(snapshot,reference=deletionSchemaReferenc
 export function assertDeletionSchema(report){if(!report?.compatible)fail('DELETION_SCHEMA_BLOCKED');}
 export async function readDeletionSchema(configPath,injected={}){
   const reference=deletionSchemaReference(); // Validate sources before any remote access.
-  const read=async()=>{const result={};for(const [key,sql] of Object.entries(DELETION_SCHEMA_QUERIES))result[key]=rowsFromD1Json(await runWranglerJson(['d1','execute',PRODUCTION_DATABASE_NAME,'--remote','--command',sql],configPath,injected,'DELETION_METADATA'));validate(result);return result;};
+  const stages={objects:'DELETION_OBJECTS',columns:'DELETION_COLUMNS',foreignKeys:'DELETION_FOREIGN_KEYS'};
+  const read=async()=>{const result={};for(const [key,sql] of Object.entries(DELETION_SCHEMA_QUERIES)){
+    result[key]=rowsFromD1Json(await runWranglerJson(['d1','execute',PRODUCTION_DATABASE_NAME,'--remote','--command',sql],configPath,injected,stages[key]));
+    if(key==='objects'&&classifyProtectedMetadata(result.objects).issues.length)fail('DELETION_PROTECTED_METADATA_BLOCKED');
+  }validate(result);return result;};
   const first=await read(),second=await read();
   if(digest(first)!==digest(second))fail('DELETION_METADATA_DRIFT');
   return evaluateDeletionSchema(second,reference);
