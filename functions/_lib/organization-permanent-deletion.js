@@ -40,7 +40,7 @@ async function readStatementBatch(env, statements) {
   return rows;
 }
 async function inventory(env,id) {
-  const tables=await all(env,"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%'");
+  const tables=await all(env,"SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'");
   const guards=new Set((await all(env,"SELECT name FROM sqlite_master WHERE type='trigger'")).map(r=>r.name));
   const metadata=await readStatementBatch(env,tables.flatMap(({name})=>[
     statement(env,`PRAGMA table_info(${quote(name)})`),

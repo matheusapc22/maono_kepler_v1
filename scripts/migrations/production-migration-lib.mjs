@@ -31,7 +31,7 @@ const WRANGLER_READ_STAGES = new Set([
   'UNSPECIFIED_READ', 'D1_INFO', 'D1_LEDGER', 'D1_QUICK_CHECK',
   'D1_FOREIGN_KEY_CHECK', 'D1_TIME_TRAVEL_INFO',
   'CC08_SCHEMA', 'CC09_SCHEMA', 'CC10_SCHEMA', 'CC11_SCHEMA',
-  'CC12_SCHEMA', 'CC13_SCHEMA', 'CC15_SCHEMA',
+  'CC12_SCHEMA', 'CC13_SCHEMA', 'CC15_SCHEMA', 'DELETION_METADATA',
   'ORGANIZATION_SCHEMA', 'ORGANIZATION_LEDGER', 'ORGANIZATION_QA_INVENTORY',
   'ORGANIZATION_IDENTITY_SNAPSHOT',
 ]);
@@ -227,6 +227,9 @@ export function approvalMaterial({ migration, migrationSha256, gitSha, pendingDi
   if (!UUID.test(databaseId || '')) throw gateError('DATABASE_ID_INVALID', 'UUID do banco inválido.');
   if (normalizedMigration === '0043_organization_creation_identity.sql' && !HEX_64.test(evidenceDigest || '')) {
     throw gateError('IDENTITY_EVIDENCE_REQUIRED', '0043 exige snapshot completo e hash do arquivo de execução.');
+  }
+  if (normalizedMigration === '0044_organization_permanent_deletion.sql' && !HEX_64.test(evidenceDigest || '')) {
+    throw gateError('DELETION_EVIDENCE_REQUIRED', '0044 requires complete metadata evidence.');
   }
   return [
     `reportVersion=${REPORT_VERSION}`,
