@@ -1,5 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {readFileSync} from "node:fs";
+import {mkdtempSync, mkdirSync, writeFileSync, rmSync} from "node:fs";
+import {tmpdir} from "node:os";
+import path from "node:path";
+import {fileURLToPath} from "node:url";
+import {spawnSync} from "node:child_process";
+
+test("real CLI scans and enforces strict baseline on Windows and POSIX", (t) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "error sink CLI "));
+  t.after(() => rmSync(directory, {recursive: true, force: true}));
+  mkdirSync(path.join(directory, "src"));
+  writeFileSync(path.join(directory, "src", "fixture.ts"), "const value = error.message;\n");
+  writeFileSync(path.join(directory, "baseline.json"), JSON.stringify({
+    version: 3, rules: ["raw-error-message"], byFile: {},
+  }));
+  const script = fileURLToPath(new URL("./audit-user-error-sinks.mjs", import.meta.url));
+  const result = spawnSync(process.execPath, [script, "--json", "--baseline", "baseline.json", "--strict-baseline"], {
+    cwd: directory, encoding: "utf8", timeout: 10000, windowsHide: true,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 1, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.summary.byFile["src/fixture.ts::raw-error-message"], 1);
+  assert.match(result.stderr, /src\/fixture\.ts::raw-error-message: 0 -> 1/);
+});
 
 import {
   buildBaseline,
@@ -149,4 +174,23 @@ test("vocabulário de implementação permanece review-only e não quebra ratche
     byFile: {},
   };
   assert.deepEqual(compareWithBaseline(summary, baseline), []);
+});
+
+test('organization deletion diagnostic hits are only the reviewed idempotency key', () => {
+  const file='src/pages/Admin/organizations/OrganizationDeletionPanel.tsx';
+  const source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
+  const findings=scanText(source,file);
+  const diagnostics=findings.filter(finding=>finding.rule==='diagnostic-id');
+  // These are internal UUID plumbing, not server Error.message/request diagnostics
+  // rendered to the operator. Any additional usage requires a fresh review.
+  assert.equal(diagnostics.length,2);
+  const lines=source.split(/\r?\n/);
+  assert.deepEqual(diagnostics.map(finding=>lines[finding.line-1].trim()),[
+    'const requestId=key.current||crypto.randomUUID();remember(null,requestId);setUncertain(true);',
+    "value=(await api<{deletion:Deletion}>(`/organizations/${organizationId}/permanent-delete`,{body:{version:preview.version,confirmation},key:requestId,signal:c.signal,timeoutMs:20000})).deletion;",
+  ]);
+  assert.equal(findings.some(finding=>['raw-error-message','raw-response-text'].includes(finding.rule)),false);
+  assert.doesNotMatch(source.slice(source.indexOf('return <section')),/\brequestId\b/);
+  const baseline=JSON.parse(readFileSync(new URL('./user-error-sink-baseline.json',import.meta.url),'utf8'));
+  assert.equal(baseline.byFile[file+'::diagnostic-id'],2);
 });
