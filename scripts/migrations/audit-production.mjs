@@ -1,3 +1,4 @@
+import { DELETION_MIGRATION, readDeletionSchema, assertDeletionSchema } from './organization-deletion-schema-0044.mjs';
 import { IDENTITY_MIGRATION, collectIdentityEvidence, guardedIdentityMigration, identityApprovalEvidence } from './organization-identity-0043.mjs';
 import {CC15_MIGRATION,readCC15Schema,assertCC15Schema} from './cc15-schema-preflight.mjs';
 import {CC13_MIGRATION,readCC13Schema,assertCC13Schema} from './cc13-schema-preflight.mjs';
@@ -52,17 +53,17 @@ try {
     throw gateError('DATABASE_INTEGRITY_FAILED', 'O preflight encontrou falha de integridade; autorização de produção foi bloqueada.');
   }
 
-  const schemaPreflight=migration.name===CC15_MIGRATION ? await readCC15Schema(temporary.configPath,remote.ledger) : migration.name===CC13_MIGRATION ? await readCC13Schema(temporary.configPath,remote.ledger) : migration.name===CC12_MIGRATION ? await readCC12Schema(temporary.configPath,remote.ledger) : migration.name===CC11_MIGRATION ? await readCC11Schema(temporary.configPath,remote.ledger) : migration.name===CC08_MIGRATION ? await readCC08Schema(temporary.configPath,remote.ledger) : migration.name===CC09_MIGRATION ? await readCC09Schema(temporary.configPath,remote.ledger) : migration.name===CC10_MIGRATION ? await readCC10Schema(temporary.configPath,remote.ledger) : null;
+  const schemaPreflight=migration.name===DELETION_MIGRATION ? await readDeletionSchema(temporary.configPath) : migration.name===CC15_MIGRATION ? await readCC15Schema(temporary.configPath,remote.ledger) : migration.name===CC13_MIGRATION ? await readCC13Schema(temporary.configPath,remote.ledger) : migration.name===CC12_MIGRATION ? await readCC12Schema(temporary.configPath,remote.ledger) : migration.name===CC11_MIGRATION ? await readCC11Schema(temporary.configPath,remote.ledger) : migration.name===CC08_MIGRATION ? await readCC08Schema(temporary.configPath,remote.ledger) : migration.name===CC09_MIGRATION ? await readCC09Schema(temporary.configPath,remote.ledger) : migration.name===CC10_MIGRATION ? await readCC10Schema(temporary.configPath,remote.ledger) : null;
   if(schemaPreflight && !schemaPreflight.compatible){
     await ensureReportDir();
     const blockedPath=args.report ? resolve(args.report) : defaultAuditReportPath(migration.name,git.sha);
     await writeJsonReport(blockedPath,{phase:'schema-preflight-blocked',writesPerformed:false,readyForAuthorization:false,git,database:remote.identity,schemaPreflight,integrity,backup});
-    if(migration.name===CC15_MIGRATION) assertCC15Schema(schemaPreflight); else if(migration.name===CC13_MIGRATION) assertCC13Schema(schemaPreflight); else if(migration.name===CC12_MIGRATION) assertCC12Schema(schemaPreflight); else if(migration.name===CC11_MIGRATION) assertCC11Schema(schemaPreflight); else if(migration.name===CC10_MIGRATION) assertCC10Schema(schemaPreflight); else if(migration.name===CC09_MIGRATION) assertCC09Schema(schemaPreflight); else assertCC08Schema(schemaPreflight);
+    if(migration.name===DELETION_MIGRATION) assertDeletionSchema(schemaPreflight); else if(migration.name===CC15_MIGRATION) assertCC15Schema(schemaPreflight); else if(migration.name===CC13_MIGRATION) assertCC13Schema(schemaPreflight); else if(migration.name===CC12_MIGRATION) assertCC12Schema(schemaPreflight); else if(migration.name===CC11_MIGRATION) assertCC11Schema(schemaPreflight); else if(migration.name===CC10_MIGRATION) assertCC10Schema(schemaPreflight); else if(migration.name===CC09_MIGRATION) assertCC09Schema(schemaPreflight); else assertCC08Schema(schemaPreflight);
   }
   const identityEvidence = migration.name === IDENTITY_MIGRATION
     ? await collectIdentityEvidence(temporary.configPath, remote, migration, 'pre') : null;
   const identityExecution = identityEvidence ? guardedIdentityMigration(identityEvidence) : null;
-  const evidenceDigest = identityEvidence ? identityApprovalEvidence(identityEvidence, identityExecution) : undefined;
+  const evidenceDigest = identityEvidence ? identityApprovalEvidence(identityEvidence, identityExecution) : migration.name===DELETION_MIGRATION ? schemaPreflight.digest : undefined;
   const approval = buildApproval({
     migration: migration.name,
     migrationSha256: migration.sha256,
@@ -109,6 +110,7 @@ try {
     integrity,
     backup,
     schemaPreflight,
+    ...(migration.name===DELETION_MIGRATION ? {evidenceDigest} : {}),
     ...(identityEvidence ? {
       identityEvidence:identityEvidence.report,
       execution:{ sha256:identityExecution.sha256, sourceSha256:identityExecution.sourceSha256,

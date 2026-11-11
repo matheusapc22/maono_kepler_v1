@@ -176,3 +176,9 @@ test('failed or incomplete batched introspection stops before claiming or provid
     const p=await f.call('/organizations/3/deletion-preview');assert.ok(p.status>=500,mode);assert.equal(f.removeCount(),0);assert.equal(f.db.prepare('SELECT COUNT(*) n FROM organization_deletions').get().n,0);
   }
 });
+for(const name of ['d1_business','_cf_business','acfXbusiness','d1Xbusiness','sqliteXbusiness'])
+test('prefixed business dependency cannot bypass deletion: '+name,async t=>{
+ const f=fixture(t);f.db.exec(`CREATE TABLE ${name}(id INTEGER PRIMARY KEY,organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE); INSERT INTO ${name}(id,organization_id) VALUES(1,3);`);
+ const p=(await f.call('/organizations/3/deletion-preview')).data;
+ assert.equal(p.eligible,false);assert.ok(p.blockers.some(x=>x.code==='UNGUARDED_DEPENDENCY'));assert.equal(f.removeCount(),0);
+});

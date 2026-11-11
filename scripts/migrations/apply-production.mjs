@@ -1,3 +1,4 @@
+import { DELETION_MIGRATION, readDeletionSchema, assertDeletionSchema } from './organization-deletion-schema-0044.mjs';
 import { IDENTITY_MIGRATION, collectIdentityEvidence, guardedIdentityMigration, identityApprovalEvidence,
   assertIdentityEvidenceUnchanged, collectIdentityPostValidation } from './organization-identity-0043.mjs';
 import {CC15_MIGRATION,readCC15Schema,assertCC15Schema} from './cc15-schema-preflight.mjs';
@@ -93,10 +94,15 @@ try {
     const currentSchema=await readCC10Schema(preflightTemporary.configPath,remote.ledger);assertCC10Schema(currentSchema);
     if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC10_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
   }
+  const deletionSchema = migration.name===DELETION_MIGRATION ? await readDeletionSchema(preflightTemporary.configPath) : null;
+  if(deletionSchema){
+    assertDeletionSchema(deletionSchema);
+    if(audit.schemaPreflight?.digest!==deletionSchema.digest || audit.evidenceDigest!==deletionSchema.digest)throw gateError('DELETION_METADATA_DRIFT','0044 evidence changed; audit and authorization required again.');
+  }
   let identityEvidence = migration.name === IDENTITY_MIGRATION
     ? await collectIdentityEvidence(preflightTemporary.configPath, remote, migration, 'pre') : null;
   let identityExecution = identityEvidence ? guardedIdentityMigration(identityEvidence) : null;
-  const evidenceDigest = identityEvidence ? identityApprovalEvidence(identityEvidence, identityExecution) : undefined;
+  const evidenceDigest = identityEvidence ? identityApprovalEvidence(identityEvidence, identityExecution) : deletionSchema?.digest;
   if (identityEvidence) {
     assertIdentityEvidenceUnchanged(audit.identityEvidence, identityEvidence.report);
     if (audit.evidenceDigest !== evidenceDigest || audit.execution?.sha256 !== identityExecution.sha256 ||
@@ -147,6 +153,12 @@ try {
     if (!finalGit.clean || finalGit.sha !== git.sha || finalSource.sha256 !== migration.sha256) {
       throw gateError('IDENTITY_LOCAL_DRIFT', 'Git ou SQL local mudou antes da escrita; novo audit obrigatório.');
     }
+  }
+
+  if(deletionSchema){
+    const finalSchema=await readDeletionSchema(preflightTemporary.configPath);
+    assertDeletionSchema(finalSchema);
+    if(finalSchema.digest!==evidenceDigest)throw gateError('DELETION_METADATA_DRIFT','0044 metadata changed before write.');
   }
 
   // Critical safety property: the config used for `migrations apply` contains
