@@ -118,7 +118,27 @@ export function getRevisionedPreviewFileNameFromConfigFile(
   return `${canonicalName}.r${normalizedRevision}.png`;
 }
 
-async function createDropboxFolderWithClient(client, path) {
+// Tombstones are a storage write fence even when feature flags are rolled back.
+// Probe without caching absence: a migration/claim may commit between attempts.
+export async function assertDropboxPathWritable(env, path) {
+  const db = env.DB || env.D1 || env.MAONO_DB;
+  if (!db?.prepare) return; // Standalone provider consumers have no D1 binding.
+  const installed = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='organization_deletions'").first();
+  if (!installed) return;
+  const target = "/" + normalizeDropboxFolderPath(path).split("/").filter(Boolean).join("/").toLowerCase();
+  const deleted = await db.prepare(
+    "SELECT 1 FROM organization_deletions WHERE lower(path)=? OR substr(?,1,length(path)+1)=lower(path)||'/' OR ?='/organizations/'||organization_id OR substr(?,1,length('/organizations/'||organization_id)+1)='/organizations/'||organization_id||'/' LIMIT 1"
+  ).bind(target, target, target, target).first();
+  if (deleted) {
+    const error = new Error("O armazenamento desta organização está bloqueado para exclusão.");
+    error.code = "ORGANIZATION_DELETION_LOCKED";
+    error.status = 409;
+    error.retryable = false;
+    throw error;
+  }
+}
+
+async function createDropboxFolderWithClient(client, path, beforeWrite) {
   const normalizedPath = normalizeDropboxFolderPath(path);
 
   if (!normalizedPath) return null;
@@ -127,17 +147,20 @@ async function createDropboxFolderWithClient(client, path) {
     operation: "files.create_folder_v2",
     url: DROPBOX_CREATE_FOLDER_URL,
     timeoutMs: DROPBOX_METADATA_TIMEOUT_MS,
-    buildInit: ({ accessToken }) => ({
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        path: normalizedPath,
-        autorename: false,
-      }),
-    }),
+    buildInit: async ({ accessToken }) => {
+      await beforeWrite();
+      return {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          path: normalizedPath,
+          autorename: false,
+        }),
+      };
+    },
   });
 
   if (response.ok) return await response.json();
@@ -182,6 +205,7 @@ async function createDropboxFolderWithClient(client, path) {
 }
 
 export async function ensureDropboxFolder(env, path) {
+  await assertDropboxPathWritable(env, path);
   if (isLocalStorageMode(env)) {
     return await ensureLocalStorageFolder(env, path);
   }
@@ -195,7 +219,7 @@ export async function ensureDropboxFolder(env, path) {
 
   for (const part of parts) {
     current = `${current}/${part}`;
-    await createDropboxFolderWithClient(client, current);
+    await createDropboxFolderWithClient(client, current, () => assertDropboxPathWritable(env, normalizedPath));
   }
 
   return { path: normalizedPath };
@@ -490,6 +514,7 @@ export async function uploadDropboxBinaryFile(
     throw error;
   }
 
+  await assertDropboxPathWritable(env, joinDropboxPath(rootPath, fileName));
   if (isLocalStorageMode(env)) {
     return await uploadLocalStorageFile(
       env,
@@ -511,21 +536,24 @@ export async function uploadDropboxBinaryFile(
     operation: "files.upload",
     url: DROPBOX_UPLOAD_URL,
     timeoutMs: DROPBOX_CONTENT_TIMEOUT_MS,
-    buildInit: ({ accessToken }) => ({
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
-        "Dropbox-API-Arg": JSON.stringify({
-          path,
-          mode: createOnly ? "add" : "overwrite",
-          autorename: false,
-          mute: false,
-          strict_conflict: createOnly,
-        }),
-      },
-      body: content,
-    }),
+    buildInit: async ({ accessToken }) => {
+      await assertDropboxPathWritable(env, path);
+      return {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
+          "Dropbox-API-Arg": JSON.stringify({
+            path,
+            mode: createOnly ? "add" : "overwrite",
+            autorename: false,
+            mute: false,
+            strict_conflict: createOnly,
+          }),
+        },
+        body: content,
+      };
+    },
   });
 
   if (!response.ok) {
@@ -579,15 +607,18 @@ async function uploadSessionRequest(
     // mutation blindly can advance the cursor twice, so SAVE-03 keeps these
     // operations bounded by timeout but does not retry them automatically.
     maxRetries: 0,
-    buildInit: ({ accessToken }) => ({
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
-        "Dropbox-API-Arg": JSON.stringify(apiArgument),
-      },
-      body: content,
-    }),
+    buildInit: async ({ accessToken }) => {
+      if (apiArgument.commit?.path) await assertDropboxPathWritable(env, apiArgument.commit.path);
+      return {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
+          "Dropbox-API-Arg": JSON.stringify(apiArgument),
+        },
+        body: content,
+      };
+    },
   });
 
   if (!response.ok) {

@@ -1,12 +1,13 @@
 import {test as base,expect} from '@playwright/test';
 import {readFileSync} from 'node:fs';
+import {getDropboxClient} from '../../functions/_lib/dropbox-client.js';
 import {persistenceFixture} from '../helpers/project-persistence-fixture.mjs';
 import {organizationManagementBrowserServer} from '../helpers/organization-management-browser-server.mjs';
 
 // Native browser HTTP stays on loopback; sessions, ACL, the management
 // route, lifecycle and SQL execute unchanged. Only Dropbox HTTP is simulated.
 // No real user, provider, D1 binding or deployed environment is involved.
-type Backend=ReturnType<typeof persistenceFixture>&{http:Awaited<ReturnType<typeof organizationManagementBrowserServer>>};
+type Backend=ReturnType<typeof persistenceFixture>&{http:Awaited<ReturnType<typeof organizationManagementBrowserServer>>;advanceDeletionClock:()=>void};
 const test=base.extend<{backend:Backend;managementFlag:string;schemaBefore0042:boolean;sessionPresent:boolean;nativeTransport:void}>({
   managementFlag:['true',{option:true}],
   schemaBefore0042:[false,{option:true}],
@@ -16,11 +17,16 @@ const test=base.extend<{backend:Backend;managementFlag:string;schemaBefore0042:b
     const cleanup:Array<()=>void>=[];
     const schema=readFileSync(new URL('../../schema.sql',import.meta.url),'utf8').split('-- Organization management (migration 0042)');
     expect(schema).toHaveLength(2);
-    const backend=persistenceFixture({after:(fn:()=>void)=>cleanup.push(fn)},schemaBefore0042?{schemaSql:schema[0]}:{});
+    let advanceDeletionClock=false;
+    const backend=persistenceFixture({after:(fn:()=>void)=>cleanup.push(fn)},{...(schemaBefore0042?{schemaSql:schema[0]}:{}),
+      afterSql:({sql,db}:{sql:string;db:{exec:(query:string)=>unknown}})=>{
+        // Synthetic time advancement only; production drain remains enforced and unit tested.
+        if(advanceDeletionClock&&sql.includes('INSERT INTO organization_deletions('))db.exec("UPDATE organization_deletions SET not_before='2020-01-01T00:00:00.000Z'");
+      }});
     backend.env.ORGANIZATION_MANAGEMENT_V1=managementFlag;
     backend.db.exec("UPDATE users SET role='super_admin' WHERE id=1; UPDATE organizations SET dropbox_root_path='/projects/'||slug");
     let http:Awaited<ReturnType<typeof organizationManagementBrowserServer>>|undefined;
-    try{http=await organizationManagementBrowserServer(backend.env,String(testInfo.project.use.baseURL));await runFixture({...backend,http});expect(http.errors).toEqual([]);}
+    try{http=await organizationManagementBrowserServer(backend.env,String(testInfo.project.use.baseURL));await runFixture({...backend,http,advanceDeletionClock:()=>{advanceDeletionClock=true;}});expect(http.errors).toEqual([]);}
     finally{await http?.close();for(const fn of cleanup.reverse())fn();}
   },
   nativeTransport:[async({page,backend,sessionPresent},runFixture)=>{
@@ -136,4 +142,50 @@ test('sessão revogada limpa registros anteriores na consulta seguinte',async({p
   await page.getByRole('button',{name:'Aplicar',exact:true}).click();
   await expect(page.getByRole('button',{name:'Offline A',exact:true})).toHaveCount(0);
   await expect(page.getByRole('link',{name:'Entrar novamente'})).toBeVisible();
+});
+
+test('exclusão compilada usa sessão, ACL, handler e D1 reais com Dropbox sintético',async({page,backend})=>{
+  backend.env.ORGANIZATION_PERMANENT_DELETE_V1='true';backend.advanceDeletionClock();
+  backend.db.exec(`INSERT INTO organizations(id,name,slug,dropbox_root_path,active,storage_status,updated_at)
+    VALUES(3,'Exclusão sintética','delete-qa','/projects/delete-qa',0,'DISABLED','2020-01-01 00:00:00');
+    INSERT INTO organization_users(organization_id,user_id,access_level) VALUES(3,2,'owner');
+    UPDATE organizations SET management_owner_id=2 WHERE id=3;
+    UPDATE organizations SET updated_at='2020-01-01 00:00:00' WHERE id=3;`);
+  const historyBefore=backend.db.prepare('SELECT COUNT(*) n FROM organization_management_events WHERE organization_id=3').get().n;
+  expect(historyBefore).toBeGreaterThan(0);
+  const otherBefore=backend.db.prepare('SELECT * FROM organizations WHERE id=2').get();
+  const otherLinks=backend.db.prepare('SELECT * FROM organization_users WHERE organization_id=2').all();
+  const providerCalls:string[]=[];let folderExists=true;
+  // Only the external provider HTTP is simulated; no deletion route/session/SQL interception.
+  getDropboxClient(backend.env).fetchFn=async(url:string,init:RequestInit)=>{
+    const target=new URL(url);expect(target.hostname).toBe('api.dropboxapi.com');
+    const args=JSON.parse(String(init.body));providerCalls.push(target.pathname);
+    if(target.pathname==='/2/files/get_metadata'){
+      if(args.path==='/organizations/3')return Response.json({error_summary:'path/not_found/'},{status:409});
+      expect(['/projects/delete-qa','id:delete-qa']).toContain(args.path);
+      return folderExists?Response.json({'.tag':'folder',id:'id:delete-qa',path_lower:'/projects/delete-qa'}):Response.json({error_summary:'path/not_found/'},{status:409});
+    }
+    if(target.pathname==='/2/files/list_folder'){
+      expect(args.path).toBe('/projects/delete-qa');return Response.json({entries:[],has_more:false});
+    }
+    if(target.pathname==='/2/files/delete_v2'){
+      expect(args.path).toBe('id:delete-qa');folderExists=false;return Response.json({metadata:{id:'id:delete-qa'}});
+    }
+    throw Error('Unexpected synthetic Dropbox request: '+target.pathname);
+  };
+  await page.goto('/admin?section=organizations');
+  await page.getByRole('button',{name:'Exclusão sintética',exact:true}).click();
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+  await expect(page.getByText('Organização excluída permanentemente. Exclusão confirmada no banco e no Dropbox.')).toBeVisible();
+  expect(folderExists).toBe(false);
+  expect(providerCalls.filter(path=>path==='/2/files/delete_v2')).toHaveLength(1);
+  expect(backend.db.prepare('SELECT id FROM organizations WHERE id=3').get()).toBeUndefined();
+  expect(backend.db.prepare('SELECT * FROM organizations WHERE id=2').get()).toEqual(otherBefore);
+  expect(backend.db.prepare('SELECT * FROM organization_users WHERE organization_id=2').all()).toEqual(otherLinks);
+  expect(backend.db.prepare('SELECT id FROM users WHERE id=2').get().id).toBe(2);
+  expect(backend.db.prepare('SELECT COUNT(*) n FROM organization_deleted_management_events WHERE organization_id=3').get().n).toBeGreaterThanOrEqual(historyBefore);
+  expect(backend.db.prepare('SELECT state FROM organization_deletions WHERE organization_id=3').get().state).toBe('completed');
+  expect(backend.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 });

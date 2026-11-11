@@ -3,6 +3,8 @@ name: Save contract validation
 on:
   pull_request:
     paths:
+      - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
       - "functions/api/projects/**"
       - "functions/_lib/save-*.js"
       - "functions/_lib/project-save-*.js"
@@ -71,7 +73,7 @@ jobs:
         run: npm run test:durable-save
 
       - name: Install browser engines for isolated recovery QA
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: node scripts/install-ci-browsers.mjs chromium firefox webkit
 
       - name: Real IndexedDB and mounted save-button recovery QA
         run: npm run test:durable-save-browser

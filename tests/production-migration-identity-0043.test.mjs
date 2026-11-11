@@ -21,7 +21,9 @@ const source = readFileSync(new URL('../migrations/' + IDENTITY_MIGRATION, impor
 const migration = { name:IDENTITY_MIGRATION, sha256:IDENTITY_MIGRATION_SHA256,
   path:new URL('../migrations/' + IDENTITY_MIGRATION, import.meta.url) };
 // Exercise migration guards from the certified pre-0043 bootstrap.
-const bootstrap = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
+const fullBootstrap = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
+// This contract certifies 0043, never the later deletion schema.
+const bootstrap = fullBootstrap.split('-- Organization permanent deletion (migration 0044)')[0];
 const canonical = bootstrap.split('-- Organization creation identity (migration 0043)')[0];
 const row = { id:1,name:'Synthetic Équipe',slug:'synthetic-000000001',dropbox_root_path:'/projects/synthetic-000000001' };
 function seed(db, r = row, active = 1) {
@@ -68,7 +70,12 @@ test('pure normalizer matches the exact functional Unicode rule',()=>{
   assert.equal(canonicalOrganizationName('E\u0301QUIPE'),canonicalOrganizationName('Équipe'));
   assert.notEqual(canonicalOrganizationName('ação'),canonicalOrganizationName('acao'));
 });
-test('full functional bootstrap is exactly post-0043 and remains rejected by pre-0043 and 0042 collectors',t=>{
+test('0043 collector rejects the later deletion schema instead of certifying 0044', t=>{
+  const db=new DatabaseSync(':memory:');t.after(()=>db.close());db.exec(fullBootstrap);
+  assert.equal(evaluateIdentitySchema(observe(db),'post').compatible,false);
+  assert.equal(evaluateIdentitySchema(observe(db),'pre').compatible,false);
+});
+test('historical pre-0044 bootstrap is exactly post-0043 and remains rejected by pre-0043 and 0042 collectors',t=>{
   const db=new DatabaseSync(':memory:');t.after(()=>db.close());db.exec(bootstrap);
   assert.equal(evaluateIdentitySchema(observe(db),'post').compatible,true);
   assert.equal(evaluateIdentitySchema(observe(db),'pre').compatible,false);

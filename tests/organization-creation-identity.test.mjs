@@ -133,7 +133,7 @@ test('paused historical names and legacy creation/rename cannot bypass canonical
   const available=await f.call('/name-availability?name='+encodeURIComponent('CAFÉ azul'));assert.equal(available.available,false);
   await assert.rejects(createOrganizationLifecycle(f.env,{name:'cafe\u0301 azul',slug:'another',active:false}),{code:'ORGANIZATION_NAME_EXISTS'});
   await assert.rejects(updateOrganizationLifecycle(f.env,2,{name:'CAFÉ AZUL'}),{code:'ORGANIZATION_NAME_EXISTS'});
-  const imported=await f.call('/import/validate',{csv:'nome,slug,descricao,plano,responsavel_email\nCAFÉ AZUL,csv-name,,free,other@offline.invalid'});assert.equal(imported.valid,false);
+  const imported=await f.call('/import/validate',{csv:'nome,slug,descricao,plano,responsavel_email\nCAFÉ AZUL,csv-name,,free,other@offline.invalid'});assert.equal(imported.status,410);assert.equal(imported.error.code,'ORGANIZATION_IMPORT_RETIRED');
 });
 test('exact active owner lookup is not truncated by partial matches and ineligible owner is rechecked',async t=>{
   const f=fixture(t);

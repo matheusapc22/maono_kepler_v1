@@ -97,7 +97,13 @@ test('pagination accurately slices received collection and clamps deep links', a
 test('late inventory respects current filters and does not reset focused draft', async ({ page }) => {
   const gate = deferred(); await setup(page, { before: async resource => { if (resource === 'projects') await gate.promise; } });
   const search = panel(page).getByRole('searchbox', { name: 'Buscar projeto' });
-  await search.fill('Mapa 03'); await search.press('Enter'); await search.fill('draft in progress');
+  await search.fill('Mapa 03'); await search.press('Enter');
+  // Applying filters navigates and remounts the query-keyed form. Start the next
+  // draft only after that commit, while the inventory response is still gated.
+  await expect(page).toHaveURL(/projectSearch=Mapa\+03/);
+  await expect(panel(page).getByRole('button', { name: 'Cancelar', exact: true })).toBeDisabled();
+  await search.fill('draft in progress');
+  await expect(search).toHaveValue('draft in progress'); await expect(search).toBeFocused();
   gate.release(); await expect(row(page, 'Mapa 03')).toBeVisible();
   await expect(panel(page).locator('tbody tr')).toHaveCount(1); await expect(search).toHaveValue('draft in progress'); await expect(search).toBeFocused();
 });

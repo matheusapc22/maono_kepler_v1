@@ -10,6 +10,7 @@
     "src/auth/session.tsx::diagnostic-id": 10,
     "src/lib/api.ts::diagnostic-id": 3,
     "src/lib/file-transfer.ts::diagnostic-id": 1,
+    "src/pages/Admin/organizations/OrganizationDeletionPanel.tsx::diagnostic-id": 2,
     "src/pages/Kepler/actions.ts::raw-response-text": 1,
     "src/pages/Kepler/change-requests/ChangeRequestReviewPage.tsx::raw-error-message": 1,
     "src/pages/Kepler/change-requests/PointFromPinWorkflow.tsx::raw-error-message": 1,

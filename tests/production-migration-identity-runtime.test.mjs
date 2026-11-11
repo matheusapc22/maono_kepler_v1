@@ -56,10 +56,10 @@ test('functional runtime refuses 0042 before reads or creation can advance',asyn
   assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM organization_management_operations').get().n,0);
 });
 
-test('functional runtime creates, imports and renames with canonical identities on 0043',async t=>{
+test('functional runtime creates and renames with canonical identities after import retirement',async t=>{
   // Current real route/session/ACL/lifecycle; only external Dropbox is simulated.
   const f=fixture(t);await f.ok('/organizations');
-  for(const kind of ['create','import']){
+  for(const kind of ['create']){
     const slug='legacy-'+kind;
     const name='Functional runtime '+kind;
     const operation=await f.ok('/operations',{kind,items:[{name,slug,description:'Offline',plan:'pro',ownerEmail:'other@offline.invalid'}]},
@@ -79,4 +79,12 @@ test('functional runtime creates, imports and renames with canonical identities 
     assert.equal(detail.organization.owner.id,2);assert.equal(detail.organization.storageStatus,'READY');
     assert.equal(detail.organization.active,true);assert.equal(detail.creationConfirmed,true);
   }
+});
+
+test('current runtime rejects new imports without changing retained organization data',async t=>{
+  const f=fixture(t);const before=f.db.prepare('SELECT COUNT(*) n FROM organizations').get().n;
+  const result=await f.call('/operations',{kind:'import',items:[{name:'Retired import',slug:'retired-import',plan:'pro',ownerEmail:'other@offline.invalid'}]},{'Idempotency-Key':crypto.randomUUID()});
+  assert.equal(result.status,410);assert.equal(result.data.error.code,'ORGANIZATION_IMPORT_RETIRED');
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM organizations').get().n,before);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM organization_management_operations').get().n,0);
 });

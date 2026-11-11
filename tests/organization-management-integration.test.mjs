@@ -148,6 +148,7 @@ test('canonical schema equals additive migration applied to populated previous s
     INSERT INTO organization_limit_requests(organization_id,request_type,created_by) VALUES(1,'projects_increase',1);`);
   db.exec(readFileSync(new URL('../migrations/0042_organization_management.sql',import.meta.url),'utf8'));
   db.exec(readFileSync(new URL('../migrations/0043_organization_creation_identity.sql',import.meta.url),'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0044_organization_permanent_deletion.sql',import.meta.url),'utf8'));
   assert.equal(db.prepare('SELECT name FROM organizations').get().name,'Existing');
   assert.equal(db.prepare('SELECT COUNT(*) n FROM organization_management_events').get().n,0,'No fabricated retrospective history');
   assert.equal(db.prepare('PRAGMA quick_check').get().quick_check,'ok');assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);

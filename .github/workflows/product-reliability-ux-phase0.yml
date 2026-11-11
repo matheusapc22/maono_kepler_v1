@@ -6,6 +6,8 @@ on:
       - "audit/product-reliability-ux-phase0"
       - "feat/prh-*"
     paths:
+      - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
       - "src/**"
       - "functions/_lib/organization-*.js"
       - "functions/_lib/dropbox*.js"
@@ -33,6 +35,8 @@ on:
     branches:
       - "mano_kepler_v1"
     paths:
+      - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
       - "src/**"
       - "functions/_lib/organization-*.js"
       - "functions/_lib/dropbox*.js"
@@ -101,7 +105,7 @@ jobs:
         run: npm run build
 
       - name: Install Chromium for loading acceptance
-        run: npx playwright install --with-deps chromium
+        run: node scripts/install-ci-browsers.mjs chromium
 
       - name: Browser loading and reliability acceptance
         run: npm run test:reliability-browser

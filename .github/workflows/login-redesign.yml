@@ -3,6 +3,8 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
       - 'src/components/selection/**'
       - 'src/pages/Login.tsx'
       - 'src/pages/LoginIcon.tsx'
@@ -38,7 +40,7 @@ jobs:
       - name: Build exact candidate
         run: npm run build
       - name: Install browser engines
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: node scripts/install-ci-browsers.mjs chromium firefox webkit
       - name: Compiled login in three engines with fixture HTTP
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: login-results.json

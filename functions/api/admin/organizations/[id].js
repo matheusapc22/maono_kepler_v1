@@ -11,23 +11,12 @@ import {
   updateOrganizationLifecycle,
 } from "../../../_lib/organization-lifecycle.js";
 import { requirePermission } from "../../../_lib/permissions.js";
-import {
-  deleteDropboxPath,
-} from "../../../_lib/dropbox.js";
 import { logAudit } from "../../../_lib/projects.js";
 import { readOrganizationStorageIncident } from "../../../_lib/organization-storage-retry.js";
 
 function normalizePositiveInteger(value) {
   const numberValue = Number(value);
   return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
-}
-
-function isDropboxNotFoundError(error) {
-  const message = String(error?.message || "");
-  return (
-    message.includes("path/not_found") ||
-    message.includes("path_lookup/not_found")
-  );
 }
 
 async function requireOrganizationAdminPanelAccess(
@@ -66,83 +55,6 @@ function publicOrganization(row) {
     storageCheckedAt: row.storage_checked_at || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
-}
-
-async function deleteOrganization(env, organizationId, hardDeleteDropbox) {
-  const current = await getOrganizationLifecycleById(env, organizationId);
-
-  if (!current) {
-    return {
-      error: {
-        message: "Organização não encontrada.",
-        status: 404,
-        code: "ORGANIZATION_NOT_FOUND",
-      },
-    };
-  }
-
-  const linkedProjects = await env.DB.prepare(
-    `SELECT COUNT(*) AS total
-     FROM projects
-     WHERE organization_id = ?
-       AND active = 1`,
-  )
-    .bind(organizationId)
-    .first();
-
-  if (linkedProjects?.total > 0) {
-    return {
-      error: {
-        message:
-          "Esta organização possui projetos ativos. Desative ou remova os projetos antes de excluir a organização.",
-        status: 409,
-        code: "ORGANIZATION_HAS_ACTIVE_PROJECTS",
-      },
-    };
-  }
-
-  await env.DB.batch([
-    env.DB.prepare(
-      `DELETE FROM organization_users
-       WHERE organization_id = ?`,
-    ).bind(organizationId),
-    env.DB.prepare(
-      `UPDATE organization_files
-       SET active = 0, updated_at = CURRENT_TIMESTAMP
-       WHERE organization_id = ?`,
-    ).bind(organizationId),
-    env.DB.prepare(
-      `UPDATE organizations
-       SET active = 0,
-           storage_status = 'DISABLED',
-           storage_error = NULL,
-           storage_checked_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-    ).bind(organizationId),
-  ]);
-
-  let dropboxDeleted = false;
-  let dropboxAlreadyMissing = false;
-
-  if (hardDeleteDropbox && current.dropbox_root_path) {
-    try {
-      await deleteDropboxPath(env, current.dropbox_root_path);
-      dropboxDeleted = true;
-    } catch (error) {
-      if (isDropboxNotFoundError(error)) {
-        dropboxAlreadyMissing = true;
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  return {
-    organization: current,
-    dropboxDeleted,
-    dropboxAlreadyMissing,
   };
 }
 
@@ -249,63 +161,14 @@ export async function onRequest(context) {
     }
 
     if (request.method === "DELETE") {
-      const { user } = await requireOrganizationAdminPanelAccess(
+      await requireOrganizationAdminPanelAccess(
         env,
         request,
         organizationId,
         "admin.organizations.delete",
       );
 
-      const url = new URL(request.url);
-      const hardDeleteDropbox = url.searchParams.get("dropbox") === "true";
-      const {
-        organization,
-        dropboxDeleted,
-        dropboxAlreadyMissing,
-        error,
-      } = await deleteOrganization(
-        env,
-        organizationId,
-        hardDeleteDropbox,
-      );
-
-      if (error) {
-        return errorResponse(
-          error.message,
-          error.status,
-          error.code,
-          null,
-          { correlationId },
-        );
-      }
-
-      await logAudit(env, {
-        userId: user.id,
-        action: hardDeleteDropbox
-          ? "admin.organizations.delete_dropbox"
-          : "admin.organizations.deactivate",
-        details: {
-          correlationId,
-          organizationId,
-          slug: organization.slug,
-          hardDeleteDropbox,
-          dropboxDeleted,
-          dropboxAlreadyMissing,
-        },
-      });
-
-      return jsonResponse(
-        {
-          ok: true,
-          dropboxDeleted,
-          dropboxAlreadyMissing,
-        },
-        {
-          headers: {
-            "X-Correlation-Id": correlationId,
-          },
-        },
-      );
+      return errorResponse('Use a exclusão permanente protegida na gestão de organizações.',410,'ORGANIZATION_PERMANENT_DELETE_REQUIRED',null,{correlationId});
     }
 
     return methodNotAllowed(

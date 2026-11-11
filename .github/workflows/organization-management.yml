@@ -32,6 +32,7 @@ jobs:
       - name: Product regressions (sequential, no remote bindings)
         run: >-
           node --experimental-strip-types --test --test-concurrency=1
+          tests/ci-browser-installation.test.mjs
           tests/access-delegation.test.mjs
           tests/admin-progressive-loading.test.mjs
           tests/admin-organization-owner-integration.test.mjs
@@ -56,6 +57,9 @@ jobs:
           tests/organization-lifecycle-concurrency.test.mjs
           tests/organization-lifecycle-wiring.test.mjs
           tests/organization-lifecycle.test.mjs
+          tests/organization-permanent-deletion.test.mjs
+          tests/organization-deletion-storage-fence.test.mjs
+          tests/organization-deletion-review.test.mjs
           tests/organization-management-integration.test.mjs
           tests/organization-management.test.mjs
           tests/organization-creation-identity.test.mjs
@@ -94,7 +98,7 @@ jobs:
           VITE_MAONO_MAP_OVERLAY_V1: 'true'
         run: npm run build
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: node scripts/install-ci-browsers.mjs chromium
       - name: Compiled UI and local product integration
         run: npx playwright test --config=playwright.organization-management.config.ts
       - name: Feature OFF preserves legacy Admin

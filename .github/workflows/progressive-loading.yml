@@ -3,6 +3,8 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
       - 'functions/_lib/owner-retention.js'
       - 'functions/_lib/organizations.js'
       - 'functions/api/admin/users/**'
@@ -117,7 +119,7 @@ jobs:
           VITE_MAONO_MAP_OVERLAY_V1: "true"
         run: npm run build
       - name: Install browser engines
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: node scripts/install-ci-browsers.mjs chromium firefox webkit
       - name: Three-engine compiled fixture coverage
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: progressive-loading-results.json

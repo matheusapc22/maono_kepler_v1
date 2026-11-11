@@ -3,6 +3,8 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
       - 'src/pages/Admin.tsx'
       - 'src/pages/Admin/components/AdminProjects.tsx'
       - 'src/pages/Admin/components/admin-projects*'
@@ -40,7 +42,7 @@ jobs:
           VITE_MAONO_LAYER_MANAGER_V1: 'true'
           VITE_MAONO_MAP_OVERLAY_V1: 'true'
         run: npm run build
-      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: node scripts/install-ci-browsers.mjs chromium firefox webkit
       - name: Compiled browser fixtures
         run: npx playwright test --config=playwright.admin-projects.config.ts
       - uses: actions/upload-artifact@v4

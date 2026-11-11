@@ -1,7 +1,6 @@
 /** Contracts shared by the management service and its deterministic tests. */
 export const PLAN_LABELS = Object.freeze({ free: 'Básico', pro: 'Profissional', enterprise: 'Empresarial' });
 export const MAX_ITEMS = 100;
-export const MAX_CSV_BYTES = 128 * 1024;
 export class ManagementError extends Error {
   constructor(message, status = 400, code = 'ORGANIZATION_MANAGEMENT_INVALID', retryable = false) {
     super(message); this.name = 'ManagementError'; this.status = status; this.code = code; this.retryable = retryable;
@@ -69,31 +68,6 @@ export function stableJson(value) {
 export async function requestHash(value) {
   const bytes = new TextEncoder().encode(stableJson(value));
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
-}
-/** RFC4180-style parsing, no spreadsheet evaluation and no network access. */
-export function parseImportCsv(csv) {
-  check(typeof csv === 'string' && new TextEncoder().encode(csv).length <= MAX_CSV_BYTES, 'CSV excede 128 KiB.');
-  csv = csv.replace(/^\uFEFF/, '');
-  const rows = []; let row = [], field = '', quoted = false, closed = false;
-  for (let i = 0; i < csv.length; i++) {
-    const c = csv[i];
-    if (quoted) { if (c === '"') { if (csv[i + 1] === '"') { field += '"'; i++; } else { quoted = false; closed = true; } } else field += c; continue; }
-    if (c === '"') { check(!field && !closed, 'Aspas inválidas no CSV.'); quoted = true; continue; }
-    if (c === ',' || c === '\n' || c === '\r') {
-      row.push(field); field = ''; closed = false;
-      if (c !== ',') { if (c === '\r' && csv[i + 1] === '\n') i++; if (row.some(v => v !== '')) rows.push(row); row = []; }
-      check(rows.length <= MAX_ITEMS + 1, 'O CSV admite até 100 organizações.');
-      continue;
-    }
-    check(!closed, 'Conteúdo após fechamento de aspas.'); field += c;
-  }
-  check(!quoted, 'Aspas não fechadas no CSV.'); row.push(field); if (row.some(v => v !== '')) rows.push(row);
-  check(rows.length >= 2 && rows.length <= MAX_ITEMS + 1, 'Informe de 1 a 100 linhas de dados.');
-  check(rows[0].join(',') === 'nome,slug,descricao,plano,responsavel_email', 'Cabeçalho esperado: nome,slug,descricao,plano,responsavel_email');
-  return rows.slice(1).map((cells, index) => {
-    try { check(cells.length === 5, 'A linha precisa ter cinco colunas.'); return { line: index + 2, input: createInput({ name: cells[0], slug: cells[1], description: cells[2], plan: cells[3], ownerEmail: cells[4] }) }; }
-    catch (e) { return { line: index + 2, error: e.message }; }
-  });
 }
 export function safeCsvCell(value) {
   let s = String(value ?? ''); if (/^[\s]*[=+\-@\t\r]/.test(s)) s = `'${s}`;

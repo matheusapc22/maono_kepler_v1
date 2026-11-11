@@ -1,3 +1,4 @@
+import { assertDropboxPathWritable } from "./dropbox.js";
 import { ownerRetention, guardedAudit, lastOwnerError } from "./owner-retention.js";
 import { normalizeMaonoError } from "./maono-error.js";
 import { errorResponse } from "./http.js";
@@ -1958,6 +1959,7 @@ export async function uploadBufferToDropbox(env, path, arrayBuffer) {
   }
 
   const safePath = assertDropboxPathSafe(path);
+  await assertDropboxPathWritable(env, safePath);
 
   const response = await fetch("https://content.dropboxapi.com/2/files/upload", {
     method: "POST",
@@ -1973,6 +1975,7 @@ export async function uploadBufferToDropbox(env, path, arrayBuffer) {
       "Content-Type": "application/octet-stream",
     },
     body: arrayBuffer,
+    signal: AbortSignal.timeout(8_000),
   });
 
   if (!response.ok) {
