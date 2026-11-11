@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Link,useNavigate,useSearchParams} from 'react-router';
+import {Link,useLocation,useNavigate,useSearchParams} from 'react-router';
 import {useSession} from '../../../auth/session.ts';
 import {MaonoSelect} from '../../../components/selection/MaonoSelect';
 import AdminIcon from '../components/AdminIcon';
@@ -12,10 +12,12 @@ import {Dialog,Notice,OperationStatus,OrganizationEditor,RequestList} from './Or
 import {PLAN_LABELS,type Detail,type Operation,type OperationInput,type Organization,type Query,type Workspace} from './organizations-types';
 import './admin-organizations.css';
 
+// Ephemeral, single-use proof; editable history state alone cannot fabricate success.
+let completedDeletionReceipt:{nonce:string;actorId:string|number}|null=null;
 const dialogTitles:Record<string,string>={create:'Nova organização',requests:'Solicitações de plano e limites',bulk:'Ações em lote',operations:'Minhas operações',operation:'Resultado da operação'};
 const initial=(p:URLSearchParams):Query=>({q:p.get('org_q')||'',status:p.get('org_status')||'all',plan:p.get('org_plan')||'all',sort:p.get('org_sort')||'newest',page:Number(p.get('org_page'))||1,size:Number(p.get('org_size'))||10});
 export default function AdminOrganizationsSection(){
-  const [params,setParams]=useSearchParams(),navigate=useNavigate(),{switchOrganization,refreshSession,user}=useSession();
+  const [params,setParams]=useSearchParams(),navigate=useNavigate(),location=useLocation(),{switchOrganization,refreshSession,user,health,authenticated}=useSession();
   const queryKey=JSON.stringify(initial(params)),query=useMemo<Query>(()=>JSON.parse(queryKey),[queryKey]);
   const [draft,setDraft]=useState(query),[workspace,setWorkspace]=useState<Workspace|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[blocked,setBlocked]=useState(false),[revision,setRevision]=useState(0),[selected,setSelected]=useState<Set<number>>(()=>new Set());
   const [header,setHeader]=useState<HTMLElement|null>(null),[detail,setDetail]=useState<Detail|null>(null),[detailError,setDetailError]=useState(''),[detailLoading,setDetailLoading]=useState(false);
@@ -23,6 +25,13 @@ export default function AdminOrganizationsSection(){
   const [operation,setOperation]=useState<Operation|null>(null),[operationError,setOperationError]=useState(''),[busy,setBusy]=useState(false),[history,setHistory]=useState<{id:string;kind:string;createdAt:string}[]>([]);
   const [bulkKind,setBulkKind]=useState<'pause'|'resume'>('pause'),[reason,setReason]=useState('');
   const [creationPending,setCreationPending]=useState(false),[success,setSuccess]=useState('');
+  // A completed server response survives the session refresh without a URL success flag.
+  useEffect(()=>{const receipt=location.state?.organizationDeletionReceipt;if(!receipt)return;
+    const verified=completedDeletionReceipt;completedDeletionReceipt=null;
+    if(authenticated&&verified&&receipt===verified.nonce&&user?.role==='super_admin'&&verified.actorId===user.id)setSuccess('Organização excluída permanentemente. Exclusão confirmada no banco e no Dropbox.'+(health==='healthy'?'':' A sessão ainda precisa ser atualizada. Recarregue a página antes de continuar.'));
+    const state={...location.state};delete state.organizationDeletionReceipt;
+    void navigate(location.pathname+location.search,{replace:true,state});
+  },[location,navigate,user,health,authenticated]);
   const createAttempt=useRef<{input:OperationInput;key:string}|null>(null),submitting=useRef(false),createButton=useRef<HTMLButtonElement|null>(null);
   const mounted=useRef(true),sequence=useRef(0),detailSequence=useRef(0),action=useRef<AbortController|null>(null),detailReload=useRef<AbortController|null>(null),keys=useRef(new Map<string,string>());
   const id=params.get('org_id'),tab=params.get('org_tab')||'general',mode=params.get('org_mode')==='import'?'':params.get('org_mode')||'',operationId=params.get('org_operation');
@@ -144,7 +153,7 @@ export default function AdminOrganizationsSection(){
     {(id||mode)&&<Dialog title={mode==='delete'?'Excluir permanentemente organização':id?(detail?.organization.name||'Organização'):(dialogTitles[mode]||'Operação')} onClose={close} busy={busy} loadingOnly={mode==='create'&&busy} dirty={mode==='create'||Boolean(id&&mode!=='delete'&&['general','people','policy'].includes(tab))} wide={mode==='requests'}>
       <Notice message={mode==='create'&&busy?'':operationError}/>{detailLoading&&<p role="status">Carregando organização…</p>}<Notice message={detailError}/>
       {id&&detail&&mode!=='delete'&&<><OrganizationEditor key={`${detail.organization.id}:${detail.organization.version}`} detail={detail} tab={tab} onTab={value=>url({org_tab:value})} onSubmit={input=>void submit(input)} onPeople={peopleLink} onDocuments={()=>void projectDocuments()} busy={busy} onDenied={invalidate}/><div className="aog-danger-zone"><button type="button" disabled={busy} onClick={()=>{if(window.confirm(`${detail.organization.active?'Pausar':'Reativar'} ${detail.organization.name}? Pausar preserva pessoas, arquivos e projetos. Reativar verifica o armazenamento.`))void submit({kind:detail.organization.active?'pause':'resume',items:[{id:detail.organization.id,version:detail.organization.version,reason:detail.organization.active?'Pausa confirmada no painel':'Reativação confirmada no painel'}]});}}>{detail.organization.active?'Pausar organização':'Reativar / verificar armazenamento'}</button>{detail.organization.active&&!['READY','ACTIVE','CONFIGURED'].includes(detail.organization.storageStatus)&&<button type="button" disabled={busy} onClick={()=>{if(window.confirm('Verificar o armazenamento desta organização?'))void submit({kind:'resume',items:[{id:detail.organization.id,version:detail.organization.version,reason:'Verificação de armazenamento confirmada'}]});}}>Verificar armazenamento</button>}<button type="button" disabled={busy} onClick={reloadDetail}>Consultar versão atual</button>{user?.role==='super_admin'&&workspace?.capabilities.permanentDelete===true&&<button type="button" className="aog-destructive" disabled={busy} onClick={()=>{setOperation(null);setOperationError('');url({org_mode:'delete',org_operation:null,org_deletion:null,org_delete_key:null});}}>Excluir permanentemente organização</button>}</div></>}
-      {id&&mode==='delete'&&(user?.role==='super_admin'&&workspace?.capabilities.permanentDelete===true?<OrganizationDeletionPanel key={id} organizationId={Number(id)} onCancel={close} onBusy={setBusy} onDenied={invalidate} onComplete={()=>{sequence.current++;detailSequence.current++;setWorkspace(null);setDetail(null);close();setSelected(new Set());setRevision(v=>v+1);setSuccess('Organização excluída permanentemente. Exclusão confirmada no banco e no Dropbox.');void refreshSession().catch(()=>setError('A exclusão foi concluída, mas a sessão ainda precisa ser atualizada. Recarregue a página antes de continuar.'));}}/>:<p role="status">Exclusão permanente indisponível neste contexto.</p>)}
+      {id&&mode==='delete'&&(user?.role==='super_admin'&&workspace?.capabilities.permanentDelete===true?<OrganizationDeletionPanel key={id} organizationId={Number(id)} onCancel={close} onBusy={setBusy} onDenied={invalidate} onComplete={()=>{sequence.current++;detailSequence.current++;setWorkspace(null);setDetail(null);close();setSelected(new Set());setRevision(v=>v+1);void refreshSession().then(()=>{const next=new URLSearchParams(params);for(const name of ['org_id','org_tab','org_mode','org_operation','org_deletion','org_delete_key'])next.delete(name);const search=next.toString();const target=location.pathname+(search?'?'+search:'');if(window.location.pathname+window.location.search!==target)return;const nonce=crypto.randomUUID();completedDeletionReceipt={nonce,actorId:user.id};void navigate(target,{replace:true,state:{organizationDeletionReceipt:nonce}});}).catch(()=>setError('A exclusão foi concluída, mas a sessão ainda precisa ser atualizada. Recarregue a página antes de continuar.'));}}/>:<p role="status">Exclusão permanente indisponível neste contexto.</p>)}
       {mode==='create'&&<>
         <div hidden={busy}><CreateForm onSubmit={input=>void submit({kind:'create',items:[input]})} busy={busy||creationPending||Boolean(operationId)}/></div>
         {busy&&<div className="aog-create-loading"><UniversalLoader accessibleLabel="Criando e validando organização"/></div>}

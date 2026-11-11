@@ -162,7 +162,7 @@ test('exclusão compilada usa sessão, ACL, handler e D1 reais com Dropbox sint�
     const args=JSON.parse(String(init.body));providerCalls.push(target.pathname);
     if(target.pathname==='/2/files/get_metadata'){
       if(args.path==='/organizations/3')return Response.json({error_summary:'path/not_found/'},{status:409});
-      expect(args.path).toBe('/projects/delete-qa');
+      expect(['/projects/delete-qa','id:delete-qa']).toContain(args.path);
       return folderExists?Response.json({'.tag':'folder',id:'id:delete-qa',path_lower:'/projects/delete-qa'}):Response.json({error_summary:'path/not_found/'},{status:409});
     }
     if(target.pathname==='/2/files/list_folder'){

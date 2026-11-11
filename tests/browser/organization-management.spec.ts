@@ -317,3 +317,36 @@ test('entrar em exclusão não mantém controles de uma operação anterior',asy
   await expect(page.getByRole('button',{name:'Retomar próximo item recuperável',exact:true})).toHaveCount(0);
   expect(state.mutations).toEqual([]);
 });
+
+
+test('recibo editável não fabrica sucesso e recibo consumido não reaparece',async({page})=>{
+  const state=await deletionSetup(page);
+  await page.evaluate(()=>{history.replaceState({...history.state,usr:{organizationDeletionReceipt:'forged-receipt'}},'',location.href);dispatchEvent(new PopStateEvent('popstate'));});
+  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toHaveCount(0);
+  expect(state.mutations).toEqual([]);
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toBeVisible();
+  const writes=state.mutations.length;
+  await page.reload();
+  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toHaveCount(0);
+  expect(state.mutations).toHaveLength(writes);
+});
+
+
+test('atualização de sessão após exclusão respeita navegação posterior',async({page})=>{
+  const state=await deletionSetup(page);
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  let release!:()=>void,entered!:()=>void;
+  const pending=new Promise<void>(resolve=>{release=resolve;}),started=new Promise<void>(resolve=>{entered=resolve;});
+  await page.route('**/api/session',async route=>{entered();await pending;await route.fallback();});
+  await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+  await started;
+  await page.evaluate(()=>{history.pushState(history.state,'','/admin?section=organizations&org_q=other');dispatchEvent(new PopStateEvent('popstate'));});
+  release();await page.waitForLoadState('networkidle');
+  await expect(page).toHaveURL(/org_q=other/);
+  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toHaveCount(0);
+  expect(state.mutations.filter(value=>value.path.endsWith('/permanent-delete'))).toHaveLength(1);
+});
