@@ -59,3 +59,10 @@ DELETE /api/admin/organizations/:id deixa de desativar/remover vínculos/apagar 
 Antes de autorizar rollout, revisar cobertura de todos os caminhos de escrita e commits no Dropbox, inclusive operações em voo, e verificar em ambiente isolado os checkpoints, perda de resposta e reconciliação. Timeout de rede não prova que o provedor cancelou a gravação. Não declarar segurança de Produção apenas porque testes simulados passaram.
 
 Manter ORGANIZATION_PERMANENT_DELETE_V1 ausente ou false até completar a revisão e receber autorizações distintas de migration, aceite e rollout. Desligar o flag não remove tombstones nem libera caminhos já bloqueados.
+
+
+## Orçamento de chamadas D1
+
+A introspecção de metadados e as contagens usam lotes somente leitura de até 64 statements, sem cache de schema entre requisições. Falhas, resultados incompletos e dependências desconhecidas continuam bloqueando a exclusão. No fixture de 107 tabelas com handler/sessão/ACL reais, foram medidas 23 chamadas para prévia, 44 para início, 36 para etapa e 11 para consulta. O teste exige menos de 50 chamadas por fluxo medido.
+
+Segundo https://developers.cloudflare.com/d1/platform/limits/, cada db.batch conta como uma chamada no limite por invocação; limites individuais de SQL continuam valendo por statement. Essas contagens locais não comprovam latência, plano contratado ou desempenho no schema implantado.

@@ -24,13 +24,32 @@ async function ready(env) {
   const names = new Set((await all(env,"SELECT name FROM sqlite_master WHERE type='trigger'")).map(r=>r.name));
   check(['org_delete_no_recreate','org_delete_no_update','org_delete_finalize_only'].every(n=>names.has(n)), 'Proteções de exclusão incompletas.',503,'ORGANIZATION_DELETE_SCHEMA_REQUIRED');
 }
+// D1 counts each batch as one invocation query. Bound metadata/count reads to
+// small read-only groups without joining parameters into a large SQL statement.
+// No cross-request schema cache: newly added/changed dependencies remain visible.
+const INVENTORY_READ_BATCH_SIZE = 64;
+async function readStatementBatch(env, statements) {
+  const rows=[];
+  for(let offset=0;offset<statements.length;offset+=INVENTORY_READ_BATCH_SIZE) {
+    const group=statements.slice(offset,offset+INVENTORY_READ_BATCH_SIZE);
+    const results=await env.DB.batch(group);
+    check(Array.isArray(results)&&results.length===group.length&&results.every(result=>result?.success!==false&&Array.isArray(result?.results)),
+      'Inventário de dependências incompleto.',503,'ORGANIZATION_DELETE_SCHEMA_REQUIRED');
+    rows.push(...results.map(result=>result.results));
+  }
+  return rows;
+}
 async function inventory(env,id) {
   const tables=await all(env,"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%'");
   const guards=new Set((await all(env,"SELECT name FROM sqlite_master WHERE type='trigger'")).map(r=>r.name));
+  const metadata=await readStatementBatch(env,tables.flatMap(({name})=>[
+    statement(env,`PRAGMA table_info(${quote(name)})`),
+    statement(env,`PRAGMA foreign_key_list(${quote(name)})`),
+  ]));
   const blockers=[],business=[];
-  for(const {name} of tables) {
-    const columns=await all(env,`PRAGMA table_info(${quote(name)})`);
-    const foreignKeys=await all(env,`PRAGMA foreign_key_list(${quote(name)})`);
+  for(let index=0;index<tables.length;index++) {
+    const {name}=tables[index],columns=metadata[index*2],foreignKeys=metadata[index*2+1];
+    check(columns.length>0,'Schema de dependências mudou durante a consulta.',503,'ORGANIZATION_DELETE_SCHEMA_REQUIRED');
     if(foreignKeys.some(fk=>fk.table==='organizations' && fk.from!=='organization_id' && !(name==='sessions'&&fk.from==='active_organization_id')))blockers.push({code:'UNGUARDED_DEPENDENCY',count:1});
     if(!columns.some(c=>c.name==='organization_id') || retained.has(name))continue;
     // Unknown extensions are never assumed safe, including empty new tables.
@@ -39,8 +58,11 @@ async function inventory(env,id) {
     }
     if(removable.has(name))continue;
     business.push(name);
-    const row=await one(env,`SELECT COUNT(*) n FROM ${quote(name)} WHERE organization_id=?`,id);
-    if(Number(row.n)>0)blockers.push({code:'LINKED_DATA',count:Number(row.n)});
+  }
+  const counts=await readStatementBatch(env,business.map(name=>statement(env,`SELECT COUNT(*) n FROM ${quote(name)} WHERE organization_id=?`,id)));
+  for(const rows of counts) {
+    check(rows.length===1&&Number.isSafeInteger(Number(rows[0].n))&&Number(rows[0].n)>=0,'Contagem de dependências não confirmada.',503,'ORGANIZATION_DELETE_SCHEMA_REQUIRED');
+    if(Number(rows[0].n)>0)blockers.push({code:'LINKED_DATA',count:Number(rows[0].n)});
   }
   const org=await one(env,'SELECT management_create_key FROM organizations WHERE id=?',id);
   const ops=await all(env,`SELECT o.id,o.kind,o.payload_json,i.item_index,i.state FROM organization_management_operations o JOIN organization_management_operation_items i ON i.operation_id=o.id WHERE i.state<>'succeeded'`);

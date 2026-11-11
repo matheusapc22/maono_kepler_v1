@@ -152,3 +152,27 @@ test('unindexed legacy organization storage blocks instead of deleting an unappr
   const f=fixture(t,{legacy:true}),d=await f.start();const r=await f.step(d);
   assert.equal(r.state,'pending');assert.equal(r.errorCode,'ORGANIZATION_DELETE_LEGACY_STORAGE');assert.equal(f.removeCount(),0);assert.ok(f.db.prepare('SELECT 1 FROM organizations WHERE id=3').get());
 });
+
+test('real routes stay below Free D1 invocation budget with bounded read batches and unchanged safeguards',async t=>{
+  const f=fixture(t),original=f.env.DB;let calls=0,batchSizes=[];
+  f.env.DB={...original,prepare(sql){const result=original.prepare(sql);for(const method of ['first','all','run']){const execute=result[method];result[method]=function(...args){calls++;return execute.apply(this,args);};}return result;},batch(statements){calls++;batchSizes.push(statements.length);return original.batch(statements);}};
+  async function measured(label,run){calls=0;batchSizes=[];const value=await run();assert.ok(calls<50,`${label}: ${calls} D1 calls exceed Free invocation budget`);assert.ok(batchSizes.every(size=>size<=64),`${label}: oversized batch`);t.diagnostic(`${label}: ${calls} D1 calls; batches ${batchSizes.join(',')}`);return value;}
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE type='table'").get().n,107);
+  const p=await measured('preview',()=>f.call('/organizations/3/deletion-preview'));assert.equal(p.data.eligible,true);
+  const d=await measured('start',()=>f.start());
+  assert.equal((await measured('step with real Dropbox adapter',()=>f.step(d))).state,'completed');
+  assert.equal((await measured('status',()=>f.call(`/deletions/${d.id}`))).status,200);
+});
+test('failed or incomplete batched introspection stops before claiming or provider access',async t=>{
+  for(const mode of ['throw','missing-result','empty-columns']){
+    const f=fixture(t),original=f.env.DB.batch.bind(f.env.DB);
+    f.env.DB.batch=async statements=>{
+      if(statements[0]?.sql.startsWith('PRAGMA table_info')){
+        if(mode==='throw')throw new Error('Synthetic read failure');
+        const results=await original(statements);if(mode==='missing-result')return results.slice(1);results[0]={results:[]};return results;
+      }
+      return original(statements);
+    };
+    const p=await f.call('/organizations/3/deletion-preview');assert.ok(p.status>=500,mode);assert.equal(f.removeCount(),0);assert.equal(f.db.prepare('SELECT COUNT(*) n FROM organization_deletions').get().n,0);
+  }
+});
