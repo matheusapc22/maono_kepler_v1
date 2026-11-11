@@ -4,7 +4,7 @@ This collector is called by the existing protected production D1 operator in `au
 
 ## Evidence and limits
 
-The collector reads three fixed metadata projections: SQLite objects and definitions, table columns (including hidden/generated columns), and foreign keys. It repeats the complete collection and rejects drift. This is a stable observed metadata sequence, not an atomic database snapshot. It does not read application rows or prove an organization empty, provider storage empty, or feature rollout safe.
+The collector reads fixed metadata projections for SQLite objects and definitions, table columns (including hidden/generated columns), foreign keys, indexes and ordered index components. It repeats the complete collection and rejects drift. This is a stable observed metadata sequence, not an atomic database snapshot. It does not read application rows or prove an organization empty, provider storage empty, or feature rollout safe.
 
 Definitions and default expressions stay in runner memory; artifacts contain definition digests, safe identifiers, FK relationships, table inventory, planned guard hashes and mismatch codes. Malformed, duplicated, unbounded or unexpected response fields are rejected. Only SQLite-reserved names are excluded. The exact d1_migrations ledger has a narrow accepted column shape with no foreign keys; unknown d1_ and _cf_ objects remain visible and fail closed. Runtime inventory also retains prefix lookalikes, so they cannot hide tenant dependencies.
 
@@ -48,6 +48,18 @@ Official sources:
 
 The regulator's `_cf_` restriction is case-insensitive; recognition is deliberately stricter. Upstream definitions are reference evidence, not proof of a remote object's identity or shape. Unexpected shapes require review rather than an authorizer workaround.
 
-Read diagnostics distinguish DELETION_OBJECTS, DELETION_COLUMNS and DELETION_FOREIGN_KEYS. A failed 0044 audit with an explicit report path writes `<report>.failure.json`, containing only a sanitized error and false writesPerformed/readyForAuthorization flags. The existing always-run artifact upload retains that file. It contains no approval hash, raw SQL, defaults, credentials or business rows. Earlier migration failure-artifact contracts and workflow protection remain unchanged.
+Read diagnostics distinguish DELETION_OBJECTS, DELETION_COLUMNS, DELETION_FOREIGN_KEYS, DELETION_INDEXES and DELETION_INDEX_COLUMNS. A failed 0044 audit with an explicit report path writes `<report>.failure.json`, containing only a sanitized error and false writesPerformed/readyForAuthorization flags. The existing always-run artifact upload retains that file. It contains no approval hash, raw SQL, defaults, credentials or business rows. Earlier migration failure-artifact contracts and workflow protection remain unchanged.
 
 Local correction verification used a fresh synthetic D1 database with canonical pre-0044 schema and the genuine workerd-created `_cf_METADATA` object. All three corrected queries succeeded, and the evaluator returned compatible=true for 103 tables with no mismatches. This verifies local workerd compatibility, not Production readiness. On Windows, capture Wrangler JSON as UTF-8; default console decoding can corrupt non-ASCII SQL literals and must not be compensated by weakening definition comparison.
+
+## Sanitized structural diagnostics
+
+Structural evidence is diagnostic, not a new schema allowlist. Unknown objects, missing guards and changed definitions still block authorization. The additional projections participate in both complete reads and the metadata/evidence digests, including the rechecks before any separately authorized apply.
+
+Column evidence contains validated names and bounded structural fields. Default expressions are represented only by presence and digest. Declared types and collations are not assumed safe: only explicitly recognized values may appear as text; other values are hashed. Foreign keys include every inspected application table and preserve id/seq ordering for composite constraints. Index evidence includes uniqueness, origin, partial status and ordered component metadata; expression and rowid components retain their structural distinction without exporting expression text. Index definitions are represented by digests, not raw SQL or partial-index predicates.
+
+A digest can confirm equality with a reviewed candidate source. It cannot explain an unknown predicate, establish the business purpose of a table, or justify accepting an observed schema automatically. Historical reference profiles must be reconstructed from reviewed versioned sources and compared completely. If sources are missing, keep the mismatch blocked and obtain additional reviewed structural evidence rather than guessing DDL.
+
+No business rows, row counts or organization eligibility are inferred from this schema audit. It does not prove provider storage empty or authorize cleanup. Direct and indirect guard coverage, retention/removal policy, and concurrency require separate implementation and tests; these diagnostic fields do not change those policies.
+
+The version 2 report adds `structuralMetadata` with columns, all inspected foreign keys, and indexes with ordered components. The index projections include per-table index counts and per-index component counts, so missing groups/components fail closed rather than producing a seemingly complete report. Local Wrangler 4.140.0 verification of the extended projections passed against the same synthetic canonical fixture: 103 tables, 957 column descriptors, 253 indexes (including implicit indexes), and 256 foreign-key component rows. These counts describe the synthetic fixture only.

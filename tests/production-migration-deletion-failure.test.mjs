@@ -7,13 +7,13 @@ import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {DatabaseSync} from 'node:sqlite';
 import {gateError,safeError} from '../scripts/migrations/production-migration-lib.mjs';
-for(const stage of ['DELETION_OBJECTS','DELETION_COLUMNS','DELETION_FOREIGN_KEYS'])test('distinct sanitized metadata stage: '+stage,()=>{
+for(const stage of ['DELETION_OBJECTS','DELETION_COLUMNS','DELETION_FOREIGN_KEYS','DELETION_INDEXES','DELETION_INDEX_COLUMNS'])test('distinct sanitized metadata stage: '+stage,()=>{
   const error=safeError(gateError('WRANGLER_COMMAND_FAILED','private',{stage,exitCode:1,stdout:'PRIVATE SELECT TOKEN SQLITE_AUTH',stderr:''}));
   assert.equal(error.diagnostic.stage,stage);
   assert.deepEqual(error.diagnostic.categories,['SQLITE_AUTH']);
   assert.doesNotMatch(JSON.stringify(error),/PRIVATE|SELECT|TOKEN/);
 });
-for(const stage of ['D1_INFO','DELETION_OBJECTS','DELETION_COLUMNS','DELETION_FOREIGN_KEYS'])test('0044 sanitized failure artifact: '+stage,t=>{
+for(const stage of ['D1_INFO','DELETION_OBJECTS','DELETION_COLUMNS','DELETION_FOREIGN_KEYS','DELETION_INDEXES','DELETION_INDEX_COLUMNS'])test('0044 sanitized failure artifact: '+stage,t=>{
   const root=mkdtempSync(join(tmpdir(),'deletion-error-artifact-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
   const db=new DatabaseSync(join(root,'fixture.sqlite'));
   db.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8').split('-- Organization permanent deletion (migration 0044)')[0]);
