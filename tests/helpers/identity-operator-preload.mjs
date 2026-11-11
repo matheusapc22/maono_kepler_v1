@@ -18,6 +18,8 @@ function readFault(child,args) {
   const stage=args.includes('time-travel')?'D1_TIME_TRAVEL_INFO':args.includes('info')?'D1_INFO':
     sql.includes('inventory_json')?'ORGANIZATION_IDENTITY_SNAPSHOT':
     sql.startsWith('SELECT s.type,s.name,s.tbl_name,s.sql FROM sqlite_schema')?'DELETION_OBJECTS':
+    sql.includes('JOIN pragma_index_xinfo(i.name)')?'DELETION_INDEX_COLUMNS':
+    sql.includes('LEFT JOIN pragma_index_list(s.name)')?'DELETION_INDEXES':
     sql.includes('JOIN pragma_table_xinfo(s.name)')?'DELETION_COLUMNS':
     sql.includes('JOIN pragma_foreign_key_list(s.name)')?'DELETION_FOREIGN_KEYS':
     sql==='SELECT id, name, applied_at FROM d1_migrations ORDER BY id;'?'D1_LEDGER':

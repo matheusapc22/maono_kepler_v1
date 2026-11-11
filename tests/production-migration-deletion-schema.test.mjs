@@ -51,8 +51,8 @@ test('fixed remote reads repeated and drift rejected without application reads',
   assert.equal(command,'npx');const q=args[args.indexOf('--command')+1];assert.ok(Object.values(DELETION_SCHEMA_QUERIES).includes(q));calls++;
   return {stdout:JSON.stringify([{success:true,results:f.db.prepare(q).all()}])};
  };
- const r=await readDeletionSchema('unused',{runProcess});assert.equal(r.compatible,true);assert.equal(calls,6);
- calls=0;await assert.rejects(()=>readDeletionSchema('unused',{runProcess:async(...args)=>{if(calls===3)f.db.exec('CREATE TABLE drift(id INTEGER)');return runProcess(...args);}}),{code:'DELETION_METADATA_DRIFT'});
+ const r=await readDeletionSchema('unused',{runProcess});assert.equal(r.compatible,true);assert.equal(calls,10);
+ calls=0;await assert.rejects(()=>readDeletionSchema('unused',{runProcess:async(...args)=>{if(calls===5)f.db.exec('CREATE TABLE drift(id INTEGER)');return runProcess(...args);}}),{code:'DELETION_METADATA_DRIFT'});
 });
 test('source drift is blocked',()=>assert.throws(()=>deletionSchemaReference(p=>source(p)+' '),{code:'DELETION_SOURCE_DRIFT'}));
 test('0044 approval requires and binds evidence; unrelated migration stays generic',()=>{
@@ -112,7 +112,7 @@ test('exact official protected internals remain in evidence without protected PR
   const q=args[args.indexOf('--command')+1];calls++;
   return {stdout:JSON.stringify([{success:true,results:f.db.prepare(q).all()}])};
  }});
- assert.equal(calls,6);assert.equal(report.compatible,true);assert.equal(report.protectedInternals.length,2);
+ assert.equal(calls,10);assert.equal(report.compatible,true);assert.equal(report.protectedInternals.length,2);
  assert.ok(report.objects.some(o=>o.name==='_cf_METADATA'));assert.ok(report.tables.includes('_cf_KV'));
  assert.equal(f.snapshot().columns.some(c=>c.table_name==='_cf_METADATA'),false);
  const original=report.metadataDigest;f.db.exec('DROP TABLE _cf_KV');assert.notEqual(evaluateDeletionSchema(f.snapshot()).metadataDigest,original);
@@ -143,4 +143,54 @@ test('protected DDL matcher rejects constraints, literals, comments and trailing
   assert.equal(classifyProtectedMetadata([{...valid,sql}]).recognized.length,0);
  }
  assert.deepEqual(classifyProtectedMetadata([{...valid,sql:'create table _cf_METADATA ( key integer primary key , value blob );'}]).recognized,['_cf_METADATA']);
+});
+
+test('structural evidence preserves composite indexes and FKs without leaking expressions',t=>{
+ const f=fixture(t,`CREATE TABLE structure_parent(a INTEGER,b INTEGER,PRIMARY KEY(a,b));
+ CREATE TABLE structure_child(id INTEGER PRIMARY KEY,a INTEGER,b INTEGER,secret "PRIVATE_TYPE_MARKER" DEFAULT 'PRIVATE_DEFAULT_MARKER',generated TEXT GENERATED ALWAYS AS ('PRIVATE_GENERATED_MARKER'||secret) VIRTUAL,FOREIGN KEY(a,b) REFERENCES structure_parent(a,b));
+ CREATE UNIQUE INDEX structure_partial ON structure_child(a DESC,b COLLATE NOCASE) WHERE secret='PRIVATE_PREDICATE_MARKER';
+ CREATE INDEX structure_expression ON structure_child((secret||'PRIVATE_EXPRESSION_MARKER'));`);
+ const r=evaluateDeletionSchema(f.snapshot()),e=r.structuralMetadata;
+ assert.equal(r.compatible,false);assert.equal(r.version,2);
+ assert.doesNotMatch(JSON.stringify(r),/PRIVATE_|CREATE INDEX|CREATE TABLE|dflt_value/);
+ const c=e.columns.find(c=>c.table==='structure_child'&&c.name==='secret');
+ assert.equal(c.declaredType,null);assert.match(c.declaredTypeDigest,/^[a-f0-9]{64}$/);assert.equal(c.defaultPresent,true);assert.match(c.defaultDigest,/^[a-f0-9]{64}$/);
+ assert.equal(e.columns.find(c=>c.table==='structure_child'&&c.name==='generated').hidden,2);
+ const fk=e.foreignKeys.filter(f=>f.table_name==='structure_child');assert.deepEqual(fk.map(f=>[f.id,f.seq,f.from_column,f.to_column]),[[0,0,'a','a'],[0,1,'b','b']]);
+ const index=e.indexes.find(i=>i.name==='structure_partial');assert.equal(index.unique,1);assert.equal(index.partial,1);assert.equal(index.origin,'c');assert.match(index.definitionDigest,/^[a-f0-9]{64}$/);
+ assert.deepEqual(index.components.filter(c=>c.key).map(c=>[c.seqno,c.name,c.descending,c.collation]),[[0,'a',1,'BINARY'],[1,'b',0,'NOCASE']]);
+ const expression=e.indexes.find(i=>i.name==='structure_expression');assert.equal(expression.components[0].cid,-2);assert.equal(expression.components[0].name,null);
+ assert.ok(e.indexes.some(i=>i.table==='structure_parent'&&i.origin==='pk'&&i.definitionDigest===null));
+});
+test('unknown collation labels are hashed rather than echoed',t=>{
+ const f=fixture(t),s=f.snapshot();s.indexColumns[0].coll='PRIVATE_COLLATION_MARKER';const r=evaluateDeletionSchema(s);
+ assert.equal(r.compatible,false);assert.doesNotMatch(JSON.stringify(r),/PRIVATE_COLLATION_MARKER/);
+ const c=r.structuralMetadata.indexes.flatMap(i=>i.components).find(c=>c.collationDigest&&c.collation===null);assert.ok(c);
+});
+for(const fault of ['missingIndexGroup','missingComponent','badCount','duplicateComponent','badIndexName','badColumnName','unknownField','oversizedType','oversizedCollation','wrongTable','badCompositeOrder','tooManyRows'])test('structural metadata rejects '+fault,t=>{
+ const f=fixture(t),s=f.snapshot();
+ if(fault==='missingIndexGroup')s.indexes=s.indexes.filter(r=>r.table_name!=='organizations');
+ if(fault==='missingComponent')s.indexColumns.splice(0,1);
+ if(fault==='badCount')s.indexes[0].index_count++;
+ if(fault==='duplicateComponent')s.indexColumns.push({...s.indexColumns[0]});
+ if(fault==='badIndexName')s.indexes.find(r=>r.index_name).index_name='PRIVATE INVALID NAME';
+ if(fault==='badColumnName')s.indexColumns.find(r=>r.cid>=0).name='PRIVATE INVALID NAME';
+ if(fault==='unknownField')s.indexColumns[0].private='PRIVATE';
+ if(fault==='oversizedType')s.columns[0].type='P'.repeat(1025);
+ if(fault==='oversizedCollation')s.indexColumns[0].coll='P'.repeat(1025);
+ if(fault==='wrongTable')s.indexColumns[0].table_name='organizations';
+ if(fault==='badCompositeOrder')s.foreignKeys[0].seq=4;
+ if(fault==='tooManyRows')s.indexColumns=Array(20001).fill(s.indexColumns[0]);
+ assert.throws(()=>evaluateDeletionSchema(s),e=>/^DELETION_METADATA_/.test(e.code)&&!JSON.stringify(e).includes('PRIVATE'));
+});
+for(const key of ['indexes','indexColumns'])test('two complete reads bind structural projection '+key,async t=>{
+ const f=fixture(t);let calls=0;
+ await assert.rejects(()=>readDeletionSchema('unused',{runProcess:async(_,args)=>{
+  const q=args[args.indexOf('--command')+1];calls++;
+  const rows=f.db.prepare(q).all();
+  if(calls>5&&q===DELETION_SCHEMA_QUERIES[key]){
+    if(key==='indexes')rows.find(r=>r.index_name).partial^=1;else rows[0].coll='PRIVATE_COLLATION_DRIFT';
+  }
+  return {stdout:JSON.stringify([{success:true,results:rows}])};
+ }}),{code:'DELETION_METADATA_DRIFT'});
 });
