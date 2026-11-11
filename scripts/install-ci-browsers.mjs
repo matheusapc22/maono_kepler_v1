@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, lstatSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
@@ -20,17 +20,41 @@ function isHostedUbuntu() {
     && /^ID=ubuntu$/m.test(readFileSync('/etc/os-release', 'utf8'));
 }
 
-function readRunnerSources() {
+// GitHub's Ubuntu image uses apt-mirrors.txt for every suite (including
+// security). Only these fixed paths may be followed, never a URI-derived path.
+const MIRROR_LISTS = ['/etc/apt/apt-mirrors.txt', '/etc/apt/apt-security-mirrors.txt'];
+
+function assertRegularSource(file, { stat = lstatSync, realpath = realpathSync } = {}) {
+  if (!stat(file).isFile() || realpath(file) !== file) {
+    throw new Error(`Refusing non-regular or linked APT source: ${file}`);
+  }
+}
+
+export function readRunnerSources({ read = readFileSync, list = readdirSync,
+  stat = lstatSync, realpath = realpathSync } = {}) {
   const files = ['/etc/apt/sources.list'];
-  for (const entry of readdirSync('/etc/apt/sources.list.d', { withFileTypes: true })) {
+  for (const entry of list('/etc/apt/sources.list.d', { withFileTypes: true })) {
     if (entry.isFile() && /\.(list|sources)$/.test(entry.name)) {
       files.push(`/etc/apt/sources.list.d/${entry.name}`);
     }
   }
-  return files.flatMap((file) => {
-    try { return [{ file, before: readFileSync(file, 'utf8') }]; }
-    catch (error) { if (error.code === 'ENOENT') return []; throw error; }
-  });
+  const readRegular = (file, optional = false) => {
+    try {
+      assertRegularSource(file, { stat, realpath });
+      return [{ file, before: read(file, 'utf8') }];
+    } catch (error) {
+      if (optional && error.code === 'ENOENT') return [];
+      throw error;
+    }
+  };
+  const sources = files.flatMap((file) => readRegular(file, true));
+  // Exact whitespace-delimited URI tokens only: no traversal, query, fragment,
+  // nested path, alternate scheme, arbitrary local file or recursive mirrorlist.
+  const tokens = new Set(sources.flatMap(({ before }) => before.split(/\s+/)));
+  for (const file of MIRROR_LISTS) {
+    if (tokens.has(`mirror+file:${file}`)) sources.push(...readRegular(file));
+  }
+  return sources;
 }
 
 export function repairRunnerSources() {
@@ -40,6 +64,7 @@ export function repairRunnerSources() {
   for (const { file, before } of readRunnerSources()) {
     const after = replaceAzureMirror(before);
     if (after === before) continue;
+    assertRegularSource(file);
     const result = spawnSync('sudo', ['-n', 'tee', file], {
       input: after, encoding: 'utf8', timeout: 10000,
     });

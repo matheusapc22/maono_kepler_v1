@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
-import { installBrowsers, isAzureDnsFailure, replaceAzureMirror, recoverBeforeInstall, lookupAzureMirror } from '../scripts/install-ci-browsers.mjs';
+import { installBrowsers, isAzureDnsFailure, replaceAzureMirror, recoverBeforeInstall, lookupAzureMirror, readRunnerSources } from '../scripts/install-ci-browsers.mjs';
 
 test('legacy and deb822 sources retain package trust, suites and components', () => {
   const source = `deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://azure.archive.ubuntu.com/ubuntu noble main universe
@@ -148,4 +148,86 @@ test('isolated fixed-host DNS timeout permits fallback but unrelated errors fail
     /Azure DNS preflight failed/);
   assert.equal(lookupAzureMirror({ spawn: () => ({ status: 0 }) }), true);
   assert.equal(lookupAzureMirror({ spawn: () => ({ status: 2 }) }), false);
+});
+
+
+function syntheticAptFiles(files, { linked = [], nonRegular = [] } = {}) {
+  const reads = [];
+  const missing = (file) => { throw Object.assign(new Error(file), { code: 'ENOENT' }); };
+  return {
+    reads,
+    io: {
+      read(file) { reads.push(file); return files[file] ?? missing(file); },
+      list() { return Object.keys(files).filter((file) => file.startsWith('/etc/apt/sources.list.d/'))
+        .map((file) => ({ name: file.split('/').at(-1), isFile: () => true })); },
+      stat(file) { if (!(file in files)) return missing(file);
+        return { isFile: () => !nonRegular.includes(file) }; },
+      realpath(file) { return linked.includes(file) ? '/outside/target' : file; },
+    },
+  };
+}
+
+test('effective mirror+file source is inspected before installation, preserving priorities and trust', () => {
+  const source = `Types: deb
+URIs: mirror+file:/etc/apt/apt-mirrors.txt
+Suites: noble noble-updates noble-backports noble-security
+Components: main universe
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+`;
+  const mirrors = `http://azure.archive.ubuntu.com/ubuntu/\tpriority:1
+https://archive.ubuntu.com/ubuntu/\tpriority:2
+https://security.ubuntu.com/ubuntu/\tpriority:3
+`;
+  const fs = syntheticAptFiles({ '/etc/apt/sources.list.d/ubuntu.sources': source,
+    '/etc/apt/apt-mirrors.txt': mirrors });
+  const effective = readRunnerSources(fs.io);
+  assert.equal(effective.length, 2);
+  assert.equal(replaceAzureMirror(source), source);
+  assert.equal(replaceAzureMirror(mirrors), mirrors.replace('http://azure.archive.ubuntu.com', 'https://archive.ubuntu.com'));
+  let repaired = 0;
+  assert.equal(recoverBeforeInstall({ eligible: () => true, sources: () => effective,
+    lookup: () => false, repair() { repaired++; } }), true);
+  assert.equal(repaired, 1);
+});
+
+test('legacy source can reference the fixed security list, and non-Azure entries stay unchanged', () => {
+  const fs = syntheticAptFiles({ '/etc/apt/sources.list':
+    'deb mirror+file:/etc/apt/apt-security-mirrors.txt noble-security main',
+    '/etc/apt/apt-security-mirrors.txt': 'https://security.ubuntu.com/ubuntu/\tpriority:1\n' });
+  const effective = readRunnerSources(fs.io);
+  assert.equal(effective.length, 2);
+  assert.equal(recoverBeforeInstall({ eligible: () => true, sources: () => effective,
+    lookup() { assert.fail('no Azure mirror to probe'); } }), false);
+});
+
+test('mirror references cannot traverse, select arbitrary files, recurse or use URI suffixes', () => {
+  const invalid = ['mirror+file:/etc/apt/../apt/apt-mirrors.txt',
+    'mirror+file:/etc/apt/apt-mirrors.txt/other', 'mirror+file:/etc/apt/apt-mirrors.txt?query',
+    'mirror+file:/etc/apt/apt-mirrors.txt#fragment', 'mirror+file:/etc/apt/apt-mirrors.txt.evil',
+    'mirror+file:///etc/apt/apt-mirrors.txt', 'mirror+file:/tmp/evil',
+    'https://evil/mirror+file:/etc/apt/apt-mirrors.txt'];
+  for (const uri of invalid) {
+    const fs = syntheticAptFiles({ '/etc/apt/sources.list': `deb ${uri} noble main`,
+      '/etc/apt/apt-mirrors.txt': 'http://azure.archive.ubuntu.com/ubuntu/' });
+    assert.equal(readRunnerSources(fs.io).length, 1);
+    assert.deepEqual(fs.reads, ['/etc/apt/sources.list']);
+  }
+  const fs = syntheticAptFiles({ '/etc/apt/sources.list': 'deb mirror+file:/etc/apt/apt-mirrors.txt noble main',
+    '/etc/apt/apt-mirrors.txt': 'mirror+file:/etc/apt/apt-security-mirrors.txt',
+    '/etc/apt/apt-security-mirrors.txt': 'http://azure.archive.ubuntu.com/ubuntu/' });
+  assert.equal(readRunnerSources(fs.io).length, 2);
+  assert.ok(!fs.reads.includes('/etc/apt/apt-security-mirrors.txt'));
+});
+
+test('linked, nonregular and missing referenced mirror files fail closed before reading content', () => {
+  const files = { '/etc/apt/sources.list': 'deb mirror+file:/etc/apt/apt-mirrors.txt noble main',
+    '/etc/apt/apt-mirrors.txt': 'http://azure.archive.ubuntu.com/ubuntu/' };
+  for (const opts of [{ linked: ['/etc/apt/apt-mirrors.txt'] }, { nonRegular: ['/etc/apt/apt-mirrors.txt'] },
+    { linked: ['/etc/apt/sources.list'] }]) {
+    const fs = syntheticAptFiles(files, opts);
+    assert.throws(() => readRunnerSources(fs.io), /Refusing non-regular or linked/);
+    assert.ok(!fs.reads.includes(opts.linked?.[0] ?? opts.nonRegular[0]));
+  }
+  const fs = syntheticAptFiles({ '/etc/apt/sources.list': files['/etc/apt/sources.list'] });
+  assert.throws(() => readRunnerSources(fs.io), /apt-mirrors.txt/);
 });
