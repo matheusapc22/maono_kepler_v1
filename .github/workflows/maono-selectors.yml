@@ -3,6 +3,8 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
       - 'src/components/selection/**'
       - 'src/components/access/**'
       - 'src/pages/Projects/**'
@@ -35,7 +37,7 @@ jobs:
           npx tsc -b
           npx eslint src/components/selection/MaonoSelect.tsx tests/browser/maono-select.spec.ts tests/browser/fixtures/maono-select.tsx playwright.selectors.config.ts
       - name: Install browser engines
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: node scripts/install-ci-browsers.mjs chromium firefox webkit
       - name: Actual shared component, five desktop and touch browser profiles
         run: npx playwright test --config=playwright.selectors.config.ts
       - name: Regression evidence

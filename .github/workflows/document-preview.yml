@@ -3,6 +3,8 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
       - 'src/pages/Projects/components/Document*'
       - 'src/lib/document-preview*.ts'
       - 'src/lib/file-transfer.ts'
@@ -45,7 +47,7 @@ jobs:
       - name: Typecheck and build including same-origin PDF worker and assets
         run: npm run build
       - name: Install browser engines
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: node scripts/install-ci-browsers.mjs chromium firefox webkit
       - name: Built app, real PDF/image rendering, synthetic intercepted APIs
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: document-preview-results.json

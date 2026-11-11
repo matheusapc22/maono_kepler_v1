@@ -3,6 +3,8 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
       - 'src/components/selection/**'
       - 'src/pages/Projects/components/Documents*'
       - 'src/pages/Projects/components/DocumentActionDialogs*'
@@ -52,7 +54,7 @@ jobs:
       - name: Build application
         run: npm run build
       - name: Install browser engines
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: node scripts/install-ci-browsers.mjs chromium firefox webkit
       - name: Actual built React route with intercepted APIs (not production acceptance)
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: documents-visual-results.json

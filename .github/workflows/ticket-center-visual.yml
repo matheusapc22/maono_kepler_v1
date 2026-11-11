@@ -3,6 +3,8 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
       - 'src/components/selection/**'
       - 'src/main.tsx'
       - 'src/pages/Projects.tsx'
@@ -78,7 +80,7 @@ jobs:
           path: dist/
           retention-days: 7
       - name: Install browser engines
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: node scripts/install-ci-browsers.mjs chromium firefox webkit
       - name: Compiled Central route with fixture APIs, not production acceptance
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: ticket-center-results.json
