@@ -179,6 +179,21 @@ test('failed or incomplete batched introspection stops before claiming or provid
 for(const name of ['d1_business','_cf_business','acfXbusiness','d1Xbusiness','sqliteXbusiness'])
 test('prefixed business dependency cannot bypass deletion: '+name,async t=>{
  const f=fixture(t);f.db.exec(`CREATE TABLE ${name}(id INTEGER PRIMARY KEY,organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE); INSERT INTO ${name}(id,organization_id) VALUES(1,3);`);
- const p=(await f.call('/organizations/3/deletion-preview')).data;
- assert.equal(p.eligible,false);assert.ok(p.blockers.some(x=>x.code==='UNGUARDED_DEPENDENCY'));assert.equal(f.removeCount(),0);
+ const response=await f.call('/organizations/3/deletion-preview'),p=response.data;
+ if(name.startsWith('_cf_'))assert.equal(response.status,503);else {assert.equal(p.eligible,false);assert.ok(p.blockers.some(x=>x.code==='UNGUARDED_DEPENDENCY'));}assert.equal(f.removeCount(),0);
+});
+
+for(const name of ['_cf_METADATA','_cf_KV'])test('runtime recognizes exact protected internal without accessing its PRAGMAs: '+name,async t=>{
+ const f=fixture(t,{hooks:{beforeSql({sql}){if(/^PRAGMA/i.test(sql)&&sql.includes(name))throw new Error('Protected internal PRAGMA attempted');}}});
+ f.db.exec(name==='_cf_METADATA'?'CREATE TABLE _cf_METADATA(key INTEGER PRIMARY KEY,value BLOB)':'CREATE TABLE _cf_KV(key TEXT PRIMARY KEY,value BLOB) WITHOUT ROWID');
+ const p=await f.call('/organizations/3/deletion-preview');assert.equal(p.status,200);assert.equal(p.data.eligible,true);
+});
+for(const ddl of [
+ 'CREATE TABLE _cf_METADATA(key INTEGER PRIMARY KEY,value BLOB,organization_id INTEGER)',
+ 'CREATE TABLE _CF_METADATA(key INTEGER PRIMARY KEY,value BLOB)',
+ 'CREATE TABLE _cf_METADATA(key INTEGER PRIMARY KEY,value BLOB); CREATE TRIGGER attached AFTER INSERT ON _cf_METADATA BEGIN SELECT 1; END',
+ 'CREATE TABLE _cf_METADATA(key INTEGER PRIMARY KEY,value BLOB); CREATE INDEX attached ON _cf_METADATA(value)',
+ 'CREATE TABLE _cf_METADATA(key INTEGER PRIMARY KEY,value BLOB); CREATE TABLE attached_child(id INTEGER,internal_key INTEGER REFERENCES _cf_METADATA(key))',
+])test('runtime blocks unsafe protected metadata shapes or references: '+ddl,async t=>{
+ const f=fixture(t);f.db.exec(ddl);const p=await f.call('/organizations/3/deletion-preview');assert.equal(p.status,503);assert.equal(f.removeCount(),0);
 });

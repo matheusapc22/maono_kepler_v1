@@ -161,6 +161,18 @@ try {
   ].join('\n'));
 } catch (error) {
   const safe = safeError(error);
+  // Only sanitized failure evidence, never an approval or raw remote response.
+  // Keep earlier migration report contracts unchanged.
+  if (args.migration === DELETION_MIGRATION && args.report) {
+    try {
+      await writeJsonReport(resolve(args.report) + '.failure.json', {
+        phase: 'audit-failed', writesPerformed: false, readyForAuthorization: false,
+        error: safe,
+      });
+    } catch {
+      process.stderr.write('Sanitized audit failure artifact could not be saved.\n');
+    }
+  }
   process.stderr.write(`${JSON.stringify({ ok: false, writesPerformed: false, error: safe }, null, 2)}\n`);
   process.exitCode = 1;
 } finally {

@@ -71,7 +71,7 @@ test('audit and apply wire mandatory 0044 metadata checks',()=>{
  assert.ok(apply.indexOf('finalSchema.digest!==evidenceDigest')<apply.indexOf('applyStarted = true'));
 });
 test('remote read failure is sanitized and labelled',async()=>{
- await assert.rejects(()=>readDeletionSchema('unused',{runProcess:async()=>{throw Object.assign(new Error('PRIVATE SQL'),{details:{exitCode:17,stdout:'PRIVATE ROW',stderr:'PRIVATE TOKEN'}});}}),e=>e.code==='WRANGLER_COMMAND_FAILED'&&!JSON.stringify(e).includes('PRIVATE')&&e.details.stage==='DELETION_METADATA');
+ await assert.rejects(()=>readDeletionSchema('unused',{runProcess:async()=>{throw Object.assign(new Error('PRIVATE SQL'),{details:{exitCode:17,stdout:'PRIVATE ROW',stderr:'PRIVATE TOKEN'}});}}),e=>e.code==='WRANGLER_COMMAND_FAILED'&&!JSON.stringify(e).includes('PRIVATE')&&e.details.stage==='DELETION_OBJECTS');
 });
 import {mkdtempSync,rmSync,existsSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -104,3 +104,43 @@ for(const prefix of ['d1_','_cf_'])test('unknown prefixed business dependency is
  const r=evaluateDeletionSchema(f.snapshot());assert.equal(r.compatible,false);assert.ok(r.tables.includes(prefix+'business'));assert.ok(r.dependencies.some(d=>d.name===prefix+'child'));
 });
 test('missing source rejects without propagating local diagnostics',()=>assert.throws(()=>deletionSchemaReference(()=>{throw new Error('PRIVATE SOURCE PATH');}),e=>e.code==='DELETION_SOURCE_DRIFT'&&!e.message.includes('PRIVATE')));
+
+const protectedDDL = 'CREATE TABLE _cf_METADATA (key INTEGER PRIMARY KEY, value BLOB); CREATE TABLE _cf_KV (key TEXT PRIMARY KEY, value BLOB) WITHOUT ROWID;';
+test('exact official protected internals remain in evidence without protected PRAGMAs',async t=>{
+ const f=fixture(t,protectedDDL);let calls=0;
+ const report=await readDeletionSchema('unused',{runProcess:async(_,args)=>{
+  const q=args[args.indexOf('--command')+1];calls++;
+  return {stdout:JSON.stringify([{success:true,results:f.db.prepare(q).all()}])};
+ }});
+ assert.equal(calls,6);assert.equal(report.compatible,true);assert.equal(report.protectedInternals.length,2);
+ assert.ok(report.objects.some(o=>o.name==='_cf_METADATA'));assert.ok(report.tables.includes('_cf_KV'));
+ assert.equal(f.snapshot().columns.some(c=>c.table_name==='_cf_METADATA'),false);
+ const original=report.metadataDigest;f.db.exec('DROP TABLE _cf_KV');assert.notEqual(evaluateDeletionSchema(f.snapshot()).metadataDigest,original);
+});
+for(const ddl of [
+ 'CREATE TABLE _cf_METADATA(key INTEGER PRIMARY KEY,value BLOB,organization_id INTEGER)',
+ 'CREATE TABLE _CF_METADATA(key INTEGER PRIMARY KEY,value BLOB)',
+ 'CREATE TABLE _cf_business(id INTEGER, organization_id INTEGER)',
+ 'CREATE VIEW _cf_METADATA AS SELECT id FROM organizations',
+ 'CREATE TABLE _cf_METADATA(key INTEGER PRIMARY KEY,value BLOB); CREATE TRIGGER attached AFTER INSERT ON _cf_METADATA BEGIN SELECT 1; END',
+ 'CREATE TABLE _cf_METADATA(key INTEGER PRIMARY KEY,value BLOB); CREATE INDEX attached ON _cf_METADATA(value)',
+])test('protected unknown/altered/associated object blocks before PRAGMAs: '+ddl,async t=>{
+ const f=fixture(t,ddl);let calls=0;
+ await assert.rejects(()=>readDeletionSchema('unused',{runProcess:async(_,args)=>{
+  const q=args[args.indexOf('--command')+1];calls++;assert.equal(q,DELETION_SCHEMA_QUERIES.objects);
+  return {stdout:JSON.stringify([{success:true,results:f.db.prepare(q).all()}])};
+ }}),{code:'DELETION_PROTECTED_METADATA_BLOCKED'});assert.equal(calls,1);
+});
+test('business foreign key to protected internals blocks rather than disappearing',t=>{
+ const f=fixture(t,protectedDDL+'CREATE TABLE attached_child(id INTEGER PRIMARY KEY,internal_key INTEGER REFERENCES _cf_METADATA(key));');
+ const r=evaluateDeletionSchema(f.snapshot());assert.equal(r.compatible,false);assert.ok(r.mismatches.some(m=>m.code==='PROTECTED_METADATA_REFERENCE'));
+});
+
+import {classifyProtectedMetadata} from '../functions/_lib/d1-protected-metadata.js';
+test('protected DDL matcher rejects constraints, literals, comments and trailing statements',()=>{
+ const valid={type:'table',name:'_cf_METADATA',tbl_name:'_cf_METADATA',sql:'CREATE TABLE _cf_METADATA(key INTEGER PRIMARY KEY,value BLOB)'};
+ for(const sql of [valid.sql+'; SELECT 1',valid.sql.replace('value BLOB',"value BLOB DEFAULT 'PRIVATE'"),valid.sql.replace('value BLOB','value BLOB NOT NULL'),valid.sql+' /* unexpected */']){
+  assert.equal(classifyProtectedMetadata([{...valid,sql}]).recognized.length,0);
+ }
+ assert.deepEqual(classifyProtectedMetadata([{...valid,sql:'create table _cf_METADATA ( key integer primary key , value blob );'}]).recognized,['_cf_METADATA']);
+});
