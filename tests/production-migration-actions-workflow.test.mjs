@@ -63,3 +63,26 @@ test('workflow never runs generic Wrangler migration apply directly', () => {
   assert.match(workflow, /migration:apply:production/);
   assert.match(workflow, /migration:postvalidate:production/);
 });
+
+test('historical postvalidation has explicit origin input and read-only artifact permission',()=>{
+ assert.match(workflow,/audit_run_id:/);assert.match(workflow,/actions: read/);assert.doesNotMatch(workflow,/actions: write/);
+ assert.match(workflow,/test "\$ACTOR_ID" = "\$OWNER_ID"/);
+ assert.match(workflow,/AUDIT_RUN_ID: \$\{\{ inputs.audit_run_id \}\}/);
+ assert.match(workflow,/TRUSTED_WORKFLOW_SHA: \$\{\{ github.workflow_sha \}\}/);
+ assert.match(workflow,/TRUSTED_WORKFLOW_REF: \$\{\{ github.workflow_ref \}\}/);
+ const origin=workflow.indexOf('- name: Authenticate original historical audit before D1 credentials');
+ assert.ok(origin>0&&origin<workflow.indexOf('- name: Validate protected credential presence'));
+ assert.match(workflow,/--audit-report \.tmp\/production-migrations\/original-audit.json --approval "\$APPROVAL_HASH"/);
+});
+test('fixed historical selector is separate from generic migrations and version gated',()=>{
+ assert.match(workflow,/HISTORICAL_OPERATOR_CONTRACT!=='historical-0044-operator-v1'/);
+ assert.match(workflow,/await validateHistoricalOperatorSources\(\)/);
+ assert.match(workflow,/test ! -e "migrations\/\$MIGRATION"/);
+ assert.match(workflow,/else\s+test -f "migrations\/\$MIGRATION"/);
+ const validation=workflow.slice(workflow.indexOf('case "$MODE" in'),workflow.indexOf('- name: Checkout canonical product branch'));
+ assert.match(validation,/audit\)[\s\S]*?test -z "\$AUDIT_RUN_ID"/);
+ assert.match(validation,/apply\)[\s\S]*?test -z "\$AUDIT_RUN_ID"/);
+ assert.match(validation,/postvalidate\)[\s\S]*?0044_organization_permanent_deletion_historical.sql[\s\S]*?AUDIT_RUN_ID/);
+});
+
+test('historical apply is denied before gate and again before fresh audit; audit identity is not approval',()=>{const clauses=[...workflow.matchAll(/            apply\)\r?\n([^\n]*)/g)];assert.equal(clauses.length,2);for(const c of clauses)assert.match(c[1],/test "\$MIGRATION" != "0044_organization_permanent_deletion_historical.sql"/);assert.match(workflow,/BLOCKED_TRANSPORT_NOT_AUTHORIZATION/);assert.match(workflow,/process.stdout.write\(r.evidenceIdentity\)/);assert.doesNotMatch(workflow,/approval_token="\$supplied_hash"/);});

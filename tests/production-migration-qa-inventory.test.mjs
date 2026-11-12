@@ -910,7 +910,7 @@ const gitExec = process.platform==='win32' ? spawnSync('git',['--exec-path'],{en
 if(gitExec) assert.equal(gitExec.status,0,'Git for Windows is required for the Bash dispatcher contract');
 const bash = gitExec ? resolve(gitExec.stdout.trim(),'../../../bin/bash.exe') : 'bash';
 for(const [name,change,expected] of [
-  ['valid inventory',{},0],['wrong owner',{ACTOR:'other'},1],['wrong ref',{DISPATCH_REF:'feature'},1],
+  ['historical apply blocked',{MODE:'apply',MIGRATION:'0044_organization_permanent_deletion_historical.sql',APPROVAL_HASH:'a'.repeat(64)},1],['historical audit evidence',{MODE:'audit',MIGRATION:'0044_organization_permanent_deletion_historical.sql'},0],['valid inventory',{},0],['wrong owner',{ACTOR:'other'},1],['wrong ref',{DISPATCH_REF:'feature'},1],
   ['wrong migration',{MIGRATION:'0043_other.sql'},1],['approval on inventory',{APPROVAL_HASH:'a'.repeat(64)},1],
   ['unknown mode',{MODE:'arbitrary-sql'},2],['migration injection',{MIGRATION:'0042_x.sql; exit 0'},1],
   ['audit unchanged',{MODE:'audit'},0],['postvalidate unchanged',{MODE:'postvalidate'},0],
@@ -918,7 +918,7 @@ for(const [name,change,expected] of [
 ]) test('real dispatcher input shell: '+name,()=>{
   const result=spawnSync(bash,['--noprofile','--norc','-s'],{
     input:inputGate,encoding:'utf8',windowsHide:true,
-    env:{...process.env,ACTOR:'matheusapc22',OWNER:'matheusapc22',DISPATCH_REF:'main',MODE:'organization-qa-inventory',
+    env:{...process.env,ACTOR:'matheusapc22',OWNER:'matheusapc22',ACTOR_ID:'22',OWNER_ID:'22',AUDIT_RUN_ID:'',DISPATCH_REF:'main',MODE:'organization-qa-inventory',
       MIGRATION:ORGANIZATION_MIGRATION,APPROVAL_HASH:'',...change},
   });
   assert.equal(result.error,undefined);

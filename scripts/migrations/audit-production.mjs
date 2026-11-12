@@ -1,3 +1,5 @@
+import {runHistoricalOperator} from './organization-deletion-historical-operator.mjs';
+import {HISTORICAL_CANDIDATE_NAME} from './organization-deletion-historical-lifecycle.mjs';
 import {evaluateHistoricalDeletionPrestate} from './deletion-historical-prestate.mjs';
 import { DELETION_MIGRATION, readDeletionSchemaEvidence, assertDeletionSchema } from './organization-deletion-schema-0044.mjs';
 import { IDENTITY_MIGRATION, collectIdentityEvidence, guardedIdentityMigration, identityApprovalEvidence } from './organization-identity-0043.mjs';
@@ -35,6 +37,9 @@ import {
 const args = parseNamedArgs(process.argv.slice(2), new Set(['migration', 'report']));
 if (!args.migration) throw gateError('MIGRATION_REQUIRED', '--migration é obrigatório.');
 
+if(args.migration===HISTORICAL_CANDIDATE_NAME){
+ await runHistoricalOperator('audit',args);
+}else{
 let temporary;
 try {
   assertOperationalMigration(args.migration);
@@ -188,4 +193,6 @@ try {
   process.exitCode = 1;
 } finally {
   await temporary?.cleanup().catch(() => {});
+}
+
 }

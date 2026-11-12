@@ -1,3 +1,5 @@
+import {runHistoricalOperator} from './organization-deletion-historical-operator.mjs';
+import {HISTORICAL_CANDIDATE_NAME} from './organization-deletion-historical-lifecycle.mjs';
 import { IDENTITY_MIGRATION, collectIdentityPostValidation } from './organization-identity-0043.mjs';
 import { resolve } from 'node:path';
 import { ORGANIZATION_MIGRATION, collectOrganizationPostValidation } from './organization-management-schema.mjs';
@@ -24,9 +26,13 @@ import {
   writeJsonReport,
 } from './production-migration-lib.mjs';
 
-const args = parseNamedArgs(process.argv.slice(2), new Set(['migration', 'report']));
+const args = parseNamedArgs(process.argv.slice(2), new Set(['migration', 'report', 'audit-report', 'approval']));
 if (!args.migration) throw gateError('MIGRATION_REQUIRED', '--migration é obrigatório.');
 
+if(args.migration===HISTORICAL_CANDIDATE_NAME){
+ await runHistoricalOperator('postvalidate',args);
+}else{
+ if(args['audit-report']||args.approval)throw gateError('ARGUMENT_INVALID','Historical audit evidence options are not supported for this migration.');
 let temporary;
 try {
   assertOperationalMigration(args.migration);
@@ -89,4 +95,6 @@ try {
   process.exitCode = 1;
 } finally {
   await temporary?.cleanup().catch(() => {});
+}
+
 }
