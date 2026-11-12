@@ -78,6 +78,47 @@ export function normalizeMigrationName(value) {
   return name;
 }
 
+export const CANONICAL_DELETION_MIGRATION = '0044_organization_permanent_deletion.sql';
+export const HISTORICAL_DELETION_MIGRATION = '0044_organization_permanent_deletion_historical.sql';
+
+// This diagnostic candidate has no operational lifecycle or authorization token.
+export function assertOperationalMigration(value) {
+  const name = normalizeMigrationName(value);
+  if (name.toLowerCase() === HISTORICAL_DELETION_MIGRATION) {
+    throw gateError('HISTORICAL_DELETION_AUDIT_ONLY', 'Historical deletion candidate is audit-only; execution and post-validation are denied.');
+  }
+  if (name.toLowerCase() === CANONICAL_DELETION_MIGRATION && name !== CANONICAL_DELETION_MIGRATION) {
+    throw gateError('MIGRATION_NAME_INVALID', 'Canonical deletion migration requires its exact filename.');
+  }
+  return name;
+}
+
+export function assertDeletionLedgerPoststate(ledger) {
+  if (!Array.isArray(ledger) || ledger.length > 10000) throw gateError('DELETION_LEDGER_INVALID', 'Deletion ledger is malformed.');
+  const ids = new Set(), names = new Set();
+  for (const row of ledger) {
+    if (!row || !Number.isSafeInteger(row.id) || row.id < 1 || typeof row.name !== 'string' ||
+        !MIGRATION_NAME.test(row.name) || typeof row.appliedAt !== 'string' ||
+        !/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})?$/.test(row.appliedAt) ||
+        ids.has(row.id) || names.has(row.name.toLowerCase())) {
+      throw gateError('DELETION_LEDGER_INVALID', 'Deletion ledger contains malformed or duplicate entries.');
+    }
+    ids.add(row.id); names.add(row.name.toLowerCase());
+    if (row.name.toLowerCase().startsWith('0044_') && row.name !== CANONICAL_DELETION_MIGRATION) {
+      throw gateError('DELETION_LEDGER_HISTORICAL', 'Unrecognized or historical deletion ledger entry blocks this operator.');
+    }
+  }
+  return true;
+}
+
+export function assertDeletionLedgerPrestate(ledger) {
+  assertDeletionLedgerPoststate(ledger);
+  if (ledger.some(row => row.name === CANONICAL_DELETION_MIGRATION)) {
+    throw gateError('DELETION_LEDGER_ALREADY_APPLIED', 'Deletion prestate requires no applied 0044 entry; resume is not authorized.');
+  }
+  return true;
+}
+
 export function requireCloudflareEnvironment(env = process.env) {
   const token = String(env.CLOUDFLARE_API_TOKEN || '').trim();
   const accountId = String(env.CLOUDFLARE_ACCOUNT_ID || '').trim();
@@ -201,7 +242,7 @@ export async function listLocalMigrations(migrationsDir = DEFAULT_MIGRATIONS_DIR
 }
 
 export function computePendingState(localMigrations, appliedNames, selectedMigration) {
-  const selected = normalizeMigrationName(selectedMigration);
+  const selected = assertOperationalMigration(selectedMigration);
   const applied = new Set(appliedNames.map((name) => String(name)));
   if (!localMigrations.includes(selected)) {
     throw gateError('MIGRATION_NOT_IN_LOCAL_SET', `A migration ${selected} não existe no diretório local de migrations.`);
@@ -220,7 +261,7 @@ export function computePendingState(localMigrations, appliedNames, selectedMigra
 }
 
 export function approvalMaterial({ migration, migrationSha256, gitSha, pendingDigest, databaseId, evidenceDigest }) {
-  const normalizedMigration = normalizeMigrationName(migration);
+  const normalizedMigration = assertOperationalMigration(migration);
   if (!HEX_64.test(migrationSha256 || '')) throw gateError('MIGRATION_HASH_INVALID', 'SHA-256 da migration inválido.');
   if (!HEX_40.test(gitSha || '')) throw gateError('GIT_SHA_INVALID', 'Git SHA inválido.');
   if (!HEX_64.test(pendingDigest || '')) throw gateError('PENDING_DIGEST_INVALID', 'Digest da fila de migrations inválido.');
@@ -270,6 +311,8 @@ export function assertProductionIdentity(identity) {
 }
 
 export function assertAuditMatchesCurrent(audit, current) {
+  assertOperationalMigration(current?.migration);
+  assertOperationalMigration(audit?.migration?.name);
   if (!audit || audit.reportVersion !== REPORT_VERSION || audit.phase !== 'audit' || audit.writesPerformed !== false) {
     throw gateError('AUDIT_REPORT_INVALID', 'O relatório informado não é um preflight de migration válido.');
   }
@@ -311,7 +354,7 @@ export function createWranglerConfig(accountId, { migrationsDir = null } = {}) {
 }
 
 export async function ensureMigrationFile(name, migrationsDir = DEFAULT_MIGRATIONS_DIR) {
-  const migration = normalizeMigrationName(name);
+  const migration = assertOperationalMigration(name);
   const path = join(migrationsDir, migration);
   const metadata = await stat(path).catch(() => null);
   if (!metadata?.isFile()) {
@@ -408,6 +451,7 @@ export async function runWranglerApply(configPath, injected = {}) {
 }
 
 export async function makeTemporaryWranglerConfig(accountId, { isolatedMigration = null, identityExecution = null } = {}) {
+  if (isolatedMigration) assertOperationalMigration(isolatedMigration.name);
   const root = await mkdtemp(join(tmpdir(), 'maono-production-migration-'));
   const configPath = join(root, 'wrangler.json');
   let config;
@@ -457,6 +501,17 @@ export async function queryLedger(configPath, injected = {}) {
   })).filter((row) => row.name);
 }
 
+// Fixed read, preserving every row and its types. No filtering/coercion for 0044.
+export async function queryDeletionLedger(configPath, injected = {}) {
+  const json = await runWranglerJson([
+    'd1', 'execute', PRODUCTION_DATABASE_NAME, '--remote',
+    '--command', 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id;'
+  ], configPath, injected, 'D1_LEDGER');
+  const ledger = rowsFromD1Json(json).map(row => row && ({ id: row.id, name: row.name, appliedAt: row.applied_at }));
+  assertDeletionLedgerPoststate(ledger);
+  return ledger;
+}
+
 export async function queryIntegrity(configPath, injected = {}) {
   const quickJson = await runWranglerJson([
     'd1', 'execute', PRODUCTION_DATABASE_NAME, '--remote', '--command', 'PRAGMA quick_check;'
@@ -476,10 +531,12 @@ export async function queryIntegrity(configPath, injected = {}) {
 }
 
 export async function readRemoteState(configPath, selectedMigration, injected = {}) {
+  selectedMigration = assertOperationalMigration(selectedMigration);
   const info = await runWranglerJson(['d1', 'info', PRODUCTION_DATABASE_NAME], configPath, injected, 'D1_INFO');
   const identity = extractD1Identity(info);
   assertProductionIdentity(identity);
-  const ledger = await queryLedger(configPath, injected);
+  const ledger = selectedMigration === CANONICAL_DELETION_MIGRATION
+    ? await queryDeletionLedger(configPath, injected) : await queryLedger(configPath, injected);
   const localMigrations = await listLocalMigrations(injected.migrationsDir || DEFAULT_MIGRATIONS_DIR);
   const pending = computePendingState(localMigrations, ledger.map((row) => row.name), selectedMigration);
   return { identity, ledger, localMigrations, pending };

@@ -152,7 +152,7 @@ function structuralMetadata(snapshot){
   };
 }
 export function assertDeletionSchema(report){if(!report?.compatible)fail('DELETION_SCHEMA_BLOCKED');}
-export async function readDeletionSchema(configPath,injected={}){
+export async function readDeletionSchemaEvidence(configPath,injected={}){
   const reference=deletionSchemaReference(); // Validate sources before any remote access.
   const stages={objects:'DELETION_OBJECTS',columns:'DELETION_COLUMNS',foreignKeys:'DELETION_FOREIGN_KEYS',indexes:'DELETION_INDEXES',indexColumns:'DELETION_INDEX_COLUMNS'};
   const read=async()=>{const result={};for(const [key,sql] of Object.entries(DELETION_SCHEMA_QUERIES)){
@@ -161,5 +161,6 @@ export async function readDeletionSchema(configPath,injected={}){
   }validate(result);return result;};
   const first=await read(),second=await read();
   if(digest(first)!==digest(second))fail('DELETION_METADATA_DRIFT');
-  return evaluateDeletionSchema(second,reference);
+  return {snapshot:second,report:evaluateDeletionSchema(second,reference),snapshotDigests:[digest(first),digest(second)]};
 }
+export async function readDeletionSchema(configPath,injected={}){return (await readDeletionSchemaEvidence(configPath,injected)).report;}

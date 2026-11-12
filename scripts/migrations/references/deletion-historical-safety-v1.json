@@ -1,0 +1,104 @@
+{
+  "profileId": "deletion-safety-historical-v1",
+  "version": 1,
+  "scope": "super-admin-empty-organization-veto-and-bounded-acl-cleanup",
+  "operationalApproval": false,
+  "sourceBase": "4ab38311f3c43726268a403011e6e1e191635aaf",
+  "fixtureSourceBase": "4f48ed5d8299fca3745807e47baf78369578e5e8",
+  "candidate": "scripts/migrations/candidates/0044_organization_permanent_deletion_historical.sql",
+  "candidateSha256": "b04a164e85fe09d292dd8e81ac744ce4deec8927290d38cff326c77e030354fa",
+  "sourcePins": {
+    "functions/_lib/organization-permanent-deletion.js": "f869cd2a00d16394b137437b1d99c1c0bbe7e3cd820e998a9185b9adf14b458a",
+    "functions/_lib/permissions.js": "822c90bc91822974c8c25eaa04719559555c75639efd3db0030de27bdc9b8021",
+    "functions/_lib/auth.js": "9f8607144d96f9d93c7ea722d2a92b074ec5fb179819070f7de12b5e1365fbe4",
+    "functions/_lib/organization-management-http.js": "0b5139aec5fe16229d0b58ed3a4461d0e6c881129256801c5a21826b5371208c",
+    "functions/api/admin/organization-management/[[path]].js": "ceb9e33e2190d124c3e96605819b4b83cb08965cc2052f2870d97e83f9adf90c",
+    "functions/_lib/d1-protected-metadata.js": "c4e5a2e64dd5e08b05d7e5de9878a5fba033163c9f31948c8884c5aba4c0e8d7",
+    "migrations/0044_organization_permanent_deletion.sql": "cde2cbad6ded662faf004eac176309b3003641ec2f0714eda06b890127fb3aba",
+    "migrations/0039_project_save_operations.sql": "0ef8d78946235a089b754f818e35c83aa3a754a2e3092d09d86c88248cd98ab8",
+    "schema.sql": "7016dbc64d6502af557bc9fd5cab9cc2be71770a1d56ff74d5c88219d61026fc",
+    "tests/fixtures/deletion-historical-safety/manifest.json": "eba41d065824c0bf24c8a446906f570f9f94d2de551b760b80d86488fa290d6a",
+    "tests/fixtures/deletion-historical-safety/observed-structure.json": "6982a5830101289ad5b0700b2e88253054236a538bede00fd47f5225a4bd474a",
+    "tests/fixtures/deletion-historical-safety/schema.sql": "0e6f55a1ac74f130fc8979917e701b758c558172a916bc053d8e8e5b17859c23",
+    "tests/fixtures/deletion-historical-safety/additional-guards.test.sql": "5d13f486390711458806fc53c8ce585a8d398e7549eff9aa1e8da32c63920cd0",
+    "scripts/migrations/candidates/0044_organization_permanent_deletion_historical.sql": "b04a164e85fe09d292dd8e81ac744ce4deec8927290d38cff326c77e030354fa"
+  },
+  "slots": {
+    "role_permissions.scope_type": {
+      "literalClass": "text",
+      "effects": [
+        "global-unique-role-permission-scope"
+      ],
+      "deletionArgument": "Global table is not mutated or selected by deletion; SuperAdmin path bypasses role grants. General authorization/uniqueness equivalence is not claimed."
+    },
+    "role_permissions.active": {
+      "literalClass": "number",
+      "effects": [
+        "two-nonunique-permission-indexes"
+      ],
+      "deletionArgument": "Global table untouched; SuperAdmin path does not query role grants."
+    },
+    "user_permissions.active": {
+      "literalClass": "number",
+      "effects": [
+        "three-nonunique-lookup-indexes",
+        "unconditional-authorization-epoch-on-insert-update-delete"
+      ],
+      "deletionArgument": "Ownership guards use OLD/NEW organization_id; mixed veto uses organization_id/project_id; cleanup DELETE uses organization_id only, regardless active or expiry."
+    },
+    "organization_feature_flags.enabled": {
+      "literalClass": "number",
+      "effects": [
+        "nonunique-organization-enabled-index"
+      ],
+      "deletionArgument": "Every organization row vetoes deletion independently of enabled. Scalar default does not affect ownership or guard."
+    },
+    "ticket_comments.internal": {
+      "literalClass": "number",
+      "effects": [],
+      "deletionArgument": "Not cleaned up; mandatory ticket_id FK references tickets whose mandatory organization_id is fully vetoed. Requires valid FK integrity and planned ticket guards."
+    },
+    "tickets.status": {
+      "literalClass": "text",
+      "effects": [
+        "nonunique-organization-status-index"
+      ],
+      "deletionArgument": "Every organization row vetoes deletion regardless status; ownership guard is independent."
+    },
+    "tickets.priority": {
+      "literalClass": "text",
+      "effects": [],
+      "deletionArgument": "Every organization row vetoes deletion regardless priority; ownership guard is independent."
+    }
+  },
+  "triggerContract": {
+    "names": [
+      "project_save_auth_role_permissions_insert",
+      "project_save_auth_role_permissions_update",
+      "project_save_auth_role_permissions_delete",
+      "project_save_auth_user_permissions_insert",
+      "project_save_auth_user_permissions_update",
+      "project_save_auth_user_permissions_delete"
+    ],
+    "body": "BEGIN UPDATE project_save_authorization_generation SET version = version + 1 WHERE id = 1; END",
+    "readsDefaultSlots": false,
+    "destination": "project_save_authorization_generation",
+    "destinationIsTriggerAndForeignKeyLeaf": true
+  },
+  "preconditions": [
+    "complete-object-and-metadata-match",
+    "two-identical-full-snapshots",
+    "quick-check-ok-and-empty-fk-check",
+    "strict-ledger-no-0044-entry",
+    "pinned-super-admin-auth-and-runtime",
+    "exact-static-candidate-and-planned-guards"
+  ],
+  "nonClaims": [
+    "general-DDL-equivalence",
+    "production-literal-recovery",
+    "guards-installed",
+    "migration-readiness",
+    "authorization-to-apply",
+    "all-application-default-behavior"
+  ]
+}

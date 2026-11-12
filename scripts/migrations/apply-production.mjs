@@ -11,6 +11,10 @@ import {CC08_MIGRATION,readCC08Schema,assertCC08Schema} from './cc08-schema-pref
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
+  assertOperationalMigration,
+  assertDeletionLedgerPrestate,
+  queryDeletionLedger,
+  CANONICAL_DELETION_MIGRATION,
   PRODUCTION_DATABASE_ID,
   PRODUCTION_DATABASE_NAME,
   REPORT_VERSION,
@@ -50,6 +54,7 @@ let migration = null;
 let git = null;
 
 try {
+  assertOperationalMigration(args.migration);
   const { accountId } = requireCloudflareEnvironment();
   migration = await ensureMigrationFile(args.migration);
   git = await readGitSnapshot();
@@ -66,6 +71,7 @@ try {
 
   preflightTemporary = await makeTemporaryWranglerConfig(accountId);
   const remote = await readRemoteState(preflightTemporary.configPath, migration.name);
+  if (migration.name === CANONICAL_DELETION_MIGRATION) assertDeletionLedgerPrestate(remote.ledger);
   if(migration.name===CC15_MIGRATION){
     const currentSchema=await readCC15Schema(preflightTemporary.configPath,remote.ledger);assertCC15Schema(currentSchema);
     if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC15_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
@@ -156,6 +162,7 @@ try {
   }
 
   if(deletionSchema){
+    assertDeletionLedgerPrestate(await queryDeletionLedger(preflightTemporary.configPath));
     const finalSchema=await readDeletionSchema(preflightTemporary.configPath);
     assertDeletionSchema(finalSchema);
     if(finalSchema.digest!==evidenceDigest)throw gateError('DELETION_METADATA_DRIFT','0044 metadata changed before write.');
@@ -169,7 +176,8 @@ try {
   const applyResult = await runWranglerApply(applyTemporary.configPath);
   applyCompleted = true;
 
-  const postLedger = await queryLedger(preflightTemporary.configPath);
+  const postLedger = migration.name === CANONICAL_DELETION_MIGRATION
+    ? await queryDeletionLedger(preflightTemporary.configPath) : await queryLedger(preflightTemporary.configPath);
   const applied = postLedger.find((row) => row.name === migration.name) || null;
   if (!applied) {
     throw gateError('POST_APPLY_LEDGER_MISSING', 'O Wrangler retornou sucesso, mas a migration não apareceu no ledger remoto. Interrompa e investigue.');
