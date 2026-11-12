@@ -1,3 +1,5 @@
+import {runHistoricalOperator} from './organization-deletion-historical-operator.mjs';
+import {HISTORICAL_CANDIDATE_NAME} from './organization-deletion-historical-lifecycle.mjs';
 import { DELETION_MIGRATION, readDeletionSchema, assertDeletionSchema } from './organization-deletion-schema-0044.mjs';
 import { IDENTITY_MIGRATION, collectIdentityEvidence, guardedIdentityMigration, identityApprovalEvidence,
   assertIdentityEvidenceUnchanged, collectIdentityPostValidation } from './organization-identity-0043.mjs';
@@ -41,9 +43,12 @@ import {
 
 const args = parseNamedArgs(process.argv.slice(2), new Set(['migration', 'audit-report', 'approval', 'report']));
 if (!args.migration) throw gateError('MIGRATION_REQUIRED', '--migration é obrigatório.');
+
+if(args.migration===HISTORICAL_CANDIDATE_NAME){
+ await runHistoricalOperator('apply',args);
+}else{
 if (!args['audit-report']) throw gateError('AUDIT_REPORT_REQUIRED', '--audit-report é obrigatório.');
 if (!args.approval) throw gateError('PRODUCTION_AUTHORIZATION_REQUIRED', '--approval é obrigatório e deve vir de autorização humana explícita.');
-
 let preflightTemporary;
 let applyTemporary;
 let applyStarted = false;
@@ -283,4 +288,6 @@ try {
 } finally {
   await applyTemporary?.cleanup().catch(() => {});
   await preflightTemporary?.cleanup().catch(() => {});
+}
+
 }

@@ -11,7 +11,7 @@ import {HISTORICAL_DELETION_MIGRATION as historical,CANONICAL_DELETION_MIGRATION
  assertDeletionLedgerPrestate,assertDeletionLedgerPoststate,queryDeletionLedger,queryLedger} from '../scripts/migrations/production-migration-lib.mjs';
 const row=(name='0043_organization_creation_identity.sql',id=1)=>({id,name,appliedAt:'2026-11-12 12:00:00'});
 const material={migration:historical,migrationSha256:'a'.repeat(64),gitSha:'b'.repeat(40),pendingDigest:'c'.repeat(64),evidenceDigest:'d'.repeat(64),databaseId:'5bc4dc32-f3bd-4c92-bbd1-cbda63e467db'};
-for(const name of [historical,historical.toUpperCase(),' '+historical+' ','../'+historical,'migrations\\'+historical,'./'+historical,'/tmp/'+historical,'C:\\temp\\'+historical])test('candidate denied at every central boundary: '+name,async()=>{
+for(const name of [historical.toUpperCase(),' '+historical+' ','../'+historical,'migrations\\'+historical,'./'+historical,'/tmp/'+historical,'C:\\temp\\'+historical])test('candidate denied at every central boundary: '+name,async()=>{
  assert.throws(()=>assertOperationalMigration(name));
  assert.throws(()=>computePendingState([name],[],name));
  assert.throws(()=>assertAuditMatchesCurrent({migration:{name}},{migration:name}));
@@ -25,7 +25,7 @@ test('strict prestate vs poststate, without fabricated ledger hash',()=>{
  assert.equal(assertDeletionLedgerPrestate([row()]),true);
  assert.equal(assertDeletionLedgerPoststate([row(canonical)]),true);
  assert.throws(()=>assertDeletionLedgerPrestate([row(canonical)]),{code:'DELETION_LEDGER_ALREADY_APPLIED'});
- for(const name of [historical,historical.toUpperCase(),'0044_other.sql',canonical.toUpperCase()]) {
+ for(const name of [historical.toUpperCase(),'0044_other.sql',canonical.toUpperCase()]) {
   assert.throws(()=>assertDeletionLedgerPrestate([row(name)]));assert.throws(()=>assertDeletionLedgerPoststate([row(name)]));
  }
  for(const rows of [null,[null],[{}],[{...row(),id:'1'}],[{...row(),name:''}],[{...row(),appliedAt:null}],[row(),row('0001_other.sql')],[row(),row(row().name.toUpperCase(),2)]])assert.throws(()=>assertDeletionLedgerPrestate(rows));
@@ -49,7 +49,7 @@ function cli(root,script,name,credentials=true) {
  encoding:'utf8',windowsHide:true,timeout:20000,env:{...process.env,NODE_NO_WARNINGS:'1',IDENTITY_FIXTURE_ROOT:root,IDENTITY_FIXTURE_FAULT:'',
  CLOUDFLARE_API_TOKEN:credentials?'synthetic-not-real':'',CLOUDFLARE_ACCOUNT_ID:credentials?'a'.repeat(32):''}});
 }
-for(const script of ['audit-production.mjs','apply-production.mjs','post-validate-production.mjs'])for(const name of [historical,historical.toUpperCase(),' '+historical+' ','../'+historical])test(script+' candidate before credentials '+name,t=>{
+for(const script of ['audit-production.mjs','apply-production.mjs','post-validate-production.mjs'])for(const name of [historical.toUpperCase(),' '+historical+' ','../'+historical])test(script+' candidate before credentials '+name,t=>{
  const root=fixture(t);const result=cli(root,script,name,false);
  assert.equal(result.status,1,result.stderr);assert.match(result.stderr,/HISTORICAL_DELETION_AUDIT_ONLY|MIGRATION_NAME_INVALID/);
  assert.doesNotMatch(result.stderr,/CLOUDFLARE_TOKEN_MISSING/);assert.equal(existsSync(join(root,'writes.log')),false);

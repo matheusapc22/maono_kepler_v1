@@ -21,7 +21,12 @@ on:
         required: true
         type: string
       approval_hash:
-        description: "Required only for apply: 64-hex approval hash emitted by the prior audit"
+        description: "Apply authorization hash; historical postvalidate uses it only to identify original evidence"
+        required: false
+        default: ""
+        type: string
+      audit_run_id:
+        description: "Original successful audit run ID, required only for historical postvalidate"
         required: false
         default: ""
         type: string
@@ -75,24 +80,41 @@ jobs:
         env:
           ACTOR: ${{ github.actor }}
           OWNER: ${{ github.repository_owner }}
+          ACTOR_ID: ${{ github.actor_id }}
+          OWNER_ID: ${{ github.repository_owner_id }}
           DISPATCH_REF: ${{ github.ref_name }}
           MODE: ${{ inputs.mode }}
           MIGRATION: ${{ inputs.migration }}
           APPROVAL_HASH: ${{ inputs.approval_hash }}
+          AUDIT_RUN_ID: ${{ inputs.audit_run_id }}
         run: |
           set -euo pipefail
           test "$ACTOR" = "$OWNER"
+          test "$ACTOR_ID" = "$OWNER_ID"
           test "$DISPATCH_REF" = "main"
           [[ "$MIGRATION" =~ ^[0-9]{4}_[A-Za-z0-9][A-Za-z0-9_-]*\.sql$ ]]
           case "$MODE" in
-            audit|postvalidate)
+            audit)
               test -z "$APPROVAL_HASH"
+              test -z "$AUDIT_RUN_ID"
+              ;;
+            postvalidate)
+              if [ "$MIGRATION" = "0044_organization_permanent_deletion_historical.sql" ]; then
+                [[ "$AUDIT_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+                [[ "$APPROVAL_HASH" =~ ^[0-9a-f]{64}$ ]]
+              else
+                test -z "$APPROVAL_HASH"
+                test -z "$AUDIT_RUN_ID"
+              fi
               ;;
             organization-qa-inventory)
+              test -z "$AUDIT_RUN_ID"
               test -z "$APPROVAL_HASH"
               test "$MIGRATION" = "0042_organization_management.sql"
               ;;
             apply)
+              test "$MIGRATION" != "0044_organization_permanent_deletion_historical.sql"
+              test -z "$AUDIT_RUN_ID"
               [[ "$APPROVAL_HASH" =~ ^[0-9a-fA-F]{64}$ ]]
               ;;
             *)
@@ -127,7 +149,12 @@ jobs:
           MIGRATION: ${{ inputs.migration }}
         run: |
           set -euo pipefail
-          test -f "migrations/$MIGRATION"
+          if [ "$MIGRATION" = "0044_organization_permanent_deletion_historical.sql" ]; then
+            node --input-type=module -e "import {HISTORICAL_OPERATOR_CONTRACT,validateHistoricalOperatorSources} from './scripts/migrations/organization-deletion-historical-operator.mjs'; if(HISTORICAL_OPERATOR_CONTRACT!=='historical-0044-operator-v1')process.exit(2); await validateHistoricalOperatorSources();"
+            test ! -e "migrations/$MIGRATION"
+          else
+            test -f "migrations/$MIGRATION"
+          fi
           test -f AGENTS.md
           test -f scripts/migrations/production-migration-lib.mjs
           test -f scripts/migrations/audit-production.mjs
@@ -147,10 +174,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: production-d1-migrations
+    permissions:
+      contents: read
+      actions: read
     env:
       MODE: ${{ inputs.mode }}
       MIGRATION: ${{ inputs.migration }}
       APPROVAL_HASH: ${{ inputs.approval_hash }}
+      AUDIT_RUN_ID: ${{ inputs.audit_run_id }}
+      TRUSTED_REPOSITORY_ID: ${{ github.repository_id }}
+      TRUSTED_OWNER_ID: ${{ github.repository_owner_id }}
+      TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
       VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
       WRANGLER_SEND_METRICS: "false"
     steps:
@@ -173,6 +208,13 @@ jobs:
           node-version: 22
           package-manager-cache: false
 
+      - name: Authenticate original historical audit before D1 credentials
+        if: inputs.mode == 'postvalidate' && inputs.migration == '0044_organization_permanent_deletion_historical.sql'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/migrations/historical-audit-artifact.mjs
+
       - name: Validate protected credential presence and fixed target
         shell: bash
         env:
@@ -187,6 +229,7 @@ jobs:
       - name: Execute protected migration operation
         shell: bash
         env:
+          GITHUB_TOKEN: ${{ inputs.mode == 'postvalidate' && inputs.migration == '0044_organization_permanent_deletion_historical.sql' && github.token || '' }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.MAONO_D1_MIGRATION_API_TOKEN }}
         run: |
           set -euo pipefail
@@ -196,17 +239,27 @@ jobs:
             audit)
               report=".tmp/production-migrations/audit.json"
               npm run migration:audit:production -- --migration "$MIGRATION" --report "$report"
-              approval_hash="$(node -e "const r=require('./$report'); process.stdout.write(r.approval.hash)")"
+              if [ "$MIGRATION" = "0044_organization_permanent_deletion_historical.sql" ]; then
+                evidence_identity="$(node -e "const r=require('./$report'); if(r.phase!=='historical-audit-transport-blocked'||r.readyForAuthorization!==false||r.approvalEligible!==false||r.approval!==undefined||!/^[a-f0-9]{64}$/.test(r.evidenceIdentity))process.exit(2); process.stdout.write(r.evidenceIdentity)")"
+              else
+                approval_hash="$(node -e "const r=require('./$report'); process.stdout.write(r.approval.hash)")"
+              fi
               REPORT_PATH="$report" node -e "const fs=require('node:fs'); const p=process.env.REPORT_PATH; const r=JSON.parse(fs.readFileSync(p,'utf8')); if(r.approval) delete r.approval.token; delete r.applyCommand; fs.writeFileSync(p, JSON.stringify(r,null,2)+'\n');"
               echo "### Production D1 migration audit" >> "$GITHUB_STEP_SUMMARY"
               echo "" >> "$GITHUB_STEP_SUMMARY"
               echo "- migration: $MIGRATION" >> "$GITHUB_STEP_SUMMARY"
               echo "- product SHA: $VALIDATED_RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
-              echo "- approval hash: $approval_hash" >> "$GITHUB_STEP_SUMMARY"
-              echo "- status: AWAITING EXPLICIT PRODUCTION AUTHORIZATION" >> "$GITHUB_STEP_SUMMARY"
+              if [ "$MIGRATION" = "0044_organization_permanent_deletion_historical.sql" ]; then
+                echo "- evidence identity (not authorization): $evidence_identity" >> "$GITHUB_STEP_SUMMARY"
+                echo "- status: BLOCKED_TRANSPORT_NOT_AUTHORIZATION" >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo "- approval hash: $approval_hash" >> "$GITHUB_STEP_SUMMARY"
+                echo "- status: AWAITING EXPLICIT PRODUCTION AUTHORIZATION" >> "$GITHUB_STEP_SUMMARY"
+              fi
               echo "- writes performed: NO" >> "$GITHUB_STEP_SUMMARY"
               ;;
             apply)
+              test "$MIGRATION" != "0044_organization_permanent_deletion_historical.sql"
               fresh=".tmp/production-migrations/fresh-audit.json"
               post=".tmp/production-migrations/post-apply.json"
               npm run migration:audit:production -- --migration "$MIGRATION" --report "$fresh"
@@ -225,7 +278,11 @@ jobs:
               ;;
             postvalidate)
               report=".tmp/production-migrations/postvalidate.json"
-              npm run migration:postvalidate:production -- --migration "$MIGRATION" --report "$report"
+              if [ "$MIGRATION" = "0044_organization_permanent_deletion_historical.sql" ]; then
+                npm run migration:postvalidate:production -- --migration "$MIGRATION" --audit-report .tmp/production-migrations/original-audit.json --approval "$APPROVAL_HASH" --report "$report"
+              else
+                npm run migration:postvalidate:production -- --migration "$MIGRATION" --report "$report"
+              fi
               echo "### Production D1 migration post-validation" >> "$GITHUB_STEP_SUMMARY"
               echo "" >> "$GITHUB_STEP_SUMMARY"
               echo "- migration: $MIGRATION" >> "$GITHUB_STEP_SUMMARY"
