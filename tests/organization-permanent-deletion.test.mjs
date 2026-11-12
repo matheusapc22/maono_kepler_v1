@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
@@ -196,4 +197,64 @@ for(const ddl of [
  'CREATE TABLE _cf_METADATA(key INTEGER PRIMARY KEY,value BLOB); CREATE TABLE attached_child(id INTEGER,internal_key INTEGER REFERENCES _cf_METADATA(key))',
 ])test('runtime blocks unsafe protected metadata shapes or references: '+ddl,async t=>{
  const f=fixture(t);f.db.exec(ddl);const p=await f.call('/organizations/3/deletion-preview');assert.equal(p.status,503);assert.equal(f.removeCount(),0);
+});
+
+const deletionMigrationSource=readFileSync(new URL('../migrations/0044_organization_permanent_deletion.sql',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+const deletionUpdateGuards=[...deletionMigrationSource.matchAll(/CREATE TRIGGER (org_delete_guard_(\w+)_update) BEFORE UPDATE ON "\2"\nWHEN EXISTS\(SELECT 1 FROM organization_deletions WHERE ([^\n]+)\)\nBEGIN SELECT RAISE\(ABORT,'ORGANIZATION_DELETION_LOCKED'\); END;/g)];
+test('all 62 UPDATE guards and bootstrap copies have exact OLD/NEW scope; INSERT and special guard set retained',()=>{
+  assert.equal(deletionUpdateGuards.length,62);
+  const bootstrap=readFileSync(new URL('../schema.sql',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+  for(const [sql,name,,condition] of deletionUpdateGuards){
+    assert.equal(condition,'organization_id=OLD.organization_id OR organization_id=NEW.organization_id',name);
+    assert.equal(bootstrap.split(sql).length-1,1,name);
+  }
+  assert.equal([...deletionMigrationSource.matchAll(/CREATE TRIGGER org_delete_guard_\w+_insert BEFORE INSERT ON "\w+"\nWHEN EXISTS\(SELECT 1 FROM organization_deletions WHERE organization_id=NEW.organization_id\)/g)].length,62);
+  // Fixed base-97236515 definitions: OLD/NEW correction must not alter special semantics.
+  const specialDefinitions={"org_delete_no_recreate":"c3c761b4b7d7552c41b6b5a9c2528189a6c34d388ab66e0725f37bf2e4decb0c","org_delete_no_update":"bda174b762ffba79c229a5f853130498bb5b39644e9fa0e5270c7628ca208230","org_delete_finalize_only":"2bb1ce013bee9e41dd458a1e8e6df04d77c365bc3ea1e06932252239b8bf9db1"};
+  for(const [name,hash] of Object.entries(specialDefinitions)){
+    const definitions=[...deletionMigrationSource.matchAll(new RegExp('CREATE TRIGGER '+name+'\\b[\\s\\S]*?END;','g'))];
+    assert.equal(definitions.length,1,name);assert.equal(createHash('sha256').update(definitions[0][0]).digest('hex'),hash,name);
+  }
+  const migrationDb=new DatabaseSync(':memory:'),bootstrapDb=new DatabaseSync(':memory:');
+  try{
+    migrationDb.exec(bootstrap.split('-- Organization permanent deletion (migration 0044)')[0]);migrationDb.exec(deletionMigrationSource);bootstrapDb.exec(bootstrap);
+    const query="SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name GLOB 'org_delete_*' ORDER BY name";
+    const actual=migrationDb.prepare(query).all();assert.equal(actual.length,127);assert.deepEqual(actual,bootstrapDb.prepare(query).all());
+    assert.deepEqual(actual.filter(x=>!x.name.startsWith('org_delete_guard_')).map(x=>x.name),['org_delete_finalize_only','org_delete_no_recreate','org_delete_no_update']);
+  }finally{migrationDb.close();bootstrapDb.close();}
+});
+for(const [sql,name,table] of deletionUpdateGuards)test('OLD/NEW movement matrix: '+table,()=>{
+  // Exercise the exact production trigger independently of unrelated table constraints.
+  const db=new DatabaseSync(':memory:');
+  try{
+    db.exec(`CREATE TABLE organization_deletions(organization_id INTEGER); CREATE TABLE "${table}"(id INTEGER PRIMARY KEY,organization_id INTEGER,payload TEXT); INSERT INTO organization_deletions VALUES(3); ${sql}`);
+    for(const [oldOrg,newOrg,blocked] of [[3,4,true],[4,3,true],[3,3,true],[3,null,true],[null,3,true],[4,5,false],[4,4,false],[null,4,false],[4,null,false],[null,null,false]]){
+      db.exec(`DELETE FROM "${table}"`);db.prepare(`INSERT INTO "${table}" VALUES(1,?,'before')`).run(oldOrg);
+      const update=()=>db.prepare(`UPDATE "${table}" SET organization_id=?,payload='after' WHERE id=1`).run(newOrg);
+      if(blocked){assert.throws(update,/ORGANIZATION_DELETION_LOCKED/,`${name}: ${oldOrg} -> ${newOrg}`);assert.deepEqual({...db.prepare(`SELECT organization_id,payload FROM "${table}"`).get()},{organization_id:oldOrg,payload:'before'});}
+      else {update();assert.equal(db.prepare(`SELECT organization_id FROM "${table}"`).get().organization_id,newOrg);}
+    }
+  }finally{db.close();}
+});
+test('frozen deletion claim blocks membership and nullable permission escape; cleanup, archive and session detach still complete',async t=>{
+  const f=fixture(t);
+  f.db.exec("INSERT INTO user_permissions(user_id,permission,organization_id) VALUES(1,'projects.view',3),(1,'projects.edit',NULL); UPDATE sessions SET active_organization_id=3 WHERE user_id=2;");
+  const d=await f.start();
+  for(const sql of [
+    'UPDATE organization_users SET organization_id=2 WHERE organization_id=3 AND user_id=1',
+    "UPDATE organization_users SET access_level='member' WHERE organization_id=3 AND user_id=1",
+    "UPDATE user_permissions SET organization_id=NULL WHERE permission='projects.view' AND organization_id=3",
+    "UPDATE user_permissions SET organization_id=2 WHERE permission='projects.view' AND organization_id=3",
+    "UPDATE user_permissions SET organization_id=3 WHERE permission='projects.edit' AND organization_id IS NULL",
+  ])assert.throws(()=>f.db.exec(sql),/ORGANIZATION_DELETION_LOCKED/);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM organization_users WHERE organization_id=3').get().n,1);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM user_permissions WHERE organization_id=3").get().n,1);
+  assert.equal(f.removeCount(),0);assert.equal((await f.step(d)).state,'completed');
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM organization_users WHERE organization_id=3').get().n,0);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM user_permissions WHERE organization_id=3').get().n,0);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM user_permissions WHERE permission='projects.edit' AND organization_id IS NULL").get().n,1);
+  assert.equal(f.db.prepare('SELECT active_organization_id FROM sessions WHERE user_id=2').get().active_organization_id,null);
+  assert.ok(f.db.prepare('SELECT COUNT(*) n FROM organization_deleted_management_events WHERE organization_id=3').get().n>0);
+  assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);
+  assert.equal((await f.step(d)).state,'completed');assert.equal(f.removeCount(),1);
 });
