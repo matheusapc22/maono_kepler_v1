@@ -1,3 +1,4 @@
+import {semanticDiagnostics} from './deletion-semantic-diagnostics.mjs';
 import {classifyProtectedMetadata, protectedMetadataName} from '../../functions/_lib/d1-protected-metadata.js';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
@@ -126,6 +127,7 @@ export function evaluateDeletionSchema(snapshot,reference=deletionSchemaReferenc
     protectedInternals:classification.recognized.map(name=>({name,classification:'workerd-protected',introspection:'not-permitted',definitionDigest:digest(sqlTokens(snapshot.objects.find(r=>r.name===name).sql))})),
     tableCount:tables.size,tables:[...tables].sort(),dependencies,
     structuralMetadata:structuralMetadata(snapshot),
+    semanticDiagnostics:semanticDiagnostics(snapshot.objects),
     objects:snapshot.objects.map(({type,name,tbl_name,sql})=>({type,name,table:tbl_name,definitionDigest:digest(sqlTokens(sql))})),
     metadataDigest:digest(snapshot),plannedGuards:reference.guards.map(r=>({name:r.name,definitionDigest:digest(sqlTokens(r.sql))})),
     referenceSources:reference.sources,remoteQueriesReadOnly:true,applicationRowsRead:false,atomicDatabaseSnapshot:false};
