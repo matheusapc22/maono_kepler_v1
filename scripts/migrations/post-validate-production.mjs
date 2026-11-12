@@ -2,6 +2,9 @@ import { IDENTITY_MIGRATION, collectIdentityPostValidation } from './organizatio
 import { resolve } from 'node:path';
 import { ORGANIZATION_MIGRATION, collectOrganizationPostValidation } from './organization-management-schema.mjs';
 import {
+  assertOperationalMigration,
+  queryDeletionLedger,
+  CANONICAL_DELETION_MIGRATION,
   PRODUCTION_DATABASE_ID,
   PRODUCTION_DATABASE_NAME,
   REPORT_VERSION,
@@ -26,6 +29,7 @@ if (!args.migration) throw gateError('MIGRATION_REQUIRED', '--migration é obrig
 
 let temporary;
 try {
+  assertOperationalMigration(args.migration);
   const { accountId } = requireCloudflareEnvironment();
   const migration = await ensureMigrationFile(args.migration);
   const git = await readGitSnapshot();
@@ -34,7 +38,8 @@ try {
   const organizationEvidence = migration.name === ORGANIZATION_MIGRATION
     ? await collectOrganizationPostValidation(temporary.configPath, remote, migration)
     : migration.name === IDENTITY_MIGRATION ? await collectIdentityPostValidation(temporary.configPath, remote, migration) : null;
-  const ledger = organizationEvidence?.ledger.rows ?? await queryLedger(temporary.configPath);
+  const ledger = organizationEvidence?.ledger.rows ?? (migration.name === CANONICAL_DELETION_MIGRATION
+    ? await queryDeletionLedger(temporary.configPath) : await queryLedger(temporary.configPath));
   const applied = ledger.find((row) => row.name === migration.name) || null;
   const integrity = await queryIntegrity(temporary.configPath);
   const ok = Boolean(applied && integrity.quickCheckOk && integrity.foreignKeyCheckOk &&

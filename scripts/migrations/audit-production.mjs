@@ -1,4 +1,5 @@
-import { DELETION_MIGRATION, readDeletionSchema, assertDeletionSchema } from './organization-deletion-schema-0044.mjs';
+import {evaluateHistoricalDeletionPrestate} from './deletion-historical-prestate.mjs';
+import { DELETION_MIGRATION, readDeletionSchemaEvidence, assertDeletionSchema } from './organization-deletion-schema-0044.mjs';
 import { IDENTITY_MIGRATION, collectIdentityEvidence, guardedIdentityMigration, identityApprovalEvidence } from './organization-identity-0043.mjs';
 import {CC15_MIGRATION,readCC15Schema,assertCC15Schema} from './cc15-schema-preflight.mjs';
 import {CC13_MIGRATION,readCC13Schema,assertCC13Schema} from './cc13-schema-preflight.mjs';
@@ -14,6 +15,8 @@ import {
   REPORT_VERSION,
   WRANGLER_VERSION,
   buildApproval,
+  assertOperationalMigration,
+  assertDeletionLedgerPrestate,
   captureTimeTravelBookmark,
   defaultAuditReportPath,
   ensureMigrationFile,
@@ -34,6 +37,7 @@ if (!args.migration) throw gateError('MIGRATION_REQUIRED', '--migration é obrig
 
 let temporary;
 try {
+  assertOperationalMigration(args.migration);
   const { accountId } = requireCloudflareEnvironment();
   const migration = await ensureMigrationFile(args.migration);
   const git = await readGitSnapshot();
@@ -43,6 +47,7 @@ try {
 
   temporary = await makeTemporaryWranglerConfig(accountId);
   const remote = await readRemoteState(temporary.configPath, migration.name);
+  if(migration.name===DELETION_MIGRATION) assertDeletionLedgerPrestate(remote.ledger);
   if (!remote.pending.selectedPending) {
     throw gateError('MIGRATION_NOT_PENDING', `A migration ${migration.name} já não está pendente no D1 de produção.`);
   }
@@ -53,11 +58,17 @@ try {
     throw gateError('DATABASE_INTEGRITY_FAILED', 'O preflight encontrou falha de integridade; autorização de produção foi bloqueada.');
   }
 
-  const schemaPreflight=migration.name===DELETION_MIGRATION ? await readDeletionSchema(temporary.configPath) : migration.name===CC15_MIGRATION ? await readCC15Schema(temporary.configPath,remote.ledger) : migration.name===CC13_MIGRATION ? await readCC13Schema(temporary.configPath,remote.ledger) : migration.name===CC12_MIGRATION ? await readCC12Schema(temporary.configPath,remote.ledger) : migration.name===CC11_MIGRATION ? await readCC11Schema(temporary.configPath,remote.ledger) : migration.name===CC08_MIGRATION ? await readCC08Schema(temporary.configPath,remote.ledger) : migration.name===CC09_MIGRATION ? await readCC09Schema(temporary.configPath,remote.ledger) : migration.name===CC10_MIGRATION ? await readCC10Schema(temporary.configPath,remote.ledger) : null;
+  const deletionEvidence=migration.name===DELETION_MIGRATION ? await readDeletionSchemaEvidence(temporary.configPath) : null;
+  const schemaPreflight=deletionEvidence ? deletionEvidence.report : migration.name===CC15_MIGRATION ? await readCC15Schema(temporary.configPath,remote.ledger) : migration.name===CC13_MIGRATION ? await readCC13Schema(temporary.configPath,remote.ledger) : migration.name===CC12_MIGRATION ? await readCC12Schema(temporary.configPath,remote.ledger) : migration.name===CC11_MIGRATION ? await readCC11Schema(temporary.configPath,remote.ledger) : migration.name===CC08_MIGRATION ? await readCC08Schema(temporary.configPath,remote.ledger) : migration.name===CC09_MIGRATION ? await readCC09Schema(temporary.configPath,remote.ledger) : migration.name===CC10_MIGRATION ? await readCC10Schema(temporary.configPath,remote.ledger) : null;
   if(schemaPreflight && !schemaPreflight.compatible){
     await ensureReportDir();
     const blockedPath=args.report ? resolve(args.report) : defaultAuditReportPath(migration.name,git.sha);
-    await writeJsonReport(blockedPath,{phase:'schema-preflight-blocked',writesPerformed:false,readyForAuthorization:false,git,database:remote.identity,schemaPreflight,integrity,backup});
+    const deletionSafetyCertification=deletionEvidence ? evaluateHistoricalDeletionPrestate(deletionEvidence.snapshot,{
+      integrity,ledger:remote.ledger,snapshotDigests:deletionEvidence.snapshotDigests,gitSha:git.sha,pendingDigest:remote.pending.pendingDigest,
+    }) : null;
+    await writeJsonReport(blockedPath,{phase:'schema-preflight-blocked',writesPerformed:false,readyForAuthorization:false,git,database:remote.identity,schemaPreflight,integrity,backup,
+      ...(deletionSafetyCertification ? {deletionSafetyCertification} : {}),
+    });
     if(migration.name===DELETION_MIGRATION) assertDeletionSchema(schemaPreflight); else if(migration.name===CC15_MIGRATION) assertCC15Schema(schemaPreflight); else if(migration.name===CC13_MIGRATION) assertCC13Schema(schemaPreflight); else if(migration.name===CC12_MIGRATION) assertCC12Schema(schemaPreflight); else if(migration.name===CC11_MIGRATION) assertCC11Schema(schemaPreflight); else if(migration.name===CC10_MIGRATION) assertCC10Schema(schemaPreflight); else if(migration.name===CC09_MIGRATION) assertCC09Schema(schemaPreflight); else assertCC08Schema(schemaPreflight);
   }
   const identityEvidence = migration.name === IDENTITY_MIGRATION

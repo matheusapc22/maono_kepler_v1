@@ -1,0 +1,2581 @@
+{
+  "scope": "synthetic-constraint-valid-populated-fixture-not-exclusive-veto-proof",
+  "fixture": "0e6f55a1ac74f130fc8979917e701b758c558172a916bc053d8e8e5b17859c23",
+  "seedSha256": "ffb5a061732b41f3f425f1b36f03d221b128a06c4601fbc6d8c7126a900902a1",
+  "foreignKeysEnabled": 1,
+  "failures": [],
+  "coverage": [
+    {
+      "table": "change_commands",
+      "count": 1
+    },
+    {
+      "table": "change_records",
+      "count": 2
+    },
+    {
+      "table": "map_analysis_rate_limits",
+      "count": 1
+    },
+    {
+      "table": "organization_exports",
+      "count": 1
+    },
+    {
+      "table": "organization_feature_flags",
+      "count": 1
+    },
+    {
+      "table": "organization_file_folders",
+      "count": 1
+    },
+    {
+      "table": "organization_files",
+      "count": 1
+    },
+    {
+      "table": "organization_limit_requests",
+      "count": 1
+    },
+    {
+      "table": "organization_limits",
+      "count": 1
+    },
+    {
+      "table": "organization_resource_reservations",
+      "count": 1
+    },
+    {
+      "table": "organization_roadmaps",
+      "count": 1
+    },
+    {
+      "table": "organization_tickets",
+      "count": 1
+    },
+    {
+      "table": "project_change_requests",
+      "count": 1
+    },
+    {
+      "table": "project_preview_operations",
+      "count": 1
+    },
+    {
+      "table": "project_save_operations",
+      "count": 1
+    },
+    {
+      "table": "projects",
+      "count": 1
+    },
+    {
+      "table": "roadmap_comments",
+      "count": 1
+    },
+    {
+      "table": "roadmap_dependencies",
+      "count": 1
+    },
+    {
+      "table": "roadmap_events",
+      "count": 1
+    },
+    {
+      "table": "roadmap_phases",
+      "count": 1
+    },
+    {
+      "table": "roadmap_tasks",
+      "count": 2
+    },
+    {
+      "table": "ticket_access_group_members",
+      "count": 1
+    },
+    {
+      "table": "ticket_access_groups",
+      "count": 1
+    },
+    {
+      "table": "ticket_access_policies",
+      "count": 1
+    },
+    {
+      "table": "ticket_access_policy_entries",
+      "count": 1
+    },
+    {
+      "table": "ticket_acl_entries",
+      "count": 1
+    },
+    {
+      "table": "ticket_attachment_upload_sessions",
+      "count": 1
+    },
+    {
+      "table": "ticket_attachments",
+      "count": 1
+    },
+    {
+      "table": "ticket_case_commands",
+      "count": 1
+    },
+    {
+      "table": "ticket_case_events",
+      "count": 1
+    },
+    {
+      "table": "ticket_case_links",
+      "count": 1
+    },
+    {
+      "table": "ticket_case_members",
+      "count": 1
+    },
+    {
+      "table": "ticket_cases",
+      "count": 1
+    },
+    {
+      "table": "ticket_change_links",
+      "count": 1
+    },
+    {
+      "table": "ticket_command_backfills",
+      "count": 1
+    },
+    {
+      "table": "ticket_command_outbox",
+      "count": 1
+    },
+    {
+      "table": "ticket_commands",
+      "count": 1
+    },
+    {
+      "table": "ticket_cycles",
+      "count": 1
+    },
+    {
+      "table": "ticket_drafts",
+      "count": 1
+    },
+    {
+      "table": "ticket_events",
+      "count": 1
+    },
+    {
+      "table": "ticket_export_audit",
+      "count": 1
+    },
+    {
+      "table": "ticket_export_gc",
+      "count": 1
+    },
+    {
+      "table": "ticket_export_items",
+      "count": 1
+    },
+    {
+      "table": "ticket_export_jobs",
+      "count": 1
+    },
+    {
+      "table": "ticket_export_parts",
+      "count": 1
+    },
+    {
+      "table": "ticket_feedback_instruments",
+      "count": 1
+    },
+    {
+      "table": "ticket_feedback_invites",
+      "count": 1
+    },
+    {
+      "table": "ticket_knowledge_articles",
+      "count": 1
+    },
+    {
+      "table": "ticket_knowledge_commands",
+      "count": 1
+    },
+    {
+      "table": "ticket_knowledge_events",
+      "count": 1
+    },
+    {
+      "table": "ticket_knowledge_revisions",
+      "count": 1
+    },
+    {
+      "table": "ticket_knowledge_sources",
+      "count": 1
+    },
+    {
+      "table": "ticket_knowledge_uses",
+      "count": 1
+    },
+    {
+      "table": "ticket_label_links",
+      "count": 1
+    },
+    {
+      "table": "ticket_labels",
+      "count": 1
+    },
+    {
+      "table": "ticket_message_revisions",
+      "count": 1
+    },
+    {
+      "table": "ticket_messages",
+      "count": 1
+    },
+    {
+      "table": "ticket_metric_checkpoints",
+      "count": 1
+    },
+    {
+      "table": "ticket_metric_definitions",
+      "count": 1
+    },
+    {
+      "table": "ticket_metric_rollups",
+      "count": 1
+    },
+    {
+      "table": "ticket_notifications",
+      "count": 1
+    },
+    {
+      "table": "ticket_query_snapshots",
+      "count": 1
+    },
+    {
+      "table": "ticket_queue_policies",
+      "count": 1
+    },
+    {
+      "table": "ticket_sla_assignments",
+      "count": 1
+    },
+    {
+      "table": "ticket_sla_policies",
+      "count": 1
+    },
+    {
+      "table": "ticket_ticket_access_policies",
+      "count": 1
+    },
+    {
+      "table": "ticket_wait_intervals",
+      "count": 1
+    },
+    {
+      "table": "tickets",
+      "count": 1
+    }
+  ],
+  "provenance": [
+    {
+      "table": "change_commands",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [],
+      "seedLine": 7,
+      "triggerSeed": null
+    },
+    {
+      "table": "change_records",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "project_change_requests",
+          "from": "change_request_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 8,
+      "triggerSeed": null
+    },
+    {
+      "table": "map_analysis_rate_limits",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 9,
+      "triggerSeed": null
+    },
+    {
+      "table": "organization_exports",
+      "category": "versioned-reconstruction",
+      "source": [
+        "migrations/0006_create_organization_exports.sql"
+      ],
+      "prerequisiteFKs": [],
+      "seedLine": 10,
+      "triggerSeed": null
+    },
+    {
+      "table": "organization_feature_flags",
+      "category": "reviewed-structural-projection",
+      "source": "Reviewed structural AST projection in historical fixture manifest; literal defaults remain explicitly synthetic, not recovered production DDL",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 11,
+      "triggerSeed": null
+    },
+    {
+      "table": "organization_file_folders",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organization_file_folders",
+          "from": "parent_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "organization_file_folders",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 13,
+      "triggerSeed": null
+    },
+    {
+      "table": "organization_files",
+      "category": "versioned-reconstruction",
+      "source": [
+        "migrations/0002_organizations_files.sql",
+        "migrations/0008_harden_organization_files.sql",
+        "migrations/0008_harden_organization_files.sql",
+        "migrations/0008_harden_organization_files.sql",
+        "migrations/0008_harden_organization_files.sql",
+        "migrations/0008_harden_organization_files.sql",
+        "migrations/0008_harden_organization_files.sql",
+        "migrations/0008_harden_organization_files.sql",
+        "migrations/0008_harden_organization_files.sql",
+        "migrations/0008_harden_organization_files.sql",
+        "migrations/0008_harden_organization_files.sql",
+        "migrations/0008_harden_organization_files.sql",
+        "migrations/0024_document_folders_trash.sql",
+        "migrations/0024_document_folders_trash.sql",
+        "migrations/0024_document_folders_trash.sql",
+        "migrations/0024_document_folders_trash.sql",
+        "migrations/0024_document_folders_trash.sql"
+      ],
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organization_file_folders",
+          "from": "trashed_from_folder_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "users",
+          "from": "deleted_by",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "organization_file_folders",
+          "from": "folder_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 14,
+      "triggerSeed": null
+    },
+    {
+      "table": "organization_limit_requests",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "reviewed_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 15,
+      "triggerSeed": null
+    },
+    {
+      "table": "organization_limits",
+      "category": "reviewed-structural-projection",
+      "source": "Reviewed structural AST projection in historical fixture manifest; literal defaults remain explicitly synthetic, not recovered production DDL",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 12,
+      "triggerSeed": null
+    },
+    {
+      "table": "organization_resource_reservations",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_user_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "projects",
+          "from": "project_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 16,
+      "triggerSeed": null
+    },
+    {
+      "table": "organization_roadmaps",
+      "category": "versioned-reconstruction",
+      "source": [
+        "migrations/0011_roadmap_gantt.sql"
+      ],
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 17,
+      "triggerSeed": null
+    },
+    {
+      "table": "organization_tickets",
+      "category": "versioned-reconstruction",
+      "source": [
+        "migrations/0010_ticket_center.sql",
+        "migrations/0025_ticket_triage_classification.sql",
+        "migrations/0025_ticket_triage_classification.sql",
+        "migrations/0025_ticket_triage_classification.sql",
+        "migrations/0025_ticket_triage_classification.sql",
+        "migrations/0025_ticket_triage_classification.sql",
+        "migrations/0025_ticket_triage_classification.sql",
+        "migrations/0025_ticket_triage_classification.sql",
+        "migrations/0025_ticket_triage_classification.sql",
+        "migrations/0025_ticket_triage_classification.sql",
+        "migrations/0025_ticket_triage_classification.sql",
+        "migrations/0025_ticket_triage_classification.sql",
+        "migrations/0026_ticket_command_lifecycle.sql",
+        "migrations/0026_ticket_command_lifecycle.sql",
+        "migrations/0026_ticket_command_lifecycle.sql",
+        "migrations/0026_ticket_command_lifecycle.sql",
+        "migrations/0026_ticket_command_lifecycle.sql",
+        "migrations/0026_ticket_command_lifecycle.sql",
+        "migrations/0026_ticket_command_lifecycle.sql",
+        "migrations/0026_ticket_command_lifecycle.sql",
+        "migrations/0027_ticket_selective_access.sql",
+        "migrations/0032_ticket_flow_navigation.sql"
+      ],
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "assigned_to",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "users",
+          "from": "triaged_by",
+          "to": "id"
+        }
+      ],
+      "seedLine": 5,
+      "triggerSeed": null
+    },
+    {
+      "table": "project_change_requests",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "requested_by_user_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "projects",
+          "from": "project_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        },
+        {
+          "id": 4,
+          "seq": 0,
+          "parent": "users",
+          "from": "transition_actor_user_id",
+          "to": "id"
+        },
+        {
+          "id": 5,
+          "seq": 0,
+          "parent": "users",
+          "from": "decided_by_user_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 23,
+      "triggerSeed": null
+    },
+    {
+      "table": "project_preview_operations",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "project_save_operations",
+          "from": "save_operation_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 25,
+      "triggerSeed": null
+    },
+    {
+      "table": "project_save_operations",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [],
+      "seedLine": 24,
+      "triggerSeed": null
+    },
+    {
+      "table": "projects",
+      "category": "versioned-reconstruction",
+      "source": [
+        "history/0f739ded008b8b4c37b36cd0953735e5a9ffeb42/schema.sql",
+        "migrations/0002_organizations_files.sql",
+        "migrations/0002_organizations_files.sql",
+        "migrations/0014_project_metadata_ownership.sql",
+        "migrations/0014_project_metadata_ownership.sql",
+        "migrations/0014_project_metadata_ownership.sql",
+        "migrations/0014_project_metadata_ownership.sql",
+        "migrations/0014_project_metadata_ownership.sql",
+        "migrations/0015_project_preview_lifecycle.sql",
+        "migrations/0015_project_preview_lifecycle.sql",
+        "migrations/0015_project_preview_lifecycle.sql",
+        "migrations/0015_project_preview_lifecycle.sql",
+        "migrations/0015_project_preview_lifecycle.sql",
+        "migrations/0015_project_preview_lifecycle.sql",
+        "migrations/0015_project_preview_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0018_project_lifecycle.sql",
+        "migrations/0040_project_preview_operations.sql",
+        "migrations/0040_project_preview_operations.sql",
+        "migrations/0040_project_preview_operations.sql"
+      ],
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "updated_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        }
+      ],
+      "seedLine": 4,
+      "triggerSeed": null
+    },
+    {
+      "table": "roadmap_comments",
+      "category": "versioned-reconstruction",
+      "source": [
+        "migrations/0011_roadmap_gantt.sql"
+      ],
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "moderated_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "author_user_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "roadmap_tasks",
+          "from": "task_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "organization_roadmaps",
+          "from": "roadmap_id",
+          "to": "id"
+        },
+        {
+          "id": 4,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 20,
+      "triggerSeed": null
+    },
+    {
+      "table": "roadmap_dependencies",
+      "category": "versioned-reconstruction",
+      "source": [
+        "migrations/0011_roadmap_gantt.sql"
+      ],
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "roadmap_tasks",
+          "from": "successor_task_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "roadmap_tasks",
+          "from": "predecessor_task_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "organization_roadmaps",
+          "from": "roadmap_id",
+          "to": "id"
+        },
+        {
+          "id": 4,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 21,
+      "triggerSeed": null
+    },
+    {
+      "table": "roadmap_events",
+      "category": "versioned-reconstruction",
+      "source": [
+        "migrations/0011_roadmap_gantt.sql"
+      ],
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_user_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "roadmap_tasks",
+          "from": "task_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organization_roadmaps",
+          "from": "roadmap_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 22,
+      "triggerSeed": null
+    },
+    {
+      "table": "roadmap_phases",
+      "category": "versioned-reconstruction",
+      "source": [
+        "migrations/0011_roadmap_gantt.sql"
+      ],
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organization_roadmaps",
+          "from": "roadmap_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 18,
+      "triggerSeed": null
+    },
+    {
+      "table": "roadmap_tasks",
+      "category": "versioned-reconstruction",
+      "source": [
+        "migrations/0011_roadmap_gantt.sql"
+      ],
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "assignee_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "roadmap_phases",
+          "from": "phase_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "organization_roadmaps",
+          "from": "roadmap_id",
+          "to": "id"
+        },
+        {
+          "id": 4,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 19,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_access_group_members",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "user_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "ticket_access_groups",
+          "from": "group_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 1,
+          "parent": "ticket_access_groups",
+          "from": "organization_id",
+          "to": "organization_id"
+        }
+      ],
+      "seedLine": 27,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_access_groups",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 26,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_access_policies",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 28,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_access_policy_entries",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "ticket_access_policies",
+          "from": "policy_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "ticket_access_policies",
+          "from": "organization_id",
+          "to": "organization_id"
+        }
+      ],
+      "seedLine": 29,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_acl_entries",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        }
+      ],
+      "seedLine": 30,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_attachment_upload_sessions",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_drafts",
+          "from": "draft_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_drafts",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 2,
+          "parent": "ticket_drafts",
+          "from": "ticket_id",
+          "to": "ticket_id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "users",
+          "from": "user_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 49,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_attachments",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "uploaded_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "ticket_drafts",
+          "from": "draft_id",
+          "to": "id"
+        },
+        {
+          "id": 4,
+          "seq": 0,
+          "parent": "ticket_messages",
+          "from": "message_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 50,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_case_commands",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 35,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_case_events",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_cases",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_cases",
+          "from": "case_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "ticket_case_commands",
+          "from": "command_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 37,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_case_links",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_cases",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_cases",
+          "from": "target_case_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "ticket_cases",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "ticket_cases",
+          "from": "case_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "change_records",
+          "from": "change_id",
+          "to": "id"
+        },
+        {
+          "id": 4,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 38,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_case_members",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_cases",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_cases",
+          "from": "case_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "user_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 39,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_cases",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "coordinator_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 36,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_change_links",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "change_records",
+          "from": "record_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "change_records",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 40,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_command_backfills",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 41,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_command_outbox",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "ticket_events",
+          "from": "event_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "ticket_commands",
+          "from": "command_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 44,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_commands",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_user_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 42,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_cycles",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "opened_by",
+          "to": "id"
+        }
+      ],
+      "seedLine": 46,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_drafts",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_messages",
+          "from": "consumed_message_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_messages",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 2,
+          "parent": "ticket_messages",
+          "from": "ticket_id",
+          "to": "ticket_id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "users",
+          "from": "user_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 47,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_events",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_user_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "ticket_messages",
+          "from": "message_id",
+          "to": "id"
+        },
+        {
+          "id": 4,
+          "seq": 0,
+          "parent": "ticket_events",
+          "from": "corrects_event_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 43,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_export_audit",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [],
+      "seedLine": 54,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_export_gc",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [],
+      "seedLine": 55,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_export_items",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_export_jobs",
+          "from": "job_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_export_jobs",
+          "from": "organization_id",
+          "to": "organization_id"
+        }
+      ],
+      "seedLine": 52,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_export_jobs",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 51,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_export_parts",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_export_jobs",
+          "from": "job_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_export_jobs",
+          "from": "organization_id",
+          "to": "organization_id"
+        }
+      ],
+      "seedLine": 53,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_feedback_instruments",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 56,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_feedback_invites",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_feedback_instruments",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_feedback_instruments",
+          "from": "instrument_version",
+          "to": "version"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "ticket_cycles",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "ticket_cycles",
+          "from": "ticket_id",
+          "to": "ticket_id"
+        },
+        {
+          "id": 1,
+          "seq": 2,
+          "parent": "ticket_cycles",
+          "from": "cycle_number",
+          "to": "cycle_number"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "users",
+          "from": "recipient_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 57,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_knowledge_articles",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "reviewer_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 58,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_knowledge_commands",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 60,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_knowledge_events",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_knowledge_revisions",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_knowledge_revisions",
+          "from": "article_id",
+          "to": "article_id"
+        },
+        {
+          "id": 0,
+          "seq": 2,
+          "parent": "ticket_knowledge_revisions",
+          "from": "revision_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 61,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_knowledge_revisions",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_knowledge_articles",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_knowledge_articles",
+          "from": "article_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "author_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 59,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_knowledge_sources",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_cases",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_cases",
+          "from": "case_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "ticket_knowledge_articles",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "ticket_knowledge_articles",
+          "from": "article_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 62,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_knowledge_uses",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_knowledge_revisions",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_knowledge_revisions",
+          "from": "article_id",
+          "to": "article_id"
+        },
+        {
+          "id": 0,
+          "seq": 2,
+          "parent": "ticket_knowledge_revisions",
+          "from": "revision_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "ticket_messages",
+          "from": "message_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 63,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_label_links",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "ticket_labels",
+          "from": "label_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "ticket_labels",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        }
+      ],
+      "seedLine": 32,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_labels",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 31,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_message_revisions",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_messages",
+          "from": "message_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_messages",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 2,
+          "parent": "ticket_messages",
+          "from": "ticket_id",
+          "to": "ticket_id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "ticket_commands",
+          "from": "command_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "users",
+          "from": "editor_user_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 0,
+      "triggerSeed": "cc05_message_initial_revision from ticket_messages insert"
+    },
+    {
+      "table": "ticket_messages",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_commands",
+          "from": "last_command_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_commands",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 0,
+          "seq": 2,
+          "parent": "ticket_commands",
+          "from": "author_user_id",
+          "to": "actor_user_id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "ticket_commands",
+          "from": "command_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "ticket_commands",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 1,
+          "seq": 2,
+          "parent": "ticket_commands",
+          "from": "author_user_id",
+          "to": "actor_user_id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "users",
+          "from": "author_user_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 48,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_metric_checkpoints",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 65,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_metric_definitions",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 64,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_metric_rollups",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        }
+      ],
+      "seedLine": 66,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_notifications",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "recipient_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "ticket_events",
+          "from": "event_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "ticket_command_outbox",
+          "from": "outbox_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 45,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_query_snapshots",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "user_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 34,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_queue_policies",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "updated_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 67,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_sla_assignments",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_cycles",
+          "from": "ticket_id",
+          "to": "ticket_id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_cycles",
+          "from": "cycle_number",
+          "to": "cycle_number"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "ticket_sla_policies",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 2,
+          "seq": 1,
+          "parent": "ticket_sla_policies",
+          "from": "policy_version",
+          "to": "version"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 69,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_sla_policies",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "actor_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 68,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_ticket_access_policies",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "ticket_access_policies",
+          "from": "policy_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "ticket_access_policies",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        }
+      ],
+      "seedLine": 33,
+      "triggerSeed": null
+    },
+    {
+      "table": "ticket_wait_intervals",
+      "category": "canonical-source",
+      "source": "schema.sql pinned by historical fixture manifest",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "ticket_cycles",
+          "from": "ticket_id",
+          "to": "ticket_id"
+        },
+        {
+          "id": 0,
+          "seq": 1,
+          "parent": "ticket_cycles",
+          "from": "cycle_number",
+          "to": "cycle_number"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "organization_tickets",
+          "from": "ticket_id",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 1,
+          "parent": "organization_tickets",
+          "from": "organization_id",
+          "to": "organization_id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "users",
+          "from": "ended_by",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "users",
+          "from": "responsible_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 70,
+      "triggerSeed": null
+    },
+    {
+      "table": "tickets",
+      "category": "reviewed-structural-projection",
+      "source": "Reviewed structural AST projection in historical fixture manifest; literal defaults remain explicitly synthetic, not recovered production DDL",
+      "prerequisiteFKs": [
+        {
+          "id": 0,
+          "seq": 0,
+          "parent": "users",
+          "from": "assigned_to",
+          "to": "id"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "parent": "users",
+          "from": "created_by",
+          "to": "id"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "parent": "projects",
+          "from": "project_id",
+          "to": "id"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "parent": "organizations",
+          "from": "organization_id",
+          "to": "id"
+        }
+      ],
+      "seedLine": 6,
+      "triggerSeed": null
+    }
+  ],
+  "foreignKeyCheck": [],
+  "quickCheck": "ok",
+  "constraintsDisabled": false,
+  "schemaAltered": false,
+  "businessRowsReadFromProduction": false,
+  "causalIsolationProven": false,
+  "notes": [
+    "Execute on a fresh complete historical fixture BEFORE claim; source fixture itself contains only synthetic representatives for seven unknown defaults.",
+    "All SQL values are synthetic. Each recipe is fixed explicit SQL, not metadata-generated guesses.",
+    "ticket_message_revisions is inserted by the real cc05_message_initial_revision trigger when ticket_messages is inserted; report seedLine=0 marks this explicit mechanism, not omission.",
+    "Other business prerequisites remain in target organization where composite FKs or triggers require/coherently associate them. Therefore eligible=false alone does not isolate which table causes veto. Inspect per-table COUNT and per-table atomic claim NOT EXISTS coverage separately.",
+    "SLA assignment requires open cycle1 and organization_tickets.current_cycle_number=1; recipe establishes both without disabling constraints.",
+    "Invariants verified: foreign_keys=1, all68 counts positive, no insertion failures, foreign_key_check empty, quick_check ok."
+  ],
+  "sourceRawSeedSha256": "5d46ec5a275d0b6486fcd919e01296f00d6c3fff46be55453a423aea0abdd933",
+  "seedHashNormalization": "UTF-8 LF and one final newline; raw source hash retained, no SQL token changes"
+}
