@@ -58,6 +58,7 @@ jobs:
           tests/organization-lifecycle-wiring.test.mjs
           tests/organization-lifecycle.test.mjs
           tests/organization-permanent-deletion.test.mjs
+          tests/organization-deletion-cleanup.test.mjs
           tests/organization-deletion-storage-fence.test.mjs
           tests/organization-deletion-review.test.mjs
           tests/organization-management-integration.test.mjs
