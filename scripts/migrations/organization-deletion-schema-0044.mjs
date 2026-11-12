@@ -5,8 +5,8 @@ import { PRODUCTION_DATABASE_NAME, runWranglerJson, rowsFromD1Json, gateError, s
 
 export const DELETION_MIGRATION = '0044_organization_permanent_deletion.sql';
 const SOURCE_HASHES = Object.freeze({
-  'schema.sql':'1b155254bf1db2f50f0c36b3514d7cd1e0d02d7b317d2d9719ce673d0190986b',
-  'migrations/0044_organization_permanent_deletion.sql':'0115ce58428c008e5527f57af06e9935810e3a88ba81a0e2848bdac0d8cf8869',
+  'schema.sql':'7016dbc64d6502af557bc9fd5cab9cc2be71770a1d56ff74d5c88219d61026fc',
+  'migrations/0044_organization_permanent_deletion.sql':'cde2cbad6ded662faf004eac176309b3003641ec2f0714eda06b890127fb3aba',
 });
 // Fixed metadata-only queries: never select application rows or interpolate names.
 // Only SQLite-reserved names are excluded. Unknown d1_/_cf_ names remain visible.
