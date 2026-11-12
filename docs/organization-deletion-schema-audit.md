@@ -71,3 +71,70 @@ Each of the 62 direct organization UPDATE guards in pending migration 0044 and t
 The correction does not change INSERT guards, the three special organization guards, session detachment, DELETE-based access cleanup, retained audit archival, or the finalization transaction. It does not add the missing historical guards or certify an unknown schema. The pending migration and canonical source hashes change, so previous audit evidence cannot authorize the revised migration. A new protected read-only audit and separate exact-hash human approval remain required before any production application.
 
 Regression coverage must exercise all guard definitions and movement directions, NULL ownership, locked non-ownership updates, preserved INSERT fences, frozen-claim interleavings and the legitimate end-to-end cleanup/finalization path. Passing these tests does not establish production organization eligibility or provider-storage emptiness.
+
+## Bounded semantic diagnostics (review only)
+
+The 0044 report includes `semanticDiagnostics` version 1 for seven historical
+names and 24 explicit indexes. The fixed descriptors come from sanitized audit
+43124161181 (product 97236515); they constrain diagnostic scope and disclosure,
+**not** compatibility. They are not recovered deployment DDL or an approved
+historical schema reference. Applying missing migration 0005 is neither proposed
+nor justified by this work.
+
+Every result has `semanticApproval: false` and `authorizationEffect: "none"`.
+`recognized-subset` means the complete definition fits the documented grammar,
+not that the definition is valid in every SQLite context or semantically approved.
+It cannot clear an object-definition, unreviewed-object or missing-guard mismatch.
+Existing source checks, protected runner, approval material and apply preflight
+remain mandatory. This change introduces no remote query or workflow input: it
+uses the existing fixed object projection, covered by the two complete snapshots.
+The report digest binds diagnostics, full-definition digests and reference sources;
+the existing approval protocol additionally binds the product Git SHA.
+
+### Accepted diagnostic language
+
+- ASCII only; sequential tokenization of comments and escaped quoted strings.
+  Quoted declaration identifiers must match fixed allowed names. Quoted expression
+  atoms are rejected because SQLite double-quoted-string fallback is ambiguous.
+- CREATE TABLE with fixed target/column names and bounded known type labels.
+  Column/table PRIMARY KEY and UNIQUE, NOT NULL/NULL, CHECK, DEFAULT, known
+  COLLATE, REFERENCES/FOREIGN KEY, fixed FK target names, ON DELETE/UPDATE actions,
+  MATCH SIMPLE/FULL/PARTIAL, explicit DEFERRABLE/NOT DEFERRABLE and INITIALLY,
+  supported ON CONFLICT, AUTOINCREMENT, STRICT and WITHOUT ROWID are represented
+  in original clause order. Unsupported ordering is rejected, not rewritten.
+- CREATE [UNIQUE] INDEX with fixed name/table, ordered allowlisted column keys,
+  optional known collation/direction, and optional bounded predicate.
+- Expressions: column atoms, NULL, current-time keywords, opaque text/numeric
+  literals, signed numbers, explicit groups, comparisons, IS [NOT] NULL,
+  [NOT] IN, NOT, AND and OR. Parentheses and precedence remain explicit.
+- Literal values are never exported or inferred from hashes. Each is represented
+  only by type plus a digest, with an opaque-literal count; independent semantic
+  review is still needed. Full source definition hashes bind their exact context.
+
+### Deliberate rejections
+
+Unsupported/unknown syntax returns only `UNSUPPORTED_DEFINITION`, with no partial
+AST, text fragment or raw exception. Named constraints, generated columns, virtual
+or AS SELECT tables, functions (including datetime), arithmetic, subqueries,
+LIKE/GLOB/BETWEEN, IS DISTINCT FROM, blob/hex literals, custom types/collations,
+unknown identifiers, ambiguous quoting, duplicate/conflicting supported constraints,
+trailing statements and unconsumed tokens are not accepted. The parser does not
+attempt algebraic equivalence, default reconstruction or SQLite schema execution.
+Valid SQLite outside this subset may therefore remain unsupported.
+
+Limits: 32 KiB ASCII definition, 4096 tokens/AST object nodes, depth 32 and 128 items
+per list. Incomplete comments/quotes, NUL, non-ASCII and excess limits fail closed.
+The seven table definitions and three partial-index predicates observed in
+production have **not** been recovered or approved by synthetic examples.
+
+### Validation and next step
+
+`tests/production-migration-deletion-semantic.test.mjs` checks supported shapes,
+privacy, quoting/precedence, malformed and adversarial forms, limits, source-digest
+binding, and that recognized historical targets still fail the existing audit.
+The test is included in `test:production-migration-gate`. Existing permanent-
+deletion concurrency/cleanup tests remain unchanged and must continue to pass.
+Real local D1/workerd tests use an isolated synthetic database; no production rows
+or private DDL are fixtures. A future authorized protected audit can expose only
+these sanitized diagnostics. Unknown syntax or opaque semantics require separate
+review and never automatically become a compatibility allowlist.
