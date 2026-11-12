@@ -8,6 +8,7 @@ const CONFIRMATION='EXCLUIR PERMANENTEMENTE';
 type Deletion={id:string;organizationId:number;state:'pending'|'storage_deleted'|'completed';retryable:boolean;errorCode:string|null;notBefore?:string};
 type Preview={organizationId:number;name:string;version:number;eligible:boolean;blockers:{code:string;count:number}[];confirmation:string};
 const blockerLabels:Record<string,string>={
+  MIXED_SCOPE_PERMISSION:'Permissões vinculadas também a projetos exigem revisão antes da exclusão',
   PAUSE_REQUIRED:'Pause a organização antes de excluir',STORAGE_NOT_SETTLED:'Armazenamento ainda não estabilizado',
   UNGUARDED_DEPENDENCY:'O esquema de dados exige revisão antes da exclusão',LINKED_DATA:'Dados vinculados, inclusive inativos ou históricos',
   UNRESOLVED_OPERATION:'Operação pendente de conclusão',DELETION_IN_PROGRESS:'Já existe uma exclusão em andamento; retome pelo endereço salvo',

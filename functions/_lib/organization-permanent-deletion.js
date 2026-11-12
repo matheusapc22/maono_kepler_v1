@@ -8,7 +8,7 @@ const one = (env, sql, ...args) => env.DB.prepare(sql).bind(...args).first();
 const all = async (env, sql, ...args) => (await env.DB.prepare(sql).bind(...args).all()).results || [];
 const statement = (env, sql, ...args) => env.DB.prepare(sql).bind(...args);
 const quote = name => { check(/^[a-zA-Z_][a-zA-Z_0-9]*$/.test(name), 'Schema desconhecido.',503,'ORGANIZATION_DELETE_SCHEMA_REQUIRED'); return `"${name}"`; };
-const removable = new Set(['organization_users','organization_access_delegations','user_permission_denials','user_permissions']);
+const removable = new Set(['organization_access_delegations','organization_users','user_permission_denials','user_permissions']);
 const retained = new Set(['organization_management_events','organization_deletions','organization_deleted_management_events']);
 const publicDeletion = row => ({id:row.id,organizationId:row.organization_id,state:row.state,retryable:row.state!=='completed',errorCode:row.error_code || null,notBefore:row.not_before});
 const fail = (message,code,status=409) => new ManagementError(message,status,code);
@@ -69,6 +69,10 @@ async function inventory(env,id) {
     check(rows.length===1&&Number.isSafeInteger(Number(rows[0].n))&&Number(rows[0].n)>=0,'Contagem de dependências não confirmada.',503,'ORGANIZATION_DELETE_SCHEMA_REQUIRED');
     if(Number(rows[0].n)>0)blockers.push({code:'LINKED_DATA',count:Number(rows[0].n)});
   }
+  // A grant may also authorize a project outside this organization. Never remove it implicitly.
+  const mixed=await one(env,'SELECT COUNT(*) n FROM user_permissions WHERE organization_id=? AND project_id IS NOT NULL',id);
+  check(mixed&&Number.isSafeInteger(Number(mixed.n))&&Number(mixed.n)>=0,'Contagem de permissões não confirmada.',503,'ORGANIZATION_DELETE_SCHEMA_REQUIRED');
+  if(Number(mixed.n)>0)blockers.push({code:'MIXED_SCOPE_PERMISSION',count:Number(mixed.n)});
   const org=await one(env,'SELECT management_create_key FROM organizations WHERE id=?',id);
   const ops=await all(env,`SELECT o.id,o.kind,o.payload_json,i.item_index,i.state FROM organization_management_operations o JOIN organization_management_operation_items i ON i.operation_id=o.id WHERE i.state<>'succeeded'`);
   for(const op of ops){let input;try{input=JSON.parse(op.payload_json)[op.item_index];}catch{blockers.push({code:'UNRESOLVED_OPERATION',count:1});continue;}
@@ -124,7 +128,7 @@ export async function startDeletion(env,actor,id,key,input) {
   // Claim and write exclusion are atomic with the emptiness/version assertions.
   const empty=business.map(name=>`NOT EXISTS(SELECT 1 FROM ${quote(name)} WHERE organization_id=?)`).join(' AND ')||'1';
   await env.DB.batch([
-    statement(env,`INSERT INTO organization_management_assertions(ok) SELECT CASE WHEN EXISTS(SELECT 1 FROM organizations WHERE id=? AND management_version=? AND active=0) AND ${empty} THEN 1 ELSE 0 END`,id,version,...business.map(()=>id)),
+    statement(env,`INSERT INTO organization_management_assertions(ok) SELECT CASE WHEN EXISTS(SELECT 1 FROM organizations WHERE id=? AND management_version=? AND active=0) AND ${empty} AND NOT EXISTS(SELECT 1 FROM user_permissions WHERE organization_id=? AND project_id IS NOT NULL) THEN 1 ELSE 0 END`,id,version,...business.map(()=>id),id),
     statement(env,`UPDATE organizations SET management_owner_id=NULL,management_version=management_version+1,management_actor_id=?,management_request_id=?,management_action='organization.deletion_requested',management_reason='Exclusão permanente confirmada' WHERE id=? AND management_version=?`,actor.id,op,id,version),
     statement(env,`INSERT INTO organization_deletions(id,organization_id,actor_id,idempotency_key,requested_version,name,slug,path,creation_key) VALUES(?,?,?,?,?,?,?,?,?)`,op,id,actor.id,key,version,org.name,org.slug,org.dropbox_root_path,org.management_create_key||null),
     statement(env,`INSERT INTO organization_deletion_audit(deletion_id,event_type,actor_id) VALUES(?,'requested',?)`,op,actor.id),
@@ -210,7 +214,7 @@ export async function stepDeletion(env,actor,id,deps={}) {
     // Provider success is checkpointed before the independent D1 transaction.
     const empty=business.map(name=>`NOT EXISTS(SELECT 1 FROM ${quote(name)} WHERE organization_id=?)`).join(' AND ')||'1';
     await env.DB.batch([
-      statement(env,`INSERT INTO organization_management_assertions(ok) SELECT CASE WHEN EXISTS(SELECT 1 FROM organization_deletions WHERE id=? AND state='storage_deleted' AND lease_token=?) AND ${empty} THEN 1 ELSE 0 END`,row.id,token,...business.map(()=>row.organization_id)),
+      statement(env,`INSERT INTO organization_management_assertions(ok) SELECT CASE WHEN EXISTS(SELECT 1 FROM organization_deletions WHERE id=? AND state='storage_deleted' AND lease_token=?) AND ${empty} AND NOT EXISTS(SELECT 1 FROM user_permissions WHERE organization_id=? AND project_id IS NOT NULL) THEN 1 ELSE 0 END`,row.id,token,...business.map(()=>row.organization_id),row.organization_id),
       statement(env,`INSERT INTO organization_deleted_management_events SELECT * FROM organization_management_events WHERE organization_id=?`,row.organization_id),
       statement(env,'DELETE FROM organization_management_events WHERE organization_id=?',row.organization_id),
       ...[...removable].map(name=>statement(env,`DELETE FROM ${quote(name)} WHERE organization_id=?`,row.organization_id)),
