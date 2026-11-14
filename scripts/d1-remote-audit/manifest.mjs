@@ -16,9 +16,15 @@ export function validateManifest(m){
  if(m.readOnlyAuditEnabled&&!configured)deny();
  return {configured,auditEnabled:m.readOnlyAuditEnabled,remoteIdentityAuthenticated:false,operationalAuthorization:false};
 }
+export function manifestSha256(bytes){
+ if(!(bytes instanceof Uint8Array)||bytes.byteLength>16384)deny();
+ let text;try{text=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes).replace(/\r\n/g,'\n');}catch{deny();}
+ if(text.includes('\r')||text.startsWith('\ufeff'))deny();
+ return createHash('sha256').update(text,'utf8').digest('hex');
+}
 export function parsePinnedManifest(bytes,expectedSha256,{requireEnabled=false}={}){
  if(!(bytes instanceof Uint8Array)||bytes.byteLength>16384||typeof expectedSha256!=='string'||!hash.test(expectedSha256))deny();
- const digest=createHash('sha256').update(bytes).digest('hex');if(digest!==expectedSha256)deny();
+ const digest=manifestSha256(bytes);if(digest!==expectedSha256)deny();
  let manifest;try{manifest=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{deny();}
  const status=validateManifest(manifest);if(requireEnabled&&(!status.configured||!status.auditEnabled))deny();
  return {manifest,status,manifestSha256:digest};

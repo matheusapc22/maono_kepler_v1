@@ -122,3 +122,11 @@ GitHub will not allow that actor to approve the run. Before activation, explicit
 choose a separately authorized triggering/reviewing identity or review a narrowly
 scoped owner-manual-approval policy. Do not silently disable protections or add a
 new actor. No autoapproval API or approval bypass exists in this code.
+
+## Reproducible manifest digest
+
+The approval input is SHA-256 of the manifest's UTF-8 text normalized from CRLF to
+LF. BOM, malformed UTF-8, lone CR and oversized input are rejected. No JSON semantic
+reordering is performed. This makes Windows and Linux checkout hashes agree while
+still binding the reviewed manifest text. Run `cli.mjs --validate` to obtain this
+canonical digest; do not substitute a platform-specific raw-file hash.

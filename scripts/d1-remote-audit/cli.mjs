@@ -1,16 +1,16 @@
 // Read-only operational CLI. No Wrangler session, production config or token fallback.
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {createHash} from 'node:crypto';
+
 import {join} from 'node:path';
-import {parsePinnedManifest} from './manifest.mjs';
+import {parsePinnedManifest,manifestSha256 as computeManifestSha256} from './manifest.mjs';
 import {collectReadonlyPinnedMetadata} from './readonly-provider.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 try{
  const [mode,...args]=process.argv.slice(2);
  if(!['--validate','--audit'].includes(mode)||args.length!==0)throw Error('INVALID_MODE');
  const bytes=readFileSync(join(root,'ops/d1-synthetic/manifest.json'));
- const expected=mode==='--audit'?process.env.MAONO_SYNTHETIC_MANIFEST_SHA256:createHash('sha256').update(bytes).digest('hex');
+ const expected=mode==='--audit'?process.env.MAONO_SYNTHETIC_MANIFEST_SHA256:computeManifestSha256(bytes);
  const {manifest,status,manifestSha256}=parsePinnedManifest(bytes,expected,{requireEnabled:mode==='--audit'});
  if(mode==='--validate'){console.log(JSON.stringify({manifestSha256,...status}));}
  else{
