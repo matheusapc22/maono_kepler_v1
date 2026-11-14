@@ -64,3 +64,9 @@ local evidence, not a deployed Worker authentication or end-to-end service test.
 
 Official API reference checked 2026-11-14:
 https://developers.cloudflare.com/workers/runtime-apis/web-crypto/
+
+The local verifier now returns authenticated issued/expiry timestamps. A caller
+must compare its trusted clock after asynchronous verification, not assume the
+pre-crypto time remains current. The integrated local harness checks that metadata
+synchronously after the final await and before its counter; a short-token regression
+test keeps the approval valid while the token expires during that verification.

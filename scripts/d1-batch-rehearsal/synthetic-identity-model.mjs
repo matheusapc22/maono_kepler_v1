@@ -3,11 +3,11 @@
 import {PRODUCTION_UUID} from './remote-protocol-model.mjs';
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const digest=/^[a-f0-9]{64}$/;
-const fields=['accountId','databaseUuid','databaseName','workerName','deploymentId','gitSha','payloadSha256','fixtureSha256','registryNamespaceId','workerBundleSha256','registryClassName','registryObjectName'];
+const fields=['accountId','databaseUuid','databaseName','workerName','deploymentId','versionId','gitSha','payloadSha256','fixtureSha256','registryNamespaceId','workerBundleSha256','registryClassName','registryObjectName'];
 function valid(m) {
   return m && fields.every(k=>typeof m[k]==='string') && /^[a-f0-9]{32}$/.test(m.accountId) && uuid.test(m.databaseUuid) &&
     m.databaseUuid!==PRODUCTION_UUID && /^maono_synthetic_rehearsal_[a-z0-9_]+$/.test(m.databaseName) &&
-    /^maono-synthetic-rehearsal-[a-z0-9-]+$/.test(m.workerName) && uuid.test(m.deploymentId) &&
+    /^maono-synthetic-rehearsal-[a-z0-9-]+$/.test(m.workerName) && uuid.test(m.deploymentId) && uuid.test(m.versionId) &&
     /^[a-f0-9]{40}$/.test(m.gitSha) && digest.test(m.payloadSha256) && digest.test(m.fixtureSha256) &&
     /^[a-f0-9]{32}$/.test(m.registryNamespaceId) && digest.test(m.workerBundleSha256) &&
     m.registryClassName==='SyntheticClaimRegistry' && m.registryObjectName==='synthetic-claim-registry-v1';

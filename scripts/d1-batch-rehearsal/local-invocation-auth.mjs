@@ -51,7 +51,7 @@ export function createLocalInvocationVerifier(pinned,key){
       // Canonical serialization also rejects duplicate keys and unexpected fields.
       if(text!==JSON.stringify(Object.fromEntries(claimFields.map(k=>[k,claims[k]]))))deny();
       if(!await crypto.subtle.verify('HMAC',key,signature,encoder.encode(domain+encoded)))deny();
-      return Object.freeze({localSignatureVerified:true,remoteIdentityAuthenticated:false,
+      return Object.freeze({localSignatureVerified:true,authenticatedIssuedAtMs:claims.issuedAtMs,authenticatedExpiresAtMs:claims.expiresAtMs,remoteIdentityAuthenticated:false,
         operationalAuthorization:false,replayProtectionProvided:false});
     }catch{deny();}
   };

@@ -16,7 +16,7 @@ const denied=/^Error: SYNTHETIC_AUTH_DENIED$/;
 test('ephemeral local WebCrypto signature verifies but gives neither authority nor replay protection',async()=>{
  const k=await key(),verify=createLocalInvocationVerifier(pins,k),t=await token(k);
  const result=await verify(request(t),now);
- assert.deepEqual(result,{localSignatureVerified:true,remoteIdentityAuthenticated:false,operationalAuthorization:false,replayProtectionProvided:false});
+ assert.deepEqual(result,{localSignatureVerified:true,authenticatedIssuedAtMs:now,authenticatedExpiresAtMs:now+60000,remoteIdentityAuthenticated:false,operationalAuthorization:false,replayProtectionProvided:false});
  assert.ok(Object.isFrozen(result));assert.deepEqual(await verify(request(t),now),result);
 });
 test('every pinned field rejects a correctly signed alternate identity',async()=>{
