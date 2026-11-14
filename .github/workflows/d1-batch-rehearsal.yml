@@ -10,6 +10,7 @@ on:
       - 'migrations/**'
       - 'AGENTS.md'
       - 'tests/d1-batch-rehearsal.test.mjs'
+      - 'tests/d1-remote-protocol-model.test.mjs'
       - '.github/workflows/d1-batch-rehearsal.yml'
   workflow_dispatch:
 permissions:
@@ -34,7 +35,7 @@ jobs:
       - name: Install pinned local emulator (no application install)
         run: npm install --prefix .tmp/d1-batch-rehearsal-runtime --no-save --package-lock=false wrangler@4.140.0
       - name: Test fixed Worker boundary
-        run: node --test tests/d1-batch-rehearsal.test.mjs tests/production-migration-historical-operator.test.mjs
+        run: node --test tests/d1-batch-rehearsal.test.mjs tests/d1-remote-protocol-model.test.mjs tests/production-migration-historical-operator.test.mjs
       - name: Run full synthetic historical matrix through local Worker
         env:
           WRANGLER_SEND_METRICS: 'false'
