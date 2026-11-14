@@ -51,3 +51,6 @@ playwright/auth.json
 
 .tmp/ticket-performance/
 dist-ticket-performance/
+
+# Local-only D1 batch rehearsal runtime and sanitized evidence
+.tmp/d1-batch-rehearsal*
