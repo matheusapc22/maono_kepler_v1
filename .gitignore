@@ -54,3 +54,6 @@ dist-ticket-performance/
 
 # Local-only D1 batch rehearsal runtime and sanitized evidence
 .tmp/d1-batch-rehearsal*
+
+# Synthetic remote audit summaries are local evidence, never source inputs
+.tmp/d1-remote-audit*
