@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "purpose": "synthetic-readonly-audit",
+  "readOnlyAuditEnabled": false,
+  "target": {"accountId":null,"databaseUuid":null,"databaseName":null,"workerName":null,"deploymentId":null,"versionId":null,"registryNamespaceId":null,"registryClassName":"SyntheticClaimRegistry"},
+  "artifact": {"gitSha":null,"workerBundleSha256":null,"payloadSha256":null,"fixtureSha256":null},
+  "scope": {"allowedHttpMethods":["GET"],"createResources":false,"deployWorker":false,"executeSql":false,"modifySecrets":false,"deleteResources":false},
+  "proposedPilot": {"maxWorkers":1,"maxD1Databases":1,"maxDurableObjectNamespaces":1,"maxLifetimeHours":24,"proposedSpendingLimitUSD":1,"authorizedSpendingLimitUSD":null,"status":"proposal-only-not-authorized"},
+  "cleanup": {"automaticDeletion":false,"requireExactResourceConfirmation":true,"preserveAuditArtifacts":true,"neverDeleteDatabaseNames":["maono_maps"],"neverDeleteDatabaseUuids":["5bc4dc32-f3bd-4c92-bbd1-cbda63e467db"]}
+}
