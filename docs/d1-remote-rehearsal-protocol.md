@@ -40,7 +40,7 @@ closed. Independently authenticated read-only reconciliation may later label
 `verified-committed`, `verified-unchanged`, or `unresolved`, but NONE permit replay.
 No controller state can prove the DB outcome without fresh observations.
 
-The included model deliberately omits the remote registry adapter. Shared-memory
+The protocol model does not deploy a remote registry adapter. Shared-memory
 tests exercise an atomic interface contract across invocations, not disk durability,
 Durable Objects behavior, remote concurrency, or exactly-once delivery. A future
 adapter must prove linearizable claim/create-if-absent and persistence across
@@ -95,3 +95,18 @@ Only after that provision a fresh synthetic experiment. Permanent deletion is a
 separate exact-resource confirmation; never infer it for production. Passing this
 experiment would still require a separately reviewed production executor/policy,
 protected audit and exact human production authorization. No merge is implied.
+
+## Local identity comparison contract
+
+`synthetic-identity-model.mjs` compares an approved manifest against a freshly
+observed manifest with exact account, UUID/name, Worker name/deployment, Git SHA,
+payload/fixture hashes and registry namespace. It denies expired approvals,
+observations older than 60 seconds or from the future, extra/substituted D1 bindings,
+and production identifiers. Exactly one D1 binding named TARGET is allowed.
+
+This is only the comparison predicate. The caller cannot prove identity by supplying
+two matching JSON objects: trusted approval retrieval, Cloudflare metadata collection,
+actual binding attestation, signature/provenance verification and authentication
+are NOT implemented. Consequently a match explicitly reports
+`remoteIdentityAuthenticated:false` and `operationalAuthorization:false`. Never
+interpret these tests as permission to invoke an arbitrary deployed Worker.

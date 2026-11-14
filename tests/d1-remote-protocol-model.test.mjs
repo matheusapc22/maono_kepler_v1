@@ -48,3 +48,8 @@ test('lost claim acknowledgement never invokes target and stays closed', async()
   s.claimOnce=claim;
   assert.equal((await modelInvocation({store:s,spec,executeFixedBatch:()=>calls++})).outcome,'denied-replay');assert.equal(calls,0);
 });
+test('claim identity fields reject coercible arrays before store access',async()=>{
+ let calls=0; const forbidden={claimOnce(){calls++;}};
+ for(const key of ['databaseUuid','databaseName','payloadSha256','auditSha256','attemptId'])await assert.rejects(modelInvocation({store:forbidden,spec:{...spec,[key]:[spec[key]]},executeFixedBatch:()=>calls++}),/INVALID_SYNTHETIC/);
+ await assert.rejects(modelInvocation({store:forbidden,spec:{...spec,databaseUuid:[PRODUCTION_UUID]},executeFixedBatch:()=>calls++}),/INVALID_SYNTHETIC/);assert.equal(calls,0);
+});
