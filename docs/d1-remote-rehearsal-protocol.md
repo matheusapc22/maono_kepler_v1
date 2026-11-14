@@ -110,3 +110,24 @@ actual binding attestation, signature/provenance verification and authentication
 are NOT implemented. Consequently a match explicitly reports
 `remoteIdentityAuthenticated:false` and `operationalAuthorization:false`. Never
 interpret these tests as permission to invoke an arbitrary deployed Worker.
+
+### Trusted collection design still required
+
+The comparison also pins the built Worker bundle hash, registry class and fixed
+object name, and requires exactly one matching REGISTRY namespace binding.
+The registry identity must not be changed to escape an existing claim.
+
+A future protected read-only collector must fetch D1 UUID/name from the account's
+D1 details endpoint, then the Worker deployment and its exact version metadata /
+bindings. Refuse split traffic, unexpected versions or additional bindings. Merely
+reading the deployment named in a manifest does not prove it is currently active:
+the collector must verify current deployment selection and recheck immediately
+before invocation. Preserve provider response provenance and a sanitized digest,
+not caller-authored claims. Verify the deployed bundle against reviewed build
+provenance, not a self-reported Git SHA header. These collection/attestation steps
+remain unimplemented; no matching local comparison replaces them.
+
+Read-only API references checked 2026-11-14:
+- https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/get/
+- https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/methods/get/
+- https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/versions/
