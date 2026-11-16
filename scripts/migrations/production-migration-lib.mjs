@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import {
@@ -81,19 +82,19 @@ export function normalizeMigrationName(value) {
 export const CANONICAL_DELETION_MIGRATION = '0044_organization_permanent_deletion.sql';
 export const HISTORICAL_DELETION_MIGRATION = '0044_organization_permanent_deletion_historical.sql';
 
-// This diagnostic candidate has no operational lifecycle or authorization token.
+// Historical selection is explicit; it is never discovered by generic migration tooling.
+export const isDeletionMigration = name => [CANONICAL_DELETION_MIGRATION,HISTORICAL_DELETION_MIGRATION].includes(name);
 export function assertOperationalMigration(value) {
   const name = normalizeMigrationName(value);
-  if (name.toLowerCase() === HISTORICAL_DELETION_MIGRATION) {
-    throw gateError('HISTORICAL_DELETION_AUDIT_ONLY', 'Historical deletion candidate is audit-only; execution and post-validation are denied.');
-  }
+  if (name.toLowerCase() === HISTORICAL_DELETION_MIGRATION && value !== HISTORICAL_DELETION_MIGRATION) throw gateError('MIGRATION_NAME_INVALID','Historical migration requires its exact filename.');
   if (name.toLowerCase() === CANONICAL_DELETION_MIGRATION && name !== CANONICAL_DELETION_MIGRATION) {
     throw gateError('MIGRATION_NAME_INVALID', 'Canonical deletion migration requires its exact filename.');
   }
   return name;
 }
 
-export function assertDeletionLedgerPoststate(ledger) {
+export function assertDeletionLedgerPoststate(ledger, selected = CANONICAL_DELETION_MIGRATION) {
+  if (!isDeletionMigration(selected)) throw gateError('MIGRATION_NAME_INVALID','Invalid deletion profile.');
   if (!Array.isArray(ledger) || ledger.length > 10000) throw gateError('DELETION_LEDGER_INVALID', 'Deletion ledger is malformed.');
   const ids = new Set(), names = new Set();
   for (const row of ledger) {
@@ -104,16 +105,16 @@ export function assertDeletionLedgerPoststate(ledger) {
       throw gateError('DELETION_LEDGER_INVALID', 'Deletion ledger contains malformed or duplicate entries.');
     }
     ids.add(row.id); names.add(row.name.toLowerCase());
-    if (row.name.toLowerCase().startsWith('0044_') && row.name !== CANONICAL_DELETION_MIGRATION) {
+    if (row.name.toLowerCase().startsWith('0044_') && row.name !== selected) {
       throw gateError('DELETION_LEDGER_HISTORICAL', 'Unrecognized or historical deletion ledger entry blocks this operator.');
     }
   }
   return true;
 }
 
-export function assertDeletionLedgerPrestate(ledger) {
-  assertDeletionLedgerPoststate(ledger);
-  if (ledger.some(row => row.name === CANONICAL_DELETION_MIGRATION)) {
+export function assertDeletionLedgerPrestate(ledger, selected = CANONICAL_DELETION_MIGRATION) {
+  assertDeletionLedgerPoststate(ledger, selected);
+  if (ledger.some(row => isDeletionMigration(row.name))) {
     throw gateError('DELETION_LEDGER_ALREADY_APPLIED', 'Deletion prestate requires no applied 0044 entry; resume is not authorized.');
   }
   return true;
@@ -269,7 +270,7 @@ export function approvalMaterial({ migration, migrationSha256, gitSha, pendingDi
   if (normalizedMigration === '0043_organization_creation_identity.sql' && !HEX_64.test(evidenceDigest || '')) {
     throw gateError('IDENTITY_EVIDENCE_REQUIRED', '0043 exige snapshot completo e hash do arquivo de execução.');
   }
-  if (normalizedMigration === '0044_organization_permanent_deletion.sql' && !HEX_64.test(evidenceDigest || '')) {
+  if (isDeletionMigration(normalizedMigration) && !HEX_64.test(evidenceDigest || '')) {
     throw gateError('DELETION_EVIDENCE_REQUIRED', '0044 requires complete metadata evidence.');
   }
   return [
@@ -355,7 +356,8 @@ export function createWranglerConfig(accountId, { migrationsDir = null } = {}) {
 
 export async function ensureMigrationFile(name, migrationsDir = DEFAULT_MIGRATIONS_DIR) {
   const migration = assertOperationalMigration(name);
-  const path = join(migrationsDir, migration);
+  const path = migration === HISTORICAL_DELETION_MIGRATION
+    ? fileURLToPath(new URL('./candidates/'+migration,import.meta.url)) : join(migrationsDir, migration);
   const metadata = await stat(path).catch(() => null);
   if (!metadata?.isFile()) {
     throw gateError('MIGRATION_FILE_MISSING', `Arquivo migrations/${migration} não encontrado.`);
@@ -502,13 +504,13 @@ export async function queryLedger(configPath, injected = {}) {
 }
 
 // Fixed read, preserving every row and its types. No filtering/coercion for 0044.
-export async function queryDeletionLedger(configPath, injected = {}) {
+export async function queryDeletionLedger(configPath, injected = {}, selected = CANONICAL_DELETION_MIGRATION) {
   const json = await runWranglerJson([
     'd1', 'execute', PRODUCTION_DATABASE_NAME, '--remote',
     '--command', 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id;'
   ], configPath, injected, 'D1_LEDGER');
   const ledger = rowsFromD1Json(json).map(row => row && ({ id: row.id, name: row.name, appliedAt: row.applied_at }));
-  assertDeletionLedgerPoststate(ledger);
+  assertDeletionLedgerPoststate(ledger, selected);
   return ledger;
 }
 
@@ -535,9 +537,15 @@ export async function readRemoteState(configPath, selectedMigration, injected = 
   const info = await runWranglerJson(['d1', 'info', PRODUCTION_DATABASE_NAME], configPath, injected, 'D1_INFO');
   const identity = extractD1Identity(info);
   assertProductionIdentity(identity);
-  const ledger = selectedMigration === CANONICAL_DELETION_MIGRATION
-    ? await queryDeletionLedger(configPath, injected) : await queryLedger(configPath, injected);
+  const ledger = isDeletionMigration(selectedMigration)
+    ? await queryDeletionLedger(configPath, injected, selectedMigration) : await queryLedger(configPath, injected);
   const localMigrations = await listLocalMigrations(injected.migrationsDir || DEFAULT_MIGRATIONS_DIR);
+  if (selectedMigration === HISTORICAL_DELETION_MIGRATION) {
+    // Substitute only in this explicit operation; never place both variants in a pending set.
+    const index=localMigrations.indexOf(CANONICAL_DELETION_MIGRATION);
+    if(index<0 || localMigrations.includes(HISTORICAL_DELETION_MIGRATION)) throw gateError('HISTORICAL_LOCAL_SET_INVALID','Historical candidate must remain outside generic discovery.');
+    localMigrations.splice(index,1,HISTORICAL_DELETION_MIGRATION);
+  }
   const pending = computePendingState(localMigrations, ledger.map((row) => row.name), selectedMigration);
   return { identity, ledger, localMigrations, pending };
 }
