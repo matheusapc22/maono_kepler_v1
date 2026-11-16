@@ -138,7 +138,12 @@ jobs:
           MIGRATION: ${{ inputs.migration }}
         run: |
           set -euo pipefail
-          test -f "migrations/$MIGRATION"
+          if [[ "$MIGRATION" = "0044_organization_permanent_deletion_historical.sql" ]]; then
+            test -f "scripts/migrations/candidates/$MIGRATION"
+            test ! -e "migrations/$MIGRATION"
+          else
+            test -f "migrations/$MIGRATION"
+          fi
           test -f AGENTS.md
           test -f scripts/migrations/production-migration-lib.mjs
           test -f scripts/migrations/audit-production.mjs

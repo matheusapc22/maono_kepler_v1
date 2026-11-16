@@ -206,3 +206,11 @@ test('diagnostic requires merged product collector tests before remote job',()=>
  const block=operation.match(/  organization-deletion-diagnostic\)\n([\s\S]*?)    ;;/)[1];
  assert.doesNotMatch(block,/migration:apply|migration:audit|acceptance:|wrangler|curl|fetch/);
 });
+
+
+test('only exact historical filename selects fixed non-discovered candidate path', () => {
+  assert.match(workflow, /if \[\[ "\$MIGRATION" = "0044_organization_permanent_deletion_historical.sql" \]\]; then/);
+  assert.match(workflow, /test -f "scripts\/migrations\/candidates\/\$MIGRATION"/);
+  assert.match(workflow, /test ! -e "migrations\/\$MIGRATION"/);
+  assert.match(workflow, /else\s+test -f "migrations\/\$MIGRATION"\s+fi/);
+});
