@@ -1,5 +1,12 @@
 name: Synthetic fixed provisioning (disabled preparation)
 on:
+  push:
+    branches: ['feat/d1-synthetic-provision-20261116']
+    paths:
+      - 'scripts/d1-synthetic-provision/**'
+      - 'ops/d1-synthetic-provision/**'
+      - 'tests/d1-synthetic-provision-*.test.mjs'
+      - '.github/workflows/d1-synthetic-provision.yml'
   pull_request:
     paths:
       - 'scripts/d1-synthetic-provision/**'
