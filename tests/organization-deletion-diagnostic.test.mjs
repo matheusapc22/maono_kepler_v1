@@ -87,3 +87,41 @@ test('context accepts only the fixed protected invocation and rejects each alter
  assert.throws(()=>validateDiagnosticContext(env,{...git,clean:false},IDENTITY_MIGRATION));
  assert.throws(()=>validateDiagnosticContext(env,git,'0044_organization_permanent_deletion.sql'));
 });
+
+// Failure evidence must remain useful without exposing arbitrary upstream data.
+import {diagnosticFailure} from '../scripts/migrations/organization-deletion-diagnostic.mjs';
+import {gateError} from '../scripts/migrations/production-migration-lib.mjs';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+test('failure projection keeps fixed stage/code but never raw messages, rows or streams',()=>{
+ const secret='PRIVATE_TOKEN_NAME_EMAIL_PATH';
+ for(const error of [new Error(secret),{code:secret,message:secret},gateError(secret,secret),
+   gateError('IDENTITY_0043_SCHEMA_INCOMPATIBLE',secret,{rows:[secret]}),
+   gateError('WRANGLER_COMMAND_FAILED',secret,{stage:secret,stdout:secret+' no such table',stderr:secret,exitCode:1})]){
+  const report=diagnosticFailure(error,'identity-before');
+  assert.equal(report.stage,'identity-before');assert.equal(report.status,'blocked');
+  assert.equal(report.writesPerformed,false);assert.ok(!JSON.stringify(report).includes(secret));
+ }
+ assert.equal(diagnosticFailure(gateError('IDENTITY_0043_SCHEMA_INCOMPATIBLE','secret'),'identity-before').code,'IDENTITY_0043_SCHEMA_INCOMPATIBLE');
+ const transport=diagnosticFailure(gateError('WRANGLER_COMMAND_FAILED','secret',{stage:'D1_INFO',stderr:'authentication error 10000 PRIVATE',exitCode:1}),'remote-state').transport;
+ assert.deepEqual(transport.categories,['CLOUDFLARE_AUTH']);assert.equal(transport.stage,'D1_INFO');
+ assert.equal(diagnosticFailure(new Error('secret'),'PRIVATE_STAGE').stage,'unknown');
+});
+test('collector progress labels identify reads without adding requests or changing results',async t=>{
+ const db=fixture(t),stages=[];
+ const report=await collectDeletionDiagnostic('fake',remote(db),migration,{...runner(db,[]),onStage:s=>stages.push(s)});
+ assert.deepEqual(stages,['identity-before','integrity','target-first','target-second','identity-after']);
+ assert.equal(report.writesPerformed,false);
+});
+test('real CLI writes minimized failure artifact before any remote access on invalid input',t=>{
+ const cwd=mkdtempSync(join(tmpdir(),'org-diagnostic-failure-'));t.after(()=>rmSync(cwd,{recursive:true,force:true}));
+ const result=spawnSync(process.execPath,[fileURLToPath(new URL('../scripts/migrations/diagnose-organization-deletion-production.mjs',import.meta.url)),
+ '--PRIVATE_ARGUMENT','PRIVATE_VALUE'],{cwd,encoding:'utf8',env:{PATH:process.env.PATH,SystemRoot:process.env.SystemRoot}});
+ assert.equal(result.status,1);assert.ok(!result.stderr.includes('PRIVATE'));
+ const report=JSON.parse(readFileSync(join(cwd,'.tmp/production-migrations/organization-deletion-diagnostic-failure.json'),'utf8'));
+ assert.equal(report.stage,'arguments');assert.equal(report.code,'ARGUMENT_INVALID');assert.equal(report.status,'blocked');
+ assert.equal(report.writesPerformed,false);assert.equal(report.deletionEligibilityVerified,false);
+});

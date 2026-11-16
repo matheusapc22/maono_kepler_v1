@@ -1,5 +1,5 @@
 import { collectIdentityPostValidation, IDENTITY_MIGRATION } from './organization-identity-0043.mjs';
-import { PRODUCTION_DATABASE_NAME, assertProductionIdentity, gateError, runWranglerJson, sha256Text } from './production-migration-lib.mjs';
+import { PRODUCTION_DATABASE_NAME, assertProductionIdentity, gateError, MigrationGateError, safeError, runWranglerJson, sha256Text } from './production-migration-lib.mjs';
 
 export const DIAGNOSTIC_MODE = 'organization-deletion-diagnostic';
 export const TARGET_ID = 10;
@@ -48,6 +48,7 @@ export function dependencyQuery(name) {
 }
 export async function collectDeletionDiagnostic(configPath, remote, migration, injected={}) {
   assertProductionIdentity(remote.identity);
+  injected.onStage?.('identity-before');
   const evidence=await collectIdentityPostValidation(configPath,remote,migration,injected);
   const query=async sql => {
     const result=await runWranglerJson(['d1','execute',PRODUCTION_DATABASE_NAME,'--remote','--command',sql],configPath,injected,'ORGANIZATION_QA_INVENTORY');
@@ -77,9 +78,14 @@ export async function collectDeletionDiagnostic(configPath, remote, migration, i
     if(foreign.length!==1||!keys(foreign[0],['n'])||!count(foreign[0].n)) fail();
     return {target:target[0],dependencies:result,nonstandardForeignKeys:foreign[0].n};
   };
+  injected.onStage?.('integrity');
   const quick=await query(DIAGNOSTIC_QUERIES.quick), foreign=await query(DIAGNOSTIC_QUERIES.foreign);
   if(quick.length!==1||!keys(quick[0],['quick_check'])||quick[0].quick_check!=='ok'||foreign.length) fail();
-  const first=await read(),last=await read();
+  injected.onStage?.('target-first');
+  const first=await read();
+  injected.onStage?.('target-second');
+  const last=await read();
+  injected.onStage?.('identity-after');
   const finalEvidence=await collectIdentityPostValidation(configPath,remote,migration,injected);
   if(JSON.stringify(first)!==JSON.stringify(last)||evidence.digest!==finalEvidence.digest) fail();
   return {version:1,phase:'organization-deletion-diagnostic-read-only',organizationId:TARGET_ID,
@@ -88,4 +94,27 @@ export async function collectDeletionDiagnostic(configPath, remote, migration, i
     aggregateReadsStable:true,atomicDatabaseSnapshot:false,
     storageProviderVerified:false,flagsObserved:false,exclusiveTestWindowProven:false,
     deletionEligibilityVerified:false,migrationAuthorized:false,activationAuthorized:false};
+}
+
+// Persist only enumerated labels, never exception messages, streams or raw rows.
+const FAILURE_STAGES = new Set(['arguments','git-snapshot','context','migration-source','cloudflare-config',
+  'temporary-config','remote-state','identity-before','integrity','target-first','target-second','identity-after','report-write']);
+const FAILURE_CODES = new Set(['DELETION_DIAGNOSTIC_BLOCKED','ARGUMENT_INVALID','GIT_SHA_INVALID',
+  'GIT_COMMAND_FAILED','GIT_TREE_NOT_CLEAN','MIGRATION_NAME_INVALID','MIGRATION_FILE_MISSING',
+  'MIGRATION_NOT_IN_LOCAL_SET','CLOUDFLARE_TOKEN_MISSING','CLOUDFLARE_ACCOUNT_INVALID',
+  'D1_JSON_SHAPE_UNEXPECTED','D1_IDENTITY_UNREADABLE','D1_BOOKMARK_UNAVAILABLE','PRODUCTION_DATABASE_IDENTITY_MISMATCH',
+  'ORGANIZATION_SCHEMA_SOURCE_DRIFT',
+  ...['TARGET_INVALID','RESPONSE_INVALID','SNAPSHOT_SIZE','SNAPSHOT_INVALID','INVENTORY_INVALID',
+    'INVENTORY_INCOMPLETE','CONFLICTS','LEDGER_INVALID','LEDGER_REQUIRED','LEDGER_PHASE','LEDGER_DRIFT',
+    'SCHEMA_INCOMPATIBLE','PHASE_INVALID'].map(code=>'IDENTITY_0043_'+code)]);
+const WRANGLER_CODES = new Set(['WRANGLER_COMMAND_FAILED','WRANGLER_EMPTY_JSON','WRANGLER_INVALID_JSON']);
+export function diagnosticFailure(error,stage) {
+  const known = error instanceof MigrationGateError;
+  const code = known && (FAILURE_CODES.has(error.code)||WRANGLER_CODES.has(error.code))
+    ? error.code : 'DELETION_DIAGNOSTIC_UNEXPECTED';
+  return {version:1,phase:'organization-deletion-diagnostic-read-only',status:'blocked',organizationId:TARGET_ID,
+    stage:FAILURE_STAGES.has(stage)?stage:'unknown',code,writesPerformed:false,
+    ...(known&&WRANGLER_CODES.has(code)?{transport:safeError(error).diagnostic}:{}),
+    storageProviderVerified:false,flagsObserved:false,deletionEligibilityVerified:false,
+    migrationAuthorized:false,activationAuthorized:false};
 }
