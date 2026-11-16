@@ -28,3 +28,7 @@ test-results
 # test temporary outputs
 coverage
 playwright/auth.json
+
+# Isolated synthetic bootstrap local outputs
+.tmp/d1-synthetic-provision/
+.tmp/d1-batch-rehearsal-runtime/
