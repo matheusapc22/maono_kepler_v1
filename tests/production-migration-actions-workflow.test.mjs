@@ -61,7 +61,7 @@ test('dispatch and PR contracts are the only triggers; PR cannot reach protected
 test('inventory adds only a fixed choice, not arbitrary executable inputs', () => {
   const inputs = workflow.slice(workflow.indexOf('    inputs:'), workflow.indexOf('\npermissions:'));
   assert.deepEqual([...inputs.matchAll(/^      ([a-z_]+):$/gm)].map(m => m[1]), ['mode', 'migration', 'approval_hash']);
-  assert.deepEqual([...inputs.matchAll(/^          - (.+)$/gm)].map(m => m[1]), ['audit', 'apply', 'postvalidate', 'organization-qa-inventory']);
+  assert.deepEqual([...inputs.matchAll(/^          - (.+)$/gm)].map(m => m[1]), ['audit', 'apply', 'postvalidate', 'organization-qa-inventory', 'organization-deletion-diagnostic']);
 });
 
 function assertCredentialBoundary(source) {
@@ -134,7 +134,7 @@ test('inventory branch has no audit/apply/acceptance or arbitrary network path',
 
 test('inventory artifact is a single JSON with three-day retention; legacy evidence unchanged', () => {
   assert.ok(workflow.includes("path: ${{ inputs.mode == 'organization-qa-inventory' && '.tmp/production-migrations/organization-qa-inventory.json' || '.tmp/production-migrations/*.json' }}"));
-  assert.ok(workflow.includes("retention-days: ${{ inputs.mode == 'organization-qa-inventory' && 3 || 14 }}"));
+  assert.ok(workflow.includes("retention-days: ${{ (inputs.mode == 'organization-qa-inventory' || inputs.mode == 'organization-deletion-diagnostic') && 3 || 14 }}"));
 });
 
 for (const [name, changes, status] of [
@@ -179,4 +179,30 @@ test('real drift guard accepts the exact pinned product SHA', t => {
   const script = stepBody('Refuse product-branch drift before remote access');
   const result = runShell(t, script, { PRODUCT_BRANCH: 'mano_kepler_v1' }, 'git() { printf "%s\\n" "1111111111111111111111111111111111111111 refs/heads/mano_kepler_v1"; }');
   assert.equal(result.status, 0);
+});
+
+const diagnosticInputs={MODE:'organization-deletion-diagnostic',MIGRATION:'0043_organization_creation_identity.sql'};
+for(const [name,change,status] of [
+ ['valid',{},0],['wrong migration',{MIGRATION:'0044_organization_permanent_deletion.sql'},1],
+ ['approval supplied',{APPROVAL_HASH:'a'.repeat(64)},1],['wrong owner',{ACTOR:'other'},1],
+ ['wrong ref',{DISPATCH_REF:'branch'},1],
+]) test('diagnostic input Bash: '+name,t=>{
+ assert.equal(runShell(t,inputGate,{...diagnosticInputs,...change}).status,status);
+});
+for(const [name,change,status,called] of [
+ ['valid',{},0,true],['wrong migration',{MIGRATION:'0042_organization_management.sql'},1,false],
+ ['approval',{APPROVAL_HASH:'a'.repeat(64)},1,false],['collector failure',{STUB_EXIT:'7'},7,true],
+]) test('diagnostic operation Bash uses only fixed collector: '+name,t=>{
+ const result=runShell(t,operation,{...diagnosticInputs,...change},
+   'node() { printf "%s\\n" "$@" >> invoked-args.txt; return "${STUB_EXIT:-0}"; }');
+ assert.equal(result.status,status,result.stderr);
+ assert.equal(result.read('invoked-args.txt'),called?['scripts/migrations/diagnose-organization-deletion-production.mjs','--migration',diagnosticInputs.MIGRATION,''].join('\n'):'');
+ if(status===0)assert.match(result.read('summary.txt'),/no writes; Dropbox\/flags NOT verified/);
+ else assert.equal(result.read('summary.txt'),'');
+});
+test('diagnostic requires merged product collector tests before remote job',()=>{
+ const validation=stepBody('Validate operator contracts without Cloudflare credentials');
+ assert.ok(validation.includes('node --test tests/organization-deletion-diagnostic.test.mjs'));
+ const block=operation.match(/  organization-deletion-diagnostic\)\n([\s\S]*?)    ;;/)[1];
+ assert.doesNotMatch(block,/migration:apply|migration:audit|acceptance:|wrangler|curl|fetch/);
 });

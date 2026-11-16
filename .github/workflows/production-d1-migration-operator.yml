@@ -16,6 +16,7 @@ on:
           - apply
           - postvalidate
           - organization-qa-inventory
+          - organization-deletion-diagnostic
       migration:
         description: "Exact migration filename, e.g. 0027_example.sql"
         required: true
@@ -94,6 +95,10 @@ jobs:
             audit|postvalidate)
               test -z "$APPROVAL_HASH"
               ;;
+            organization-deletion-diagnostic)
+              test -z "$APPROVAL_HASH"
+              test "$MIGRATION" = "0043_organization_creation_identity.sql"
+              ;;
             organization-qa-inventory)
               test -z "$APPROVAL_HASH"
               test "$MIGRATION" = "0042_organization_management.sql"
@@ -146,6 +151,7 @@ jobs:
           node --check scripts/migrations/organization-qa-inventory.mjs
           node --check scripts/migrations/inventory-organizations-production.mjs
           npm run test:production-migration-gate
+          node --test tests/organization-deletion-diagnostic.test.mjs
 
   remote:
     if: github.event_name == 'workflow_dispatch'
@@ -238,6 +244,12 @@ jobs:
               echo "- product SHA: $VALIDATED_RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
               echo "- writes performed: NO" >> "$GITHUB_STEP_SUMMARY"
               ;;
+            organization-deletion-diagnostic)
+              test -z "$APPROVAL_HASH"
+              test "$MIGRATION" = "0043_organization_creation_identity.sql"
+              node scripts/migrations/diagnose-organization-deletion-production.mjs --migration "$MIGRATION"
+              echo "- org 10 diagnostic: no writes; Dropbox/flags NOT verified" >> "$GITHUB_STEP_SUMMARY"
+              ;;
             organization-qa-inventory)
               test -z "$APPROVAL_HASH"
               test "$MIGRATION" = "0042_organization_management.sql"
@@ -258,4 +270,4 @@ jobs:
           name: production-d1-${{ inputs.mode }}-${{ inputs.migration }}-${{ github.run_id }}
           path: ${{ inputs.mode == 'organization-qa-inventory' && '.tmp/production-migrations/organization-qa-inventory.json' || '.tmp/production-migrations/*.json' }}
           if-no-files-found: ignore
-          retention-days: ${{ inputs.mode == 'organization-qa-inventory' && 3 || 14 }}
+          retention-days: ${{ (inputs.mode == 'organization-qa-inventory' || inputs.mode == 'organization-deletion-diagnostic') && 3 || 14 }}
