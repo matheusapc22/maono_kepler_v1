@@ -1,3 +1,4 @@
+import { classifyProtectedMetadata } from '../../functions/_lib/d1-protected-metadata.js';
 import { collectIdentityPostValidation, IDENTITY_MIGRATION } from './organization-identity-0043.mjs';
 import { PRODUCTION_DATABASE_NAME, assertProductionIdentity, gateError, MigrationGateError, safeError, runWranglerJson, sha256Text } from './production-migration-lib.mjs';
 
@@ -9,6 +10,8 @@ const count = n => Number.isSafeInteger(n) && n >= 0;
 const removable = new Set(['organization_access_delegations','organization_users','user_permission_denials','user_permissions']);
 const retained = new Set(['organization_management_events','organization_deletions','organization_deleted_management_events']);
 export const DIAGNOSTIC_QUERIES = Object.freeze({
+  protectedObjects: `SELECT type,name,tbl_name,sql FROM sqlite_master
+    WHERE lower(name) GLOB '_cf_*' OR lower(tbl_name) GLOB '_cf_*' ORDER BY type,name;`,
   target: `SELECT id, active, management_version AS version,
     CASE WHEN slug='maono-qa-organizacoes-20261102' THEN 1 ELSE 0 END AS identityMatches,
     CASE WHEN storage_status IN ('READY','DISABLED') THEN 1 ELSE 0 END AS storageSettled,
@@ -24,10 +27,12 @@ export const DIAGNOSTIC_QUERIES = Object.freeze({
   dependencies: `SELECT m.name,
     (SELECT COUNT(*) FROM sqlite_master t WHERE t.type='trigger' AND
       t.name IN ('org_delete_guard_'||m.name||'_insert','org_delete_guard_'||m.name||'_update')) AS guards
-    FROM sqlite_master m WHERE m.type='table' AND EXISTS
+    FROM sqlite_master m WHERE m.type='table' AND m.name NOT GLOB 'sqlite_*'
+      AND m.name NOT IN ('_cf_METADATA','_cf_KV') AND EXISTS
       (SELECT 1 FROM pragma_table_info(m.name) c WHERE c.name='organization_id') ORDER BY m.name;`,
   foreignKeys: `SELECT COUNT(*) AS n FROM sqlite_master m, pragma_foreign_key_list(m.name) f
-    WHERE m.type='table' AND f."table"='organizations' AND f."from"<>'organization_id'
+    WHERE m.type='table' AND m.name NOT GLOB 'sqlite_*'
+      AND m.name NOT IN ('_cf_METADATA','_cf_KV') AND f."table"='organizations' AND f."from"<>'organization_id'
       AND NOT(m.name='sessions' AND f."from"='active_organization_id');`,
   quick: 'PRAGMA quick_check;',
   foreign: 'PRAGMA foreign_key_check;',
@@ -56,35 +61,45 @@ export async function collectDeletionDiagnostic(configPath, remote, migration, i
     if(parts.length!==1||parts[0]?.success!==true||!Array.isArray(parts[0]?.results)) fail();
     return parts[0].results;
   };
-  const read=async()=>{
+  const read=async pass=>{
+    const stage=label=>injected.onStage?.(`${pass}-${label}`);
+    stage('protected-metadata');
+    const metadata=await query(DIAGNOSTIC_QUERIES.protectedObjects);
+    if(metadata.length>200||metadata.some(row=>!keys(row,['type','name','tbl_name','sql'])||
+      !['table','index','trigger','view'].includes(row.type)||
+      ![row.name,row.tbl_name].every(value=>typeof value==='string'&&value.length<=128)||
+      (row.sql!==null&&(typeof row.sql!=='string'||row.sql.length>200000)))) fail();
+    if(classifyProtectedMetadata(metadata).issues.length) fail();
+    stage('target');
     const target=await query(DIAGNOSTIC_QUERIES.target);
     const fields=['id','active','version','identityMatches','storageSettled','drained','pathMatches','overlappingPaths','mixedPermissions','globalUnresolvedItems'];
     if(target.length!==1||!keys(target[0],fields)||target[0].id!==TARGET_ID||!fields.every(k=>count(target[0][k]))||
       !['active','identityMatches','storageSettled','drained','pathMatches'].every(k=>target[0][k]<=1)) fail();
     if(target[0].identityMatches!==1) fail();
+    stage('dependencies');
     const dependencies=await query(DIAGNOSTIC_QUERIES.dependencies);
     if(dependencies.length>200) fail();
     const seen=new Set(), result=[];
     for(const row of dependencies){
       if(!keys(row,['name','guards'])||!count(row.guards)||row.guards>2||seen.has(row.name)) fail();
       const sql=dependencyQuery(row.name);seen.add(row.name);
+      stage('dependency-count');
       const rows=await query(sql);
       if(rows.length!==1||!keys(rows[0],['n'])||!count(rows[0].n)) fail();
       // No raw schema identifiers or business rows escape the runner.
       result.push({tableDigest:sha256Text(row.name),kind:retained.has(row.name)?'retained':removable.has(row.name)?'removable':'business',
         count:rows[0].n,guardCount:row.guards});
     }
+    stage('foreign-keys');
     const foreign=await query(DIAGNOSTIC_QUERIES.foreignKeys);
     if(foreign.length!==1||!keys(foreign[0],['n'])||!count(foreign[0].n)) fail();
-    return {target:target[0],dependencies:result,nonstandardForeignKeys:foreign[0].n};
+    return {target:target[0],dependencies:result,nonstandardForeignKeys:foreign[0].n,protectedMetadataDigest:sha256Text(JSON.stringify(metadata))};
   };
   injected.onStage?.('integrity');
   const quick=await query(DIAGNOSTIC_QUERIES.quick), foreign=await query(DIAGNOSTIC_QUERIES.foreign);
   if(quick.length!==1||!keys(quick[0],['quick_check'])||quick[0].quick_check!=='ok'||foreign.length) fail();
-  injected.onStage?.('target-first');
-  const first=await read();
-  injected.onStage?.('target-second');
-  const last=await read();
+  const first=await read('first');
+  const last=await read('second');
   injected.onStage?.('identity-after');
   const finalEvidence=await collectIdentityPostValidation(configPath,remote,migration,injected);
   if(JSON.stringify(first)!==JSON.stringify(last)||evidence.digest!==finalEvidence.digest) fail();
@@ -98,7 +113,8 @@ export async function collectDeletionDiagnostic(configPath, remote, migration, i
 
 // Persist only enumerated labels, never exception messages, streams or raw rows.
 const FAILURE_STAGES = new Set(['arguments','git-snapshot','context','migration-source','cloudflare-config',
-  'temporary-config','remote-state','identity-before','integrity','target-first','target-second','identity-after','report-write']);
+  'temporary-config','remote-state','identity-before','integrity','target-first','target-second','identity-after','report-write',
+  ...['first','second'].flatMap(pass=>['protected-metadata','target','dependencies','dependency-count','foreign-keys'].map(label=>`${pass}-${label}`))]);
 const FAILURE_CODES = new Set(['DELETION_DIAGNOSTIC_BLOCKED','ARGUMENT_INVALID','GIT_SHA_INVALID',
   'GIT_COMMAND_FAILED','GIT_TREE_NOT_CLEAN','MIGRATION_NAME_INVALID','MIGRATION_FILE_MISSING',
   'MIGRATION_NOT_IN_LOCAL_SET','CLOUDFLARE_TOKEN_MISSING','CLOUDFLARE_ACCOUNT_INVALID',
