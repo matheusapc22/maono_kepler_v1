@@ -48,7 +48,7 @@ jobs:
       - id: plan
         run: |
           node scripts/d1-synthetic-provision/runner.mjs --validate
-          node --input-type=module -e "import{readFileSync,appendFileSync}from'node:fs';import{validateProvisionPlan}from'./scripts/d1-synthetic-provision/plan.mjs';appendFileSync(process.env.GITHUB_OUTPUT,'enabled='+validateProvisionPlan(readFileSync('ops/d1-synthetic-provision/plan.json')).executionEnabled+'\\n');"
+          node --input-type=module -e "import{readFileSync,appendFileSync}from'node:fs';import{validateProvisionPlan}from'./scripts/d1-synthetic-provision/plan.mjs';appendFileSync(process.env.GITHUB_OUTPUT,'enabled='+validateProvisionPlan(readFileSync('ops/d1-synthetic-provision/plan.json')).executionEnabled+String.fromCharCode(10));"
   protection:
     needs: validate
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.validate.outputs.enabled == 'true'
