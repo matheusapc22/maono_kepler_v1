@@ -1,3 +1,5 @@
+import {readHistoricalOperation} from './deletion-historical-operation.mjs';
+import {HISTORICAL_DELETION_MIGRATION,isDeletionMigration} from './production-migration-lib.mjs';
 import {evaluateHistoricalDeletionPrestate} from './deletion-historical-prestate.mjs';
 import { DELETION_MIGRATION, readDeletionSchemaEvidence, assertDeletionSchema } from './organization-deletion-schema-0044.mjs';
 import { IDENTITY_MIGRATION, collectIdentityEvidence, guardedIdentityMigration, identityApprovalEvidence } from './organization-identity-0043.mjs';
@@ -47,7 +49,7 @@ try {
 
   temporary = await makeTemporaryWranglerConfig(accountId);
   const remote = await readRemoteState(temporary.configPath, migration.name);
-  if(migration.name===DELETION_MIGRATION) assertDeletionLedgerPrestate(remote.ledger);
+  if(isDeletionMigration(migration.name)) assertDeletionLedgerPrestate(remote.ledger,migration.name);
   if (!remote.pending.selectedPending) {
     throw gateError('MIGRATION_NOT_PENDING', `A migration ${migration.name} já não está pendente no D1 de produção.`);
   }
@@ -59,7 +61,7 @@ try {
   }
 
   const deletionEvidence=migration.name===DELETION_MIGRATION ? await readDeletionSchemaEvidence(temporary.configPath) : null;
-  const schemaPreflight=deletionEvidence ? deletionEvidence.report : migration.name===CC15_MIGRATION ? await readCC15Schema(temporary.configPath,remote.ledger) : migration.name===CC13_MIGRATION ? await readCC13Schema(temporary.configPath,remote.ledger) : migration.name===CC12_MIGRATION ? await readCC12Schema(temporary.configPath,remote.ledger) : migration.name===CC11_MIGRATION ? await readCC11Schema(temporary.configPath,remote.ledger) : migration.name===CC08_MIGRATION ? await readCC08Schema(temporary.configPath,remote.ledger) : migration.name===CC09_MIGRATION ? await readCC09Schema(temporary.configPath,remote.ledger) : migration.name===CC10_MIGRATION ? await readCC10Schema(temporary.configPath,remote.ledger) : null;
+  const schemaPreflight=migration.name===HISTORICAL_DELETION_MIGRATION ? await readHistoricalOperation(temporary.configPath,{integrity,ledger:remote.ledger,gitSha:git.sha,pendingDigest:remote.pending.pendingDigest}) : deletionEvidence ? deletionEvidence.report : migration.name===CC15_MIGRATION ? await readCC15Schema(temporary.configPath,remote.ledger) : migration.name===CC13_MIGRATION ? await readCC13Schema(temporary.configPath,remote.ledger) : migration.name===CC12_MIGRATION ? await readCC12Schema(temporary.configPath,remote.ledger) : migration.name===CC11_MIGRATION ? await readCC11Schema(temporary.configPath,remote.ledger) : migration.name===CC08_MIGRATION ? await readCC08Schema(temporary.configPath,remote.ledger) : migration.name===CC09_MIGRATION ? await readCC09Schema(temporary.configPath,remote.ledger) : migration.name===CC10_MIGRATION ? await readCC10Schema(temporary.configPath,remote.ledger) : null;
   if(schemaPreflight && !schemaPreflight.compatible){
     await ensureReportDir();
     const blockedPath=args.report ? resolve(args.report) : defaultAuditReportPath(migration.name,git.sha);
@@ -74,7 +76,7 @@ try {
   const identityEvidence = migration.name === IDENTITY_MIGRATION
     ? await collectIdentityEvidence(temporary.configPath, remote, migration, 'pre') : null;
   const identityExecution = identityEvidence ? guardedIdentityMigration(identityEvidence) : null;
-  const evidenceDigest = identityEvidence ? identityApprovalEvidence(identityEvidence, identityExecution) : migration.name===DELETION_MIGRATION ? schemaPreflight.digest : undefined;
+  const evidenceDigest = identityEvidence ? identityApprovalEvidence(identityEvidence, identityExecution) : isDeletionMigration(migration.name) ? schemaPreflight.digest : undefined;
   const approval = buildApproval({
     migration: migration.name,
     migrationSha256: migration.sha256,
@@ -121,7 +123,7 @@ try {
     integrity,
     backup,
     schemaPreflight,
-    ...(migration.name===DELETION_MIGRATION ? {evidenceDigest} : {}),
+    ...(isDeletionMigration(migration.name) ? {evidenceDigest} : {}),
     ...(identityEvidence ? {
       identityEvidence:identityEvidence.report,
       execution:{ sha256:identityExecution.sha256, sourceSha256:identityExecution.sourceSha256,
@@ -174,7 +176,7 @@ try {
   const safe = safeError(error);
   // Only sanitized failure evidence, never an approval or raw remote response.
   // Keep earlier migration report contracts unchanged.
-  if (args.migration === DELETION_MIGRATION && args.report) {
+  if (isDeletionMigration(args.migration) && args.report) {
     try {
       await writeJsonReport(resolve(args.report) + '.failure.json', {
         phase: 'audit-failed', writesPerformed: false, readyForAuthorization: false,

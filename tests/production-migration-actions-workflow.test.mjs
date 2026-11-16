@@ -63,3 +63,10 @@ test('workflow never runs generic Wrangler migration apply directly', () => {
   assert.match(workflow, /migration:apply:production/);
   assert.match(workflow, /migration:postvalidate:production/);
 });
+
+test('only exact historical filename selects fixed non-discovered candidate path', () => {
+  assert.match(workflow, /if \[\[ "\$MIGRATION" = "0044_organization_permanent_deletion_historical.sql" \]\]; then/);
+  assert.match(workflow, /test -f "scripts\/migrations\/candidates\/\$MIGRATION"/);
+  assert.match(workflow, /test ! -e "migrations\/\$MIGRATION"/);
+  assert.match(workflow, /else\s+test -f "migrations\/\$MIGRATION"\s+fi/);
+});

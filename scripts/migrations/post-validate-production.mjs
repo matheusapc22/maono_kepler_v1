@@ -1,10 +1,11 @@
+import {readHistoricalOperation} from './deletion-historical-operation.mjs';
+import {HISTORICAL_DELETION_MIGRATION,isDeletionMigration} from './production-migration-lib.mjs';
 import { IDENTITY_MIGRATION, collectIdentityPostValidation } from './organization-identity-0043.mjs';
 import { resolve } from 'node:path';
 import { ORGANIZATION_MIGRATION, collectOrganizationPostValidation } from './organization-management-schema.mjs';
 import {
   assertOperationalMigration,
   queryDeletionLedger,
-  CANONICAL_DELETION_MIGRATION,
   PRODUCTION_DATABASE_ID,
   PRODUCTION_DATABASE_NAME,
   REPORT_VERSION,
@@ -38,10 +39,11 @@ try {
   const organizationEvidence = migration.name === ORGANIZATION_MIGRATION
     ? await collectOrganizationPostValidation(temporary.configPath, remote, migration)
     : migration.name === IDENTITY_MIGRATION ? await collectIdentityPostValidation(temporary.configPath, remote, migration) : null;
-  const ledger = organizationEvidence?.ledger.rows ?? (migration.name === CANONICAL_DELETION_MIGRATION
-    ? await queryDeletionLedger(temporary.configPath) : await queryLedger(temporary.configPath));
+  const ledger = organizationEvidence?.ledger.rows ?? (isDeletionMigration(migration.name)
+    ? await queryDeletionLedger(temporary.configPath,{},migration.name) : await queryLedger(temporary.configPath));
   const applied = ledger.find((row) => row.name === migration.name) || null;
   const integrity = await queryIntegrity(temporary.configPath);
+  const historicalPostValidation = migration.name===HISTORICAL_DELETION_MIGRATION ? await readHistoricalOperation(temporary.configPath,{integrity,ledger,gitSha:git.sha,pendingDigest:remote.pending.pendingDigest},'post') : null;
   const ok = Boolean(applied && integrity.quickCheckOk && integrity.foreignKeyCheckOk &&
     (!organizationEvidence || organizationEvidence.schema.compatible));
 
@@ -50,6 +52,7 @@ try {
   const report = {
     reportVersion: REPORT_VERSION,
     phase: 'postvalidate-read-only',
+    ...(historicalPostValidation ? {historicalPostValidation} : {}),
     generatedAt: new Date().toISOString(),
     wranglerVersion: WRANGLER_VERSION,
     writesPerformed: false,

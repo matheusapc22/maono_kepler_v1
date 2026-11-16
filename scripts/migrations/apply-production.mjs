@@ -1,3 +1,5 @@
+import {readHistoricalOperation} from './deletion-historical-operation.mjs';
+import {HISTORICAL_DELETION_MIGRATION,isDeletionMigration} from './production-migration-lib.mjs';
 import { DELETION_MIGRATION, readDeletionSchema, assertDeletionSchema } from './organization-deletion-schema-0044.mjs';
 import { IDENTITY_MIGRATION, collectIdentityEvidence, guardedIdentityMigration, identityApprovalEvidence,
   assertIdentityEvidenceUnchanged, collectIdentityPostValidation } from './organization-identity-0043.mjs';
@@ -14,7 +16,6 @@ import {
   assertOperationalMigration,
   assertDeletionLedgerPrestate,
   queryDeletionLedger,
-  CANONICAL_DELETION_MIGRATION,
   PRODUCTION_DATABASE_ID,
   PRODUCTION_DATABASE_NAME,
   REPORT_VERSION,
@@ -71,7 +72,7 @@ try {
 
   preflightTemporary = await makeTemporaryWranglerConfig(accountId);
   const remote = await readRemoteState(preflightTemporary.configPath, migration.name);
-  if (migration.name === CANONICAL_DELETION_MIGRATION) assertDeletionLedgerPrestate(remote.ledger);
+  if (isDeletionMigration(migration.name)) assertDeletionLedgerPrestate(remote.ledger,migration.name);
   if(migration.name===CC15_MIGRATION){
     const currentSchema=await readCC15Schema(preflightTemporary.configPath,remote.ledger);assertCC15Schema(currentSchema);
     if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC15_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
@@ -100,7 +101,8 @@ try {
     const currentSchema=await readCC10Schema(preflightTemporary.configPath,remote.ledger);assertCC10Schema(currentSchema);
     if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC10_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
   }
-  const deletionSchema = migration.name===DELETION_MIGRATION ? await readDeletionSchema(preflightTemporary.configPath) : null;
+  const historicalContext = migration.name===HISTORICAL_DELETION_MIGRATION ? {integrity:await queryIntegrity(preflightTemporary.configPath),ledger:remote.ledger,gitSha:git.sha,pendingDigest:remote.pending.pendingDigest} : null;
+  const deletionSchema = migration.name===HISTORICAL_DELETION_MIGRATION ? await readHistoricalOperation(preflightTemporary.configPath,historicalContext) : migration.name===DELETION_MIGRATION ? await readDeletionSchema(preflightTemporary.configPath) : null;
   if(deletionSchema){
     assertDeletionSchema(deletionSchema);
     if(audit.schemaPreflight?.digest!==deletionSchema.digest || audit.evidenceDigest!==deletionSchema.digest)throw gateError('DELETION_METADATA_DRIFT','0044 evidence changed; audit and authorization required again.');
@@ -162,8 +164,11 @@ try {
   }
 
   if(deletionSchema){
-    assertDeletionLedgerPrestate(await queryDeletionLedger(preflightTemporary.configPath));
-    const finalSchema=await readDeletionSchema(preflightTemporary.configPath);
+    const finalGit=await readGitSnapshot(),finalSource=await ensureMigrationFile(migration.name);
+    if(!finalGit.clean || finalGit.sha!==git.sha || finalSource.sha256!==migration.sha256) throw gateError('DELETION_LOCAL_DRIFT','Git or SQL changed before write; new audit required.');
+    const finalLedger=await queryDeletionLedger(preflightTemporary.configPath,{},migration.name);
+    assertDeletionLedgerPrestate(finalLedger,migration.name);
+    const finalSchema=migration.name===HISTORICAL_DELETION_MIGRATION ? await readHistoricalOperation(preflightTemporary.configPath,{...historicalContext,ledger:finalLedger,integrity:await queryIntegrity(preflightTemporary.configPath)}) : await readDeletionSchema(preflightTemporary.configPath);
     assertDeletionSchema(finalSchema);
     if(finalSchema.digest!==evidenceDigest)throw gateError('DELETION_METADATA_DRIFT','0044 metadata changed before write.');
   }
@@ -176,8 +181,8 @@ try {
   const applyResult = await runWranglerApply(applyTemporary.configPath);
   applyCompleted = true;
 
-  const postLedger = migration.name === CANONICAL_DELETION_MIGRATION
-    ? await queryDeletionLedger(preflightTemporary.configPath) : await queryLedger(preflightTemporary.configPath);
+  const postLedger = isDeletionMigration(migration.name)
+    ? await queryDeletionLedger(preflightTemporary.configPath,{},migration.name) : await queryLedger(preflightTemporary.configPath);
   const applied = postLedger.find((row) => row.name === migration.name) || null;
   if (!applied) {
     throw gateError('POST_APPLY_LEDGER_MISSING', 'O Wrangler retornou sucesso, mas a migration não apareceu no ledger remoto. Interrompa e investigue.');
@@ -187,6 +192,7 @@ try {
     throw gateError('POST_APPLY_INTEGRITY_FAILED', 'A migration consta aplicada, mas a validação de integridade falhou. Use o bookmark registrado para investigação/recuperação.');
   }
 
+  const historicalPostValidation = migration.name===HISTORICAL_DELETION_MIGRATION ? await readHistoricalOperation(preflightTemporary.configPath,{...historicalContext,ledger:postLedger,integrity:postIntegrity,expectedPreMetadataDigest:deletionSchema.preMetadataDigest},'post') : null;
   const identityPostValidation = identityEvidence
     ? await collectIdentityPostValidation(preflightTemporary.configPath,
       await readRemoteState(preflightTemporary.configPath, migration.name), migration) : null;
@@ -196,6 +202,7 @@ try {
   const report = {
     reportVersion: REPORT_VERSION,
     phase: 'apply-and-postvalidate',
+    ...(historicalPostValidation ? {historicalPostValidation} : {}),
     generatedAt: new Date().toISOString(),
     wranglerVersion: WRANGLER_VERSION,
     database: {
