@@ -1,0 +1,27 @@
+name: Synthetic pilot (local only)
+on:
+  pull_request:
+    paths:
+      - 'scripts/d1-synthetic-pilot/**'
+      - 'scripts/d1-batch-rehearsal/**'
+      - 'tests/d1-synthetic-pilot-*.test.mjs'
+      - '.github/workflows/d1-synthetic-pilot-local.yml'
+permissions:
+  contents: read
+jobs:
+  local-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install pinned local emulator only
+        run: npm install --prefix .tmp/d1-batch-rehearsal-runtime --no-save --package-lock=false wrangler@4.140.0
+      - name: Test local fixed pilot and explicit simulated faults
+        run: node --test tests/d1-synthetic-pilot-*.test.mjs

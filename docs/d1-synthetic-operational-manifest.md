@@ -10,8 +10,9 @@ may fall back to repository production configuration or a current Wrangler login
 
 ## Account and authority
 
-No isolated target account has been verified in the local material. The target
-account and all resource identities therefore remain null, not guessed.
+An isolated Free account Maono - Ensaios was reported created on 2026-11-16:
+1988481e4c75c760516161104b7e1e50. The operational manifest stays unconfigured
+until the concrete pilot is approved and actual resource receipts exist.
 The account 09d455fa1cf988b0d9db89987b73eaff was observed in the Maono Pages check URLs;
 it is excluded from this synthetic audit along with the canonical maono_maps UUID.
 This exclusion is a guard, not evidence that another account belongs to the user.
@@ -84,7 +85,7 @@ manifest for PRs. Remote audit is dispatch-only from main, requires a configured
 manifest explicitly enabled in reviewed code, an exact manifest hash, and the fixed
 GitHub Environment synthetic-d1-readonly-audit. The workflow first reads that
 existing environment's protection metadata and refuses unless reviewers exist,
-self-review is prevented and admin bypass is disabled. A forbidden/unavailable
+the chosen owner-manual-review policy matches and admin bypass is disabled. A forbidden/unavailable
 GitHub metadata request fails closed; do not broaden token permissions automatically.
 The environment must be configured separately before enabling the manifest. No
 secret-bearing job is scheduled from a PR, arbitrary branch or the default draft.
@@ -114,14 +115,15 @@ Sources checked 2026-11-14:
 - https://developers.cloudflare.com/workers/versions-and-deployments/
 - https://developers.cloudflare.com/workers/versions-and-deployments/version-overrides/
 
-## Human-reviewer identity decision still open
+## Human-reviewer decision selected 2026-11-16
 
-The draft protection preflight requires prevent_self_review=true. If the only
-reviewer is also the dispatch actor (for example Matheus using the same account),
-GitHub will not allow that actor to approve the run. Before activation, explicitly
-choose a separately authorized triggering/reviewing identity or review a narrowly
-scoped owner-manual-approval policy. Do not silently disable protections or add a
-new actor. No autoapproval API or approval bypass exists in this code.
+Matheus chose his own manual approval for the isolated synthetic environment,
+acknowledging this is not independent review. The prepared validator pins the
+repository, dispatch actor numeric ID and exactly one owner reviewer. It requires
+prevent_self_review=false and can_admins_bypass=false, never autoapproves, and
+fails closed on absent/unreadable protection metadata. This is code preparation,
+not environment configuration or credential authorization. Production rules remain
+unchanged. See d1-synthetic-fixed-pilot.md for exact identity and remaining gates.
 
 ## Reproducible manifest digest
 

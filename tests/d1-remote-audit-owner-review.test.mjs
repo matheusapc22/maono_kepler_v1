@@ -1,0 +1,42 @@
+// Pure metadata contract tests. No GitHub API, approval, environment or credential changes.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {assertOwnerReviewPolicy} from '../scripts/d1-remote-audit/owner-review-policy.mjs';
+const context=()=>({actorId:'172453089',repository:'matheusapc22/maono_kepler_v1'});
+function metadata(){return {name:'synthetic-d1-readonly-audit',can_admins_bypass:false,protection_rules:[{type:'required_reviewers',prevent_self_review:false,reviewers:[{type:'User',reviewer:{id:172453089,login:'matheusapc22'}}]}]};}
+function denyMutation(mutate){const m=metadata();mutate(m);assert.throws(()=>assertOwnerReviewPolicy(m,context()));}
+test('owner-only manual approval is explicitly non-independent',()=>{
+ assert.deepEqual(assertOwnerReviewPolicy(metadata(),context()),{manualOwnerApprovalRequired:true,independentReview:false});
+});
+test('environment identity, explicit bypass denial and self-review choice must match exactly',()=>{
+ for(const mutation of [m=>{delete m.name;},m=>{m.name='production-d1-migrations';},m=>{m.name='synthetic-d1-readonly-audit-other';},m=>{m.name=['synthetic-d1-readonly-audit'];},m=>{delete m.can_admins_bypass;},m=>{m.can_admins_bypass=true;},m=>{m.can_admins_bypass=0;},m=>{m.can_admins_bypass='false';},m=>{delete m.protection_rules[0].prevent_self_review;},m=>{m.protection_rules[0].prevent_self_review=true;},m=>{m.protection_rules[0].prevent_self_review=0;}])denyMutation(mutation);
+});
+test('missing, malformed and duplicate reviewer rules fail closed',()=>{
+ for(const mutation of [m=>{delete m.protection_rules;},m=>{m.protection_rules=[];},m=>{m.protection_rules={0:m.protection_rules[0],length:1};},m=>{m.protection_rules=[null];},m=>{m.protection_rules[0].type='wait_timer';},m=>{m.protection_rules.push(structuredClone(m.protection_rules[0]));},m=>{m.protection_rules[0]=Object.assign([],m.protection_rules[0]);},m=>{delete m.protection_rules[0].reviewers;},m=>{m.protection_rules[0].reviewers=[];},m=>{m.protection_rules[0].reviewers.push(structuredClone(m.protection_rules[0].reviewers[0]));},m=>{m.protection_rules[0].reviewers={0:m.protection_rules[0].reviewers[0],length:1};}])denyMutation(mutation);
+});
+test('reviewer must be the exact numeric owner User identity, not Team or matching display name',()=>{
+ for(const mutation of [m=>{m.protection_rules[0].reviewers[0].type='Team';},m=>{delete m.protection_rules[0].reviewers[0].type;},m=>{m.protection_rules[0].reviewers[0].reviewer.id=1;},m=>{m.protection_rules[0].reviewers[0].reviewer.id='172453089';},m=>{m.protection_rules[0].reviewers[0].reviewer.login='another-user';},m=>{m.protection_rules[0].reviewers[0].reviewer.login=['matheusapc22'];},m=>{m.protection_rules[0].reviewers[0].reviewer.login='MatheusAPC22';},m=>{m.protection_rules[0].reviewers[0].reviewer={name:'matheusapc22'};},m=>{m.protection_rules[0].reviewers[0].reviewer=Object.assign([],{id:172453089,login:'matheusapc22'});},m=>{m.protection_rules[0].reviewers[0]=Object.assign([],m.protection_rules[0].reviewers[0]);}])denyMutation(mutation);
+});
+test('dispatcher must be exact owner ID string and exact repository, with no coercion',()=>{
+ for(const c of [{actorId:'1',repository:context().repository},{actorId:172453089,repository:context().repository},{actorId:['172453089'],repository:context().repository},{actorId:'172453089',repository:'matheusapc22/other'},{actorId:'172453089',repository:'other/maono_kepler_v1'},{actorId:'172453089',repository:[context().repository]},{actorId:'172453089'},{repository:context().repository},null,[],Object.assign([],context())])assert.throws(()=>assertOwnerReviewPolicy(metadata(),c));
+});
+test('non-object and array-shaped metadata never becomes an approval policy',()=>{
+ for(const m of [null,undefined,false,'synthetic-d1-readonly-audit',[],Object.assign([],metadata())])assert.throws(()=>assertOwnerReviewPolicy(m,context()));
+});
+
+test('workflow loads checked-out policy before secret job and passes trusted owner context via environment',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const workflow=readFileSync(new URL('../.github/workflows/d1-synthetic-readonly-audit.yml',import.meta.url),'utf8');
+ const protection=workflow.match(/^  protection:\r?\n([\s\S]*?)(?=^  audit:)/m)?.[1];assert.ok(protection,'protection job must exist before audit job');
+ const checkout=protection.indexOf('uses: actions/checkout@v4'),setupNode=protection.indexOf('uses: actions/setup-node@v4'),api=protection.indexOf('gh api '),policy=protection.indexOf("import{assertOwnerReviewPolicy}");
+ assert.ok(checkout>=0&&setupNode>checkout&&api>setupNode&&policy>api,'checkout and Node setup must precede metadata read and policy import');
+ assert.match(protection,/persist-credentials: false/);assert.match(protection,/node-version: 24/);
+ assert.match(protection,/github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main' && needs\.validate\.outputs\.enabled == 'true'/);
+ assert.match(protection,/MAONO_DISPATCH_ACTOR_ID: \$\{\{ github\.actor_id \}\}/);assert.match(protection,/GH_REPO: \$\{\{ github\.repository \}\}/);
+ assert.match(protection,/actorId:process\.env\.MAONO_DISPATCH_ACTOR_ID,repository:process\.env\.GH_REPO/);
+ assert.match(protection,/set -euo pipefail/);assert.match(protection,/gh api "repos\/\$GH_REPO\/environments\/synthetic-d1-readonly-audit" > environment\.json/);
+ assert.ok(!protection.includes('${{ secrets.'),'protection validator must not receive audit secrets');
+ const audit=workflow.slice(workflow.indexOf('\n  audit:'));
+ assert.match(audit,/needs: \[validate, protection\]/);assert.match(audit,/environment: synthetic-d1-readonly-audit/);
+ const manifest=JSON.parse(readFileSync(new URL('../ops/d1-synthetic/manifest.json',import.meta.url),'utf8'));assert.equal(manifest.readOnlyAuditEnabled,false);
+});
