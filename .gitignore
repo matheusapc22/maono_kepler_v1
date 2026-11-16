@@ -57,3 +57,6 @@ dist-ticket-performance/
 
 # Synthetic remote audit summaries are local evidence, never source inputs
 .tmp/d1-remote-audit*
+
+# Synthetic provisioning runner receipts, never source inputs
+.tmp/d1-synthetic-provision/
