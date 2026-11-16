@@ -71,7 +71,9 @@ export async function provisionFixedPilot({plan,freeObservation,token,fetchImpl=
   stage='verify-namespace-binding';const settings=(await api({url:SCRIPT+'/settings',method:'GET'},options)).result;
   if(!safeObject(settings)||!Array.isArray(settings.bindings)||settings.bindings.length!==2)deny();
   const db=settings.bindings.find(b=>b?.type==='d1'),ns=settings.bindings.find(b=>b?.type==='durable_object_namespace');
-  if(!db||db.name!=='TARGET'||db.id!==receipt.result.uuid||!ns||ns.name!=='REGISTRY'||ns.class_name!=='SyntheticClaimRegistry'||typeof ns.namespace_id!=='string'||!/^[a-f0-9]{32}$/.test(ns.namespace_id)||(ns.script_name!==undefined&&ns.script_name!==WORKER))deny();
+  const dbId=safeObject(db)&&Object.hasOwn(db,'database_id')?db.database_id:db?.id;
+  if(!safeObject(db)||Object.keys(db).some(k=>!['type','name','id','database_id'].includes(k))||db.name!=='TARGET'||dbId!==receipt.result.uuid||
+     (Object.hasOwn(db,'id')&&db.id!==receipt.result.uuid)||(Object.hasOwn(db,'database_id')&&db.database_id!==receipt.result.uuid)||!ns||ns.name!=='REGISTRY'||ns.class_name!=='SyntheticClaimRegistry'||typeof ns.namespace_id!=='string'||!/^[a-f0-9]{32}$/.test(ns.namespace_id)||(ns.script_name!==undefined&&ns.script_name!==WORKER))deny();
   inventory[2]={...inventory[2],uuid:ns.namespace_id,acknowledged:true};
   stage='record-completion';
   if(await journal.record({phase:'verified-deny-all',inventory:structuredClone(inventory),workersDevEnabled:false,previewsEnabled:false})!==true)deny();

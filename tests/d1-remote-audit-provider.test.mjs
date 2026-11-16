@@ -33,3 +33,13 @@ test('oversized responses and invalid credentials/options denied without data ex
  const f=fake();await assert.rejects(collectReadonlyPinnedMetadata({manifest,token:'bad\ncredential',fetchImpl:f.fetchImpl}),denied);assert.equal(f.calls.length,0);
  await assert.rejects(run({fetchImpl:f.fetchImpl,timeoutMs:30001}),denied);assert.equal(f.calls.length,0);
 });
+
+test('FAKE documented database_id and legacy id accept only exact unambiguous identity',async()=>{
+ for(const fields of [{id:manifest.databaseUuid},{database_id:manifest.databaseUuid},{id:manifest.databaseUuid,database_id:manifest.databaseUuid}]){
+  const b=bodies();b[2].resources.bindings[0]={type:'d1',name:'TARGET',...fields};
+  const r=await run(fake(b));assert.equal(r.bindings[0].id,manifest.databaseUuid);assert.equal(r.liveInvocationBindingVerified,false);
+ }
+ for(const fields of [{},{database_id:null},{database_id:[manifest.databaseUuid]},{id:manifest.databaseUuid,database_id:null},{id:PRODUCTION_DATABASE_UUID,database_id:manifest.databaseUuid},{id:manifest.databaseUuid,database_id:PRODUCTION_DATABASE_UUID},{id:manifest.databaseUuid,extra:true}]){
+  const b=bodies();b[2].resources.bindings[0]={type:'d1',name:'TARGET',...fields};await assert.rejects(run(fake(b)),denied);
+ }
+});
