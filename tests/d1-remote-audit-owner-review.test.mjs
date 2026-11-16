@@ -23,3 +23,20 @@ test('dispatcher must be exact owner ID string and exact repository, with no coe
 test('non-object and array-shaped metadata never becomes an approval policy',()=>{
  for(const m of [null,undefined,false,'synthetic-d1-readonly-audit',[],Object.assign([],metadata())])assert.throws(()=>assertOwnerReviewPolicy(m,context()));
 });
+
+test('workflow loads checked-out policy before secret job and passes trusted owner context via environment',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const workflow=readFileSync(new URL('../.github/workflows/d1-synthetic-readonly-audit.yml',import.meta.url),'utf8');
+ const protection=workflow.match(/^  protection:\r?\n([\s\S]*?)(?=^  audit:)/m)?.[1];assert.ok(protection,'protection job must exist before audit job');
+ const checkout=protection.indexOf('uses: actions/checkout@v4'),setupNode=protection.indexOf('uses: actions/setup-node@v4'),api=protection.indexOf('gh api '),policy=protection.indexOf("import{assertOwnerReviewPolicy}");
+ assert.ok(checkout>=0&&setupNode>checkout&&api>setupNode&&policy>api,'checkout and Node setup must precede metadata read and policy import');
+ assert.match(protection,/persist-credentials: false/);assert.match(protection,/node-version: 24/);
+ assert.match(protection,/github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main' && needs\.validate\.outputs\.enabled == 'true'/);
+ assert.match(protection,/MAONO_DISPATCH_ACTOR_ID: \$\{\{ github\.actor_id \}\}/);assert.match(protection,/GH_REPO: \$\{\{ github\.repository \}\}/);
+ assert.match(protection,/actorId:process\.env\.MAONO_DISPATCH_ACTOR_ID,repository:process\.env\.GH_REPO/);
+ assert.match(protection,/set -euo pipefail/);assert.match(protection,/gh api "repos\/\$GH_REPO\/environments\/synthetic-d1-readonly-audit" > environment\.json/);
+ assert.ok(!protection.includes('${{ secrets.'),'protection validator must not receive audit secrets');
+ const audit=workflow.slice(workflow.indexOf('\n  audit:'));
+ assert.match(audit,/needs: \[validate, protection\]/);assert.match(audit,/environment: synthetic-d1-readonly-audit/);
+ const manifest=JSON.parse(readFileSync(new URL('../ops/d1-synthetic/manifest.json',import.meta.url),'utf8'));assert.equal(manifest.readOnlyAuditEnabled,false);
+});
