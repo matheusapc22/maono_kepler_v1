@@ -1,0 +1,12 @@
+{
+  "accountId": "1988481e4c75c760516161104b7e1e50",
+  "plan": "Free",
+  "displayedPriceUSD": 0,
+  "observedAt": "2026-11-16T14:56:00Z",
+  "sourceUrl": "https://dash.cloudflare.com/1988481e4c75c760516161104b7e1e50/workers/plans",
+  "method": "authenticated-dashboard-read",
+  "displayedCurrentPlan": "Gratuito / US$ 0 / Plano atual",
+  "operatorObservationOnly": true,
+  "cryptographicAttestation": false,
+  "maxAgeSeconds": 3600
+}

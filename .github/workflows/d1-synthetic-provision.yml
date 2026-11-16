@@ -1,0 +1,88 @@
+name: Synthetic fixed provisioning (disabled preparation)
+on:
+  pull_request:
+    paths:
+      - 'scripts/d1-synthetic-provision/**'
+      - 'ops/d1-synthetic-provision/**'
+      - 'tests/d1-synthetic-provision-*.test.mjs'
+      - '.github/workflows/d1-synthetic-provision.yml'
+  workflow_dispatch:
+    inputs:
+      plan_sha256:
+        description: Exact reviewed fixed plan SHA256
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: synthetic-fixed-provision-20261116
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.plan.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install pinned local emulator only
+        run: npm install --prefix .tmp/d1-batch-rehearsal-runtime --no-save --package-lock=false wrangler@4.140.0
+      - run: node --test tests/d1-synthetic-provision-*.test.mjs
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+      - id: plan
+        run: |
+          node scripts/d1-synthetic-provision/runner.mjs --validate
+          node --input-type=module -e "import{readFileSync,appendFileSync}from'node:fs';import{validateProvisionPlan}from'./scripts/d1-synthetic-provision/plan.mjs';appendFileSync(process.env.GITHUB_OUTPUT,'enabled='+validateProvisionPlan(readFileSync('ops/d1-synthetic-provision/plan.json')).executionEnabled+'\\n');"
+  protection:
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.validate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify environment and unique dispatch before credential job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/environments/synthetic-d1-provision" > environment.json
+          gh api "repos/$GH_REPO/actions/workflows/d1-synthetic-provision.yml/runs?event=workflow_dispatch&per_page=100" > runs.json
+          node --input-type=module -e "import{readFileSync}from'node:fs';import{assertProvisionGate}from'./scripts/d1-synthetic-provision/github-gate.mjs';assertProvisionGate(JSON.parse(readFileSync('environment.json','utf8')),JSON.parse(readFileSync('runs.json','utf8')),{actorId:process.env.GITHUB_ACTOR_ID,repository:process.env.GITHUB_REPOSITORY,runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT});"
+  provision:
+    needs: [validate, protection]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.validate.outputs.enabled == 'true'
+    environment: synthetic-d1-provision
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Fixed deny-all bootstrap only
+        env:
+          MAONO_PROVISION_PLAN_SHA256: ${{ inputs.plan_sha256 }}
+          MAONO_SYNTHETIC_PROVISION_TOKEN: ${{ secrets.MAONO_SYNTHETIC_PROVISION_TOKEN }}
+        run: node scripts/d1-synthetic-provision/runner.mjs --provision
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-provision-receipts-${{ github.run_id }}
+          path: .tmp/d1-synthetic-provision/
+          if-no-files-found: warn
+          retention-days: 7
