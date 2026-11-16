@@ -40,14 +40,21 @@ Invocation authentication is distinct from Cloudflare administrative credentials
 Tokens must be handled by a separately approved protected mechanism, never chat,
 repository, logs or sanitized artifacts. Do not create/store/grant them in this PR.
 
-## Reviewer decision
+## Reviewer decision selected 2026-11-16
 
-The existing synthetic audit requires prevent_self_review=true. The same GitHub
-identity cannot dispatch and review under that setting. Either obtain approval for
-an actual independent reviewer, or explicitly approve a synthetic-only policy
-allowing Matheus to approve his own run, with admin bypass still disabled. The
-latter is human approval, NOT independent review. Do not select another collaborator,
-modify production environments or change the existing draft workflow implicitly.
+Matheus selected option 2: his own manual approval for the isolated synthetic
+pilot, explicitly acknowledging that it is NOT independent review. The prepared
+read-only audit validator requires the exact environment synthetic-d1-readonly-audit,
+admin bypass disabled, self-review allowed and exactly one required User reviewer:
+matheusapc22 (GitHub numeric ID 172453089). The dispatch actor must be that same
+numeric identity and the repository must match. Login strings alone cannot satisfy
+the numeric identity check. It does not autoapprove the protected job.
+
+This implements the chosen policy in code only. It does not create/edit a GitHub
+environment, install secrets, enable the manifest, merge or dispatch any workflow.
+Production protections remain unchanged. Concrete resource/permission/window
+approval still precedes pilot activation. A missing/forbidden environment metadata
+read fails closed; do not broaden the GitHub token to make it pass automatically.
 
 ## Proof obligations before first effectful remote request
 

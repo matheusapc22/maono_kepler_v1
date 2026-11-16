@@ -3,7 +3,7 @@ const workflow=readFileSync(new URL('../.github/workflows/d1-synthetic-readonly-
 test('workflow audit is protected, main-only, exact manifest, never PR or arbitrary resource selection',()=>{
  assert.match(workflow,/github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/);
  assert.match(workflow,/needs\.validate\.outputs\.enabled == 'true'/);assert.match(workflow,/environment: synthetic-d1-readonly-audit/);
- assert.match(workflow,/r\.type==='required_reviewers'/);assert.match(workflow,/r\.prevent_self_review===true/);assert.match(workflow,/e\.can_admins_bypass!==false/);
+ assert.match(workflow,/assertOwnerReviewPolicy/);assert.match(workflow,/MAONO_DISPATCH_ACTOR_ID: \$\{\{ github\.actor_id \}\}/);
  assert.match(workflow,/MAONO_SYNTHETIC_MANIFEST_SHA256: \$\{\{ inputs\.manifest_sha256 \}\}/);assert.ok(!/wrangler|d1 execute|deploy |MAONO_D1_MIGRATION_API_TOKEN|CLOUDFLARE_API_TOKEN|pull_request_target/.test(workflow));
 });
 test('CLI validates disabled template without token or network; audit fails closed',()=>{
