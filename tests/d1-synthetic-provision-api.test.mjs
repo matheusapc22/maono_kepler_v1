@@ -47,3 +47,11 @@ test('FAKE invalid clock and unexpected lateral pagination fail closed',async()=
  const g=fixture();g.args.fetchImpl=async()=>Response.json({success:true,errors:[],messages:[],result:[],next:'cursor-not-allowed'});assert.equal((await provisionFixedPilot(g.args)).status,'blocked-before-write');
  const h=fixture();const original=h.args.fetchImpl;h.args.fetchImpl=async(...args)=>{const response=await original(...args);if(h.calls.length===4){const envelope=await response.json();envelope.result_info={page:1};return Response.json(envelope);}return response;};const r=await provisionFixedPilot(h.args);assert.equal(r.status,'unknown-stop');assert.equal(h.calls.length,4);
 });
+
+test('FAKE settings D1 aliases are exact; conflict fails closed without replay',async()=>{
+ for(const fields of [{id:dbUuid},{database_id:dbUuid},{id:dbUuid,database_id:dbUuid},{},{id:dbUuid,database_id:null},{id:'wrong',database_id:dbUuid},{id:dbUuid,extra:true}]){
+  const f=fixture({mutateResponse:(r,n)=>{if(n===8)r.bindings[0]={type:'d1',name:'TARGET',...fields};return r;}});
+  const r=await provisionFixedPilot(f.args);const valid=Object.keys(fields).length>0&&Object.entries(fields).every(([k,v])=>['id','database_id'].includes(k)&&v===dbUuid);
+  assert.equal(r.status,valid?'provisioned-deny-all':'unknown-stop');assert.equal(f.calls.length,8);assert.equal(r.retryAllowed,false);
+ }
+});

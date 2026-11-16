@@ -54,7 +54,9 @@ export async function collectReadonlyPinnedMetadata({manifest,token,fetchImpl=gl
   if(version.id!==m.versionId||!object(version.resources)||!Array.isArray(version.resources.bindings)||version.resources.bindings.length!==2)deny();
   const bindings=version.resources.bindings;
   const d1=bindings.find(b=>b?.type==='d1'),registry=bindings.find(b=>b?.type==='durable_object_namespace');
-  if(!keysOnly(d1,['type','name','id'])||d1.name!=='TARGET'||d1.id!==m.databaseUuid||
+  const d1Id=object(d1)&&Object.hasOwn(d1,'database_id')?d1.database_id:d1?.id;
+  if(!keysOnly(d1,['type','name'],['id','database_id'])||d1.name!=='TARGET'||d1Id!==m.databaseUuid||
+     (Object.hasOwn(d1,'id')&&d1.id!==m.databaseUuid)||(Object.hasOwn(d1,'database_id')&&d1.database_id!==m.databaseUuid)||
      !keysOnly(registry,['type','name','namespace_id','class_name'],['script_name'])||registry.name!=='REGISTRY'||
      registry.namespace_id!==m.registryNamespaceId||registry.class_name!==m.registryClassName||
      (Object.hasOwn(registry,'script_name')&&registry.script_name!==m.workerName))deny();
@@ -64,7 +66,7 @@ export async function collectReadonlyPinnedMetadata({manifest,token,fetchImpl=gl
   return Object.freeze({readOnly:true,pinnedMetadataMatched:true,observedAtMs,collectedAtMs,
    accountId:m.accountId,database:{uuid:database.uuid,name:database.name},workerName:m.workerName,
    deployment:{id:deployment.id,versionId:m.versionId,percentage:100},
-   bindings:[{type:'d1',name:'TARGET',id:d1.id},{type:'durable_object_namespace',name:'REGISTRY',namespace_id:registry.namespace_id,class_name:registry.class_name,script_name:m.workerName}],
+   bindings:[{type:'d1',name:'TARGET',id:d1Id},{type:'durable_object_namespace',name:'REGISTRY',namespace_id:registry.namespace_id,class_name:registry.class_name,script_name:m.workerName}],
    activeDeploymentVerified:false,deploymentPropagationVerified:false,versionOverrideProtectionVerified:false,bundleProvenanceVerified:false,liveInvocationBindingVerified:false,
    namespaceStorageIdentityVerified:false,tokenScopeVerified:false,operationalAuthorization:false});
  }catch{deny();}
