@@ -456,3 +456,16 @@ test('erro de exclusão expira após dez segundos sem remover a recuperação',a
   await page.getByRole('button',{name:'Retomar exclusão',exact:true}).click();
   await expect(page.locator('.aog-deletion-error-toast')).toBeVisible();
 });
+
+test('falha de sessão após exclusão mantém sucesso comprovado e erro fechável no topo',async({page})=>{
+  await deletionSetup(page);
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  await page.route('**/api/session',route=>route.fulfill({status:503,json:{error:'unavailable'}}));
+  await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+  await expect(page.getByText('Organização Excluída',{exact:true})).toBeVisible();
+  await expect(page.locator('.aog-deletion-error-toast')).toContainText('A exclusão foi concluída');
+  await page.getByRole('button',{name:'Fechar aviso de erro'}).click();
+  await expect(page.locator('.aog-deletion-error-toast')).toHaveCount(0);
+  await expect(page.getByText('Sessão desatualizada. Recarregue a página antes de continuar.',{exact:true})).toBeVisible();
+});
