@@ -162,11 +162,11 @@ test('falha remota exibe apresentação segura sem detalhes técnicos',async({pa
   await expect(page.getByRole('button',{name:'Tentar novamente',exact:true})).toBeVisible();
 });
 
-async function deletionSetup(page:Page, options:{eligible?:boolean;enabled?:boolean;startResponseLost?:boolean;stepFailure?:boolean;role?:string}={}){
+async function deletionSetup(page:Page, options:{eligible?:boolean;enabled?:boolean;startResponseLost?:boolean;stepFailure?:boolean;role?:string;automatic?:boolean;automaticPaused?:boolean;automaticBlocked?:boolean}={}){
   const state=await setup(page,options.role||'super_admin');
   const org={id:1,name:'Organização Sintética Alfa',slug:'qa-alfa',description:'',active:false,version:3,plan:'free',owner:null,projectCount:0,userCount:1,fileCount:0,storageStatus:'DISABLED',updatedAt:'2026-01-01T12:00:00Z',lastActivityAt:null};
   const mutations:{path:string;body:unknown;key:string|undefined}[]=[];
-  let deletion:{id:string;organizationId:number;state:string;retryable:boolean;errorCode:string|null}|null=null;
+  let deletion:{id:string;organizationId:number;state:string;retryable:boolean;errorCode:string|null;automatic?:boolean;automaticPaused?:boolean;automaticBlocked?:boolean}|null=null;
   let starts=0;
   await page.route('**/api/admin/organization-management/**',async route=>{
     const r=route.request(),url=new URL(r.url()),path=url.pathname.replace('/api/admin/organization-management','');
@@ -175,7 +175,7 @@ async function deletionSetup(page:Page, options:{eligible?:boolean;enabled?:bool
     if(path==='/organizations/1')return route.fulfill({json:{ok:true,organization:org,policy:{plan:'free',projects:5,storageMb:500,projectOverride:null,used:0,reserved:0,remaining:5,storageUsedMb:0,projectQuotaEnforced:true,informational:[]}}});
     if(path==='/organizations/1/deletion-preview')return route.fulfill({json:{ok:true,organizationId:1,name:org.name,version:3,eligible:options.eligible!==false,blockers:options.eligible===false?[{code:'LINKED_DATA',count:2}]:[],confirmation:'EXCLUIR PERMANENTEMENTE'}});
     if(path==='/organizations/1/permanent-delete'){
-      starts++;deletion={id:'delete-synthetic-1',organizationId:1,state:'pending',retryable:true,errorCode:null};
+      starts++;deletion={id:'delete-synthetic-1',organizationId:1,state:'pending',retryable:true,errorCode:null,automatic:options.automatic,automaticPaused:options.automaticPaused,automaticBlocked:options.automaticBlocked};
       if(options.startResponseLost&&starts===1)return route.fulfill({status:503,json:{ok:false,error:{code:'SYNTHETIC_RESPONSE_LOST',message:'Resposta indisponível'}}});
       return route.fulfill({json:{ok:true,deletion}});
     }
@@ -188,9 +188,9 @@ async function deletionSetup(page:Page, options:{eligible?:boolean;enabled?:bool
     return route.fallback();
   });
   await page.reload();
-  if(options.role&&options.role!=='super_admin')return {...state,mutations};
+  if(options.role&&options.role!=='super_admin')return {...state,mutations,completeDeletion:undefined};
   await page.getByRole('button',{name:'Organização Sintética Alfa',exact:true}).click();
-  return {...state,mutations};
+  return {...state,mutations,completeDeletion:()=>{if(deletion)deletion={...deletion,state:'completed'};}};
 }
 
 test('exclusão só aparece para Super Admin com capacidade habilitada',async({page})=>{
@@ -349,4 +349,79 @@ test('atualização de sessão após exclusão respeita navegação posterior',a
   await expect(page).toHaveURL(/org_q=other/);
   await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toHaveCount(0);
   expect(state.mutations.filter(value=>value.path.endsWith('/permanent-delete'))).toHaveLength(1);
+});
+
+
+test('exclusão automática confirma uma vez e acompanha somente por leitura até concluir',async({page})=>{
+  const state=await deletionSetup(page,{automatic:true});
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+  await expect(page.getByText('Solicitação registrada para execução automática no servidor',{exact:false})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Retomar exclusão',exact:true})).toHaveCount(0);
+  expect(state.mutations.map(r=>r.path)).toEqual(['/organizations/1/permanent-delete']);
+  state.completeDeletion?.();
+  await expect(page.getByText('Organização excluída permanentemente. Exclusão confirmada no banco e no Dropbox.')).toBeVisible({timeout:10000});
+  expect(state.mutations).toHaveLength(1);
+  expect(state.errors).toEqual([]);
+});
+
+for(const mode of ['automaticPaused','automaticBlocked'] as const){
+  test(`exclusão automática ${mode} informa bloqueio sem enviar etapas`,async({page})=>{
+    const state=await deletionSetup(page,{automatic:true,[mode]:true});
+    await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+    await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+    await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+    await expect(page.getByText(mode==='automaticPaused'?'Execução automática pausada pelo administrador.':'A execução automática foi interrompida para verificação administrativa.',{exact:false})).toBeVisible();
+    await expect(page.getByRole('button',{name:'Retomar exclusão',exact:true})).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole('button',{name:'Consultar exclusão',exact:true})).toBeVisible();
+    await page.getByRole('button',{name:'Consultar exclusão',exact:true}).click();
+    expect(state.mutations).toHaveLength(1);
+    expect(state.errors).toEqual([]);
+  });
+}
+
+test('reabrir exclusão automática perdida só consulta e fechar interrompe acompanhamento',async({page})=>{
+  const state=await deletionSetup(page,{automatic:true,startResponseLost:true});
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Consultar exclusão',exact:true})).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Solicitação registrada para execução automática no servidor',{exact:false})).toBeVisible();
+  let reads=0;
+  page.on('request',request=>{if(request.method()==='GET'&&request.url().includes('/deletions/'))reads++;});
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.waitForTimeout(5500);
+  expect(reads).toBe(0);
+  expect(state.mutations).toHaveLength(1);
+});
+
+test('falha no acompanhamento não indica falha de exclusão e consulta permite recuperar',async({page})=>{
+  const state=await deletionSetup(page,{automatic:true});
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+  await expect(page.getByText('Solicitação registrada para execução automática no servidor',{exact:false})).toBeVisible();
+  await page.route('**/deletions/delete-synthetic-1',route=>route.fulfill({status:503,json:{ok:false,error:{code:'UNAVAILABLE',message:'Indisponível'}}}));
+  await expect(page.getByRole('alert')).toContainText('Isso não confirma falha da exclusão.',{timeout:10000});
+  await page.unroute('**/deletions/delete-synthetic-1');
+  state.completeDeletion?.();
+  await page.getByRole('button',{name:'Consultar exclusão',exact:true}).click();
+  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toBeVisible();
+  expect(state.mutations).toHaveLength(1);
+});
+
+
+test('acompanhamento automático invalida painel ao perder autorização',async({page})=>{
+  const state=await deletionSetup(page,{automatic:true});
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+  await expect(page.getByText('Solicitação registrada para execução automática no servidor',{exact:false})).toBeVisible();
+  await page.route('**/deletions/delete-synthetic-1',route=>route.fulfill({status:403,json:{ok:false,error:{code:'FORBIDDEN',message:'Sem acesso'}}}));
+  await expect(page.getByRole('dialog')).toHaveCount(0,{timeout:10000});
+  expect(state.mutations).toHaveLength(1);
 });

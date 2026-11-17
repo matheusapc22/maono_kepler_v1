@@ -10,7 +10,11 @@ const statement = (env, sql, ...args) => env.DB.prepare(sql).bind(...args);
 const quote = name => { check(/^[a-zA-Z_][a-zA-Z_0-9]*$/.test(name), 'Schema desconhecido.',503,'ORGANIZATION_DELETE_SCHEMA_REQUIRED'); return `"${name}"`; };
 const removable = new Set(['organization_access_delegations','organization_users','user_permission_denials','user_permissions']);
 const retained = new Set(['organization_management_events','organization_deletions','organization_deleted_management_events']);
-const publicDeletion = row => ({id:row.id,organizationId:row.organization_id,state:row.state,retryable:row.state!=='completed',errorCode:row.error_code || null,notBefore:row.not_before});
+export const automaticDeletionEnabled = env => String(env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED)==='true';
+export const automaticDeletionBlocked = row => Number(row.attempts)>=3 || Boolean(row.error_code && row.error_code!=='ORGANIZATION_DELETE_PROVIDER_FAILED');
+const deletionSelect = `SELECT d.*, EXISTS(SELECT 1 FROM organization_deletion_audit a WHERE a.deletion_id=d.id AND a.event_type='automatic_requested') AS automatic FROM organization_deletions d`;
+const publicDeletion = (row,env) => ({id:row.id,organizationId:row.organization_id,state:row.state,retryable:row.state!=='completed',errorCode:row.error_code || null,notBefore:row.not_before,
+  automatic:Boolean(row.automatic),automaticPaused:Boolean(row.automatic)&&!automaticDeletionEnabled(env),automaticBlocked:Boolean(row.automatic)&&automaticDeletionBlocked(row)});
 const fail = (message,code,status=409) => new ManagementError(message,status,code);
 export async function deletionEnabled(env) {
   if (String(env.ORGANIZATION_PERMANENT_DELETE_V1)!=='true') return false;
@@ -107,20 +111,20 @@ export async function deletionPreview(env,id) {
   return {organizationId:id,name:org.name,version:org.management_version,eligible:blockers.length===0,blockers,confirmation:DELETION_CONFIRMATION};
 }
 export async function deletionByKey(env,actor,key) {
-  await ready(env);const row=await one(env,'SELECT * FROM organization_deletions WHERE actor_id=? AND idempotency_key=?',actor.id,text(key,'Chave',16,160));
-  return {deletion:row?publicDeletion(row):null};
+  await ready(env);const row=await one(env,deletionSelect+' WHERE actor_id=? AND idempotency_key=?',actor.id,text(key,'Chave',16,160));
+  return {deletion:row?publicDeletion(row,env):null};
 }
 export async function getDeletion(env,actor,id) {
-  await ready(env);const row=await one(env,'SELECT * FROM organization_deletions WHERE id=? AND actor_id=?',text(id,'Operação',1,80),actor.id);
+  await ready(env);const row=await one(env,deletionSelect+' WHERE d.id=? AND actor_id=?',text(id,'Operação',1,80),actor.id);
   check(row,'Exclusão não encontrada.',404,'ORGANIZATION_DELETION_NOT_FOUND');return row;
 }
-export async function deletionStatus(env,actor,id){return {deletion:publicDeletion(await getDeletion(env,actor,id))};}
+export async function deletionStatus(env,actor,id){return {deletion:publicDeletion(await getDeletion(env,actor,id),env)};}
 export async function startDeletion(env,actor,id,key,input) {
   await ready(env);id=integer(id);object(input,['version','confirmation']);
   check(input.confirmation===DELETION_CONFIRMATION,'Digite a confirmação exatamente como indicada.',400,'ORGANIZATION_DELETE_CONFIRMATION_REQUIRED');
   const version=integer(input.version,'Versão',0);key=text(key,'Chave',16,160);
-  const previous=await one(env,'SELECT * FROM organization_deletions WHERE actor_id=? AND idempotency_key=?',actor.id,key);
-  if(previous){check(previous.organization_id===id&&previous.requested_version===version,'Chave de exclusão já usada.',409,'ORGANIZATION_IDEMPOTENCY_CONFLICT');return {deletion:publicDeletion(previous)};}
+  const previous=await one(env,deletionSelect+' WHERE actor_id=? AND idempotency_key=?',actor.id,key);
+  if(previous){check(previous.organization_id===id&&previous.requested_version===version,'Chave de exclusão já usada.',409,'ORGANIZATION_IDEMPOTENCY_CONFLICT');return {deletion:publicDeletion(previous,env)};}
   const preview=await deletionPreview(env,id);
   check(preview.version===version,'A organização mudou. Revise os dados.',412,'ORGANIZATION_VERSION_CONFLICT');
   check(preview.eligible,'A organização ainda possui impedimentos para exclusão.',409,'ORGANIZATION_DELETE_BLOCKED');
@@ -132,6 +136,7 @@ export async function startDeletion(env,actor,id,key,input) {
     statement(env,`UPDATE organizations SET management_owner_id=NULL,management_version=management_version+1,management_actor_id=?,management_request_id=?,management_action='organization.deletion_requested',management_reason='Exclusão permanente confirmada' WHERE id=? AND management_version=?`,actor.id,op,id,version),
     statement(env,`INSERT INTO organization_deletions(id,organization_id,actor_id,idempotency_key,requested_version,name,slug,path,creation_key) VALUES(?,?,?,?,?,?,?,?,?)`,op,id,actor.id,key,version,org.name,org.slug,org.dropbox_root_path,org.management_create_key||null),
     statement(env,`INSERT INTO organization_deletion_audit(deletion_id,event_type,actor_id) VALUES(?,'requested',?)`,op,actor.id),
+    ...(automaticDeletionEnabled(env)?[statement(env,`INSERT INTO organization_deletion_audit(deletion_id,event_type,actor_id) VALUES(?,'automatic_requested',?)`,op,actor.id)]:[]),
   ]);
   return deletionStatus(env,actor,op);
 }
@@ -168,13 +173,24 @@ async function checkEmptyFolder(env,row,storage) {
     check(docs?.has_more===false&&Array.isArray(docs.entries)&&docs.entries.length===0,'Há documentos no armazenamento.',409,'ORGANIZATION_DELETE_STORAGE_NOT_EMPTY');
   }
 }
+async function renewDeletionLease(env,id,token) {
+  const renewed=await one(env,`UPDATE organization_deletions SET lease_until=? WHERE id=? AND lease_token=? AND julianday(lease_until)>julianday('now') RETURNING id`,new Date(Date.now()+120000).toISOString(),id,token);
+  check(renewed,'A posse da exclusão expirou ou mudou.',409,'ORGANIZATION_DELETE_LEASE_LOST');
+}
 export async function stepDeletion(env,actor,id,deps={}) {
-  let row=await getDeletion(env,actor,id);if(row.state==='completed')return {deletion:publicDeletion(row)};
+  let row=await getDeletion(env,actor,id);if(row.state==='completed')return {deletion:publicDeletion(row,env)};
   await deps.authorizeOrganization?.(row.organization_id);
-  if(!Number.isFinite(Date.parse(row.not_before))||Date.now()<Date.parse(row.not_before))return {deletion:{...publicDeletion(row),errorCode:'ORGANIZATION_DELETE_DRAINING'}};
+  if(!Number.isFinite(Date.parse(row.not_before))||Date.now()<Date.parse(row.not_before))return {deletion:{...publicDeletion(row,env),errorCode:'ORGANIZATION_DELETE_DRAINING'}};
   const token=crypto.randomUUID(),now=new Date().toISOString(),until=new Date(Date.now()+120000).toISOString();
-  const claimed=await one(env,`UPDATE organization_deletions SET lease_token=?,lease_until=?,attempts=attempts+1,error_code=NULL WHERE id=? AND state<>'completed' AND (lease_token IS NULL OR lease_until<?) RETURNING *`,token,until,row.id,now);
-  if(!claimed)return {deletion:publicDeletion(row)};
+  // Repeat automatic eligibility inside the atomic lease claim: concurrent ticks
+  // may have selected the same row before another attempt failed or exhausted its budget.
+  if(deps.automatic && !automaticDeletionEnabled(env))return {deletion:publicDeletion(row,env)};
+  const automaticFence=deps.automatic?` AND attempts<3
+    AND (error_code IS NULL OR error_code='ORGANIZATION_DELETE_PROVIDER_FAILED')
+    AND (attempts=0 OR julianday(updated_at)<=julianday('now','-2 minutes'))
+    AND EXISTS(SELECT 1 FROM organization_deletion_audit a WHERE a.deletion_id=organization_deletions.id AND a.event_type='automatic_requested')`:'';
+  const claimed=await one(env,`UPDATE organization_deletions SET lease_token=?,lease_until=?,attempts=attempts+1,error_code=NULL WHERE id=? AND state<>'completed' AND (lease_token IS NULL OR lease_until<?)${automaticFence} RETURNING *`,token,until,row.id,now);
+  if(!claimed)return {deletion:publicDeletion(row,env)};
   row=claimed;const storage=deps.deletionStorage||provider;
   try {
     const {blockers,business}=await inventory(env,row.organization_id);
@@ -199,9 +215,11 @@ export async function stepDeletion(env,actor,id,deps={}) {
         check(!auth||auth.user?.role==='super_admin','A gestão global é restrita ao Super Admin.',403,'MANAGEMENT_SUPER_ADMIN_REQUIRED');
         await deps.authorizeOrganization?.(row.organization_id);
         row.folder_id=metadata.id;
+        await renewDeletionLease(env,row.id,token);
         await storage.remove(env,metadata.id);
       }
       await verifyAbsent(env,row,storage);
+      await renewDeletionLease(env,row.id,token);
       await env.DB.batch([
         statement(env,`UPDATE organization_deletions SET state='storage_deleted',updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=?`,row.id,token),
         statement(env,`INSERT INTO organization_deletion_audit(deletion_id,event_type,actor_id) SELECT ?,'storage_deleted',? WHERE EXISTS(SELECT 1 FROM organization_deletions WHERE id=? AND lease_token=?)`,row.id,actor.id,row.id,token)
@@ -211,10 +229,11 @@ export async function stepDeletion(env,actor,id,deps={}) {
     const finalAuth=await deps.authorizeGlobal?.();
     check(!finalAuth||finalAuth.user?.role==='super_admin','A gestão global é restrita ao Super Admin.',403,'MANAGEMENT_SUPER_ADMIN_REQUIRED');
     await deps.authorizeOrganization?.(row.organization_id);
+    await renewDeletionLease(env,row.id,token);
     // Provider success is checkpointed before the independent D1 transaction.
     const empty=business.map(name=>`NOT EXISTS(SELECT 1 FROM ${quote(name)} WHERE organization_id=?)`).join(' AND ')||'1';
     await env.DB.batch([
-      statement(env,`INSERT INTO organization_management_assertions(ok) SELECT CASE WHEN EXISTS(SELECT 1 FROM organization_deletions WHERE id=? AND state='storage_deleted' AND lease_token=?) AND ${empty} AND NOT EXISTS(SELECT 1 FROM user_permissions WHERE organization_id=? AND project_id IS NOT NULL) THEN 1 ELSE 0 END`,row.id,token,...business.map(()=>row.organization_id),row.organization_id),
+      statement(env,`INSERT INTO organization_management_assertions(ok) SELECT CASE WHEN EXISTS(SELECT 1 FROM organization_deletions WHERE id=? AND state='storage_deleted' AND lease_token=? AND julianday(lease_until)>julianday('now')) AND ${empty} AND NOT EXISTS(SELECT 1 FROM user_permissions WHERE organization_id=? AND project_id IS NOT NULL) THEN 1 ELSE 0 END`,row.id,token,...business.map(()=>row.organization_id),row.organization_id),
       statement(env,`INSERT INTO organization_deleted_management_events SELECT * FROM organization_management_events WHERE organization_id=?`,row.organization_id),
       statement(env,'DELETE FROM organization_management_events WHERE organization_id=?',row.organization_id),
       ...[...removable].map(name=>statement(env,`DELETE FROM ${quote(name)} WHERE organization_id=?`,row.organization_id)),
