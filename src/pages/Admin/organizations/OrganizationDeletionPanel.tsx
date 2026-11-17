@@ -1,8 +1,8 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {useSearchParams} from 'react-router';
+import {UniversalLoader} from '../../../components/loading/UniversalLoader';
 import {StaticLoadingText} from '../../../components/loading/Skeleton';
 import {api,denied,errorText,dateLabel} from './organizations-api';
-import {Notice} from './OrganizationDialogs';
 
 const CONFIRMATION='EXCLUIR PERMANENTEMENTE';
 type Deletion={id:string;organizationId:number;state:'pending'|'storage_deleted'|'completed';retryable:boolean;errorCode:string|null;notBefore?:string;automatic?:boolean;automaticPaused?:boolean;automaticBlocked?:boolean};
@@ -25,6 +25,7 @@ export function OrganizationDeletionPanel({organizationId,onBusy,onDenied,onComp
   const operationId=params.get('org_deletion'),requestKey=params.get('org_delete_key');
   const [preview,setPreview]=useState<Preview|null>(null),[deletion,setDeletion]=useState<Deletion|null>(null);
   const [confirmation,setConfirmation]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[uncertain,setUncertain]=useState(Boolean(operationId||requestKey));
+  const [dismissedError,setDismissedError]=useState('');
   const [pollError,setPollError]=useState(''),[pollRevision,setPollRevision]=useState(0);
   const panel=useRef<HTMLElement|null>(null);
   const controller=useRef<AbortController|null>(null),mounted=useRef(true),submitting=useRef(false),complete=useRef(false);
@@ -126,20 +127,29 @@ export function OrganizationDeletionPanel({organizationId,onBusy,onDenied,onComp
     catch(e){if(!c.signal.aborted&&mounted.current){if(denied(e))callbacks.current.onDenied();setError(errorText(e));}}
     finally{submitting.current=false;if(mounted.current){setBusy(false);callbacks.current.onBusy(false);setPollRevision(v=>v+1);}}
   }
+  // A spinner represents observed active work, never a paused, blocked or unobservable operation.
+  const operationError=deletion?.errorCode&&deletion.errorCode!=='ORGANIZATION_DELETE_DRAINING'&&(!automatic||deletion.automaticBlocked)?`A operação precisa de ${deletion.retryable?'nova tentativa':'verificação administrativa'}. Referência: ${deletion.errorCode}`:'';
+  const visibleError=[error,pollError,operationError].filter(Boolean).join(' ');
+  useEffect(()=>{if(!visibleError){setDismissedError('');return;}setDismissedError('');const timer=setTimeout(()=>setDismissedError(visibleError),10000);return()=>clearTimeout(timer);},[visibleError,busy]);
+  const showProgress=(loading||busy||following)&&!visibleError;
+  const compactProgress=showProgress&&(busy||Boolean(deletion));
   return <section ref={panel} tabIndex={-1} className="aog-deletion-panel" aria-label="Confirmação de exclusão permanente" aria-busy={busy||loading}>
-    <Notice message={error}/><Notice message={pollError}/>
-    {loading&&<p role="status">Verificando dependências e segurança da exclusão…</p>}
-    {preview&&<><p><strong>{preview.name}</strong> · organização #{organizationId}</p><p>Esta ação remove o cadastro e a pasta exclusiva da organização no Dropbox. Organizações com dados vinculados não podem ser excluídas por este fluxo. As contas de usuários e o histórico de auditoria são preservados.</p>
+    {visibleError&&dismissedError!==visibleError&&<div role="alert" className="aog-deletion-error-toast"><span>{visibleError}</span><button type="button" aria-label="Fechar aviso de erro" onClick={()=>setDismissedError(visibleError)}>×</button></div>}
+    {visibleError&&<p role="status">A conclusão não foi confirmada. Consulte a mesma exclusão para verificar o estado e as opções de recuperação.</p>}
+    {showProgress&&<div className="aog-deletion-progress">
+      <UniversalLoader size="page" accessibleLabel={loading?'Verificando exclusão':busy&&!deletion?'Enviando solicitação de exclusão':'Exclusão em andamento'}/>
+    </div>}
+    {preview&&!deletion&&!compactProgress&&<><p><strong>{preview.name}</strong> · organização #{organizationId}</p><p>Esta ação remove o cadastro e a pasta exclusiva da organização no Dropbox. Organizações com dados vinculados não podem ser excluídas por este fluxo. As contas de usuários e o histórico de auditoria são preservados.</p>
       <p>Não há opção de desfazer na aplicação. Histórico e backups do Dropbox continuam sujeitos à retenção do serviço.</p>
       {!preview.eligible&&<><p role="status">Exclusão bloqueada. Resolva as dependências antes de abrir uma nova confirmação.</p><ul className="aog-records">{preview.blockers.map((blocker,index)=><li key={`${blocker.code}:${index}`}>{blockerLabels[blocker.code]||'Dependência ou condição de segurança pendente'}{blocker.count>0?` (${blocker.count})`:''}<small>Referência: {blocker.code}</small></li>)}</ul></>}
       {!deletion&&preview.eligible&&<label className="aog-form">Digite EXCLUIR PERMANENTEMENTE<input autoComplete="off" spellCheck={false} value={confirmation} disabled={busy} onChange={e=>setConfirmation(e.target.value)} aria-describedby="organization-deletion-exact-help"/><small id="organization-deletion-exact-help">Use exatamente as letras maiúsculas e o espaço indicado, sem espaços extras.</small></label>}
     </>}
-    {deletion&&<><p>Operação <code>{deletion.id}</code> · organização #{deletion.organizationId}</p><p role="status">{deletion.errorCode==='ORGANIZATION_DELETE_DRAINING'?`Aguardando ${deletion.notBefore?'até '+dateLabel(deletion.notBefore):'dois minutos'} para encerrar operações de armazenamento em andamento. A pasta ainda não foi removida. `:deletion.state==='storage_deleted'?'Pasta removida do Dropbox. Finalização no banco ainda pendente.':deletion.state==='completed'?'Exclusão concluída.':'Exclusão iniciada. A conclusão ainda não foi confirmada.'}</p>{deletion.errorCode&&deletion.errorCode!=='ORGANIZATION_DELETE_DRAINING'&&(!automatic||deletion.automaticBlocked)&&<Notice message={`A operação precisa de ${deletion.retryable?'nova tentativa':'verificação administrativa'}. Referência: ${deletion.errorCode}`}/>}</>}
-    {automatic&&deletion?.state!=='completed'&&<p role="status">{deletion.automaticPaused?'Execução automática pausada pelo administrador. Consulte o andamento; não é necessário iniciar outra exclusão.':deletion.automaticBlocked?'A execução automática foi interrompida para verificação administrativa. Não inicie outra exclusão.':'Solicitação registrada para execução automática no servidor após a espera de segurança. Você pode fechar este painel; não é necessário iniciar outra exclusão. A conclusão ainda depende da confirmação do servidor.'}</p>}
-    {(deletion||uncertain)&&!automatic&&<p>Fechar este painel não cancela etapas já enviadas. Guarde este endereço para consultar e retomar a mesma operação. Nenhuma nova etapa será enviada automaticamente ao reabrir.</p>}
-    <div className="aog-danger-zone">
+    {deletion&&!compactProgress&&<><p>Operação <code>{deletion.id}</code> · organização #{deletion.organizationId}</p><p role="status">{deletion.errorCode==='ORGANIZATION_DELETE_DRAINING'?`Aguardando ${deletion.notBefore?'até '+dateLabel(deletion.notBefore):'dois minutos'} para encerrar operações de armazenamento em andamento. A pasta ainda não foi removida. `:deletion.state==='storage_deleted'?'Pasta removida do Dropbox. Finalização no banco ainda pendente.':deletion.state==='completed'?'Exclusão concluída.':'Exclusão iniciada. A conclusão ainda não foi confirmada.'}</p></>}
+    {automatic&&!compactProgress&&deletion?.state!=='completed'&&<p role="status">{deletion.automaticPaused?'Execução automática pausada pelo administrador. Consulte o andamento; não é necessário iniciar outra exclusão.':deletion.automaticBlocked?'A execução automática foi interrompida para verificação administrativa. Não inicie outra exclusão.':'Solicitação registrada para execução automática no servidor após a espera de segurança. Você pode fechar este painel; não é necessário iniciar outra exclusão. A conclusão ainda depende da confirmação do servidor.'}</p>}
+    {(deletion||uncertain)&&!automatic&&!compactProgress&&<p>Fechar este painel não cancela etapas já enviadas. Guarde este endereço para consultar e retomar a mesma operação. Nenhuma nova etapa será enviada automaticamente ao reabrir.</p>}
+    <div className="aog-danger-zone" hidden={compactProgress}>
       {!deletion&&!uncertain&&<button type="button" disabled={busy} onClick={onCancel}>Cancelar</button>}
-      {(uncertain||automatic)&&<button type="button" disabled={busy||loading} onClick={()=>void consult()}>Consultar exclusão</button>}
+      {(uncertain||(automatic&&!compactProgress))&&<button type="button" disabled={busy||loading} onClick={()=>void consult()}>Consultar exclusão</button>}
       {deletion?deletion.state!=='completed'&&!automatic&&(!deletion.errorCode||deletion.retryable)&&<button type="button" className="aog-destructive" disabled={busy||loading} onClick={()=>void run()}><StaticLoadingText pending={busy}>Retomar exclusão</StaticLoadingText></button>:preview?.eligible&&<button type="button" className="aog-destructive" disabled={busy||loading||confirmation!==CONFIRMATION} onClick={()=>void run()}><StaticLoadingText pending={busy}>{uncertain?'Retomar com a mesma confirmação':'Confirmar exclusão permanente'}</StaticLoadingText></button>}
     </div>
   </section>;
