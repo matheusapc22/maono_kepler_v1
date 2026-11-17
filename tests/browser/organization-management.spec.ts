@@ -469,3 +469,73 @@ test('falha de sessão após exclusão mantém sucesso comprovado e erro fecháv
   await expect(page.locator('.aog-deletion-error-toast')).toHaveCount(0);
   await expect(page.getByText('Sessão desatualizada. Recarregue a página antes de continuar.',{exact:true})).toBeVisible();
 });
+
+test('toast de exclusão sobrevive refresh lento e troca do contexto ativo da sessão',async({page},info)=>{
+  const state=await deletionSetup(page,{automatic:true});
+  await page.goto('/admin?section=organizations&org_q=QA%20Exclus%C3%A3o%20Autom%C3%A1tica%2020261117&org_id=1');
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  let release!:()=>void,entered!:()=>void;
+  const pending=new Promise<void>(resolve=>{release=resolve;}),started=new Promise<void>(resolve=>{entered=resolve;});
+  await page.route('**/api/session',async route=>{
+    entered();await pending;
+    await route.fulfill({json:{authenticated:true,user:{id:1,name:'Operador sintético',email:'qa@example.test',role:'super_admin',activeOrganizationId:2},projects:[],organizations:[],activeOrganization:null}});
+  });
+  await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toBeVisible();
+  state.completeDeletion?.();
+  await started;
+  await expect(page.locator('.admin-organizations-workspace')).toHaveCount(0);
+  await page.waitForTimeout(3500);
+  await expect(page.getByText('Organização Excluída',{exact:true})).toHaveCount(0);
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  release();
+  const toast=page.getByText('Organização Excluída',{exact:true});
+  await expect(toast).toBeVisible();
+  await expect(toast).toBeInViewport();
+  await page.screenshot({path:info.outputPath('deletion-toast-after-session-remount.png'),fullPage:true});
+  await expect(page).toHaveURL(/org_q=QA[+%]/);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.clock.fastForward(2999);
+  await expect(toast).toBeVisible();
+  await page.clock.fastForward(1);
+  await expect(toast).toHaveCount(0);
+  expect(state.mutations).toHaveLength(1);
+});
+
+for(const outcome of ['succeeded','failed','partial','pending'] as const){
+  test(`pausa compacta ${outcome}: loader sem detalhes e recuperação preservada`,async({page},info)=>{
+    await setup(page);
+    let release!:()=>void,entered!:()=>void;
+    const pending=new Promise<void>(resolve=>{release=resolve;}),started=new Promise<void>(resolve=>{entered=resolve;});
+    const operation={id:'pause-synthetic',kind:'pause',createdAt:'2026-01-01',done:false,items:[{index:0,label:'Organização Sintética Alfa',state:'pending',attempts:0,result:null,error:null,code:null,retryable:false}]};
+    await page.route('**/api/admin/organization-management/operations',route=>route.fulfill({json:{ok:true,...operation}}));
+    await page.route('**/api/admin/organization-management/operations/pause-synthetic/step',async route=>{
+      entered();await pending;
+      await route.fulfill({json:{ok:true,...operation,done:outcome!=='pending',items:[{...operation.items[0],state:outcome,retryable:outcome==='failed'||outcome==='partial',error:outcome==='failed'?'Falha sintética recuperável':null}]}});
+    });
+    await page.getByRole('button',{name:'Organização Sintética Alfa',exact:true}).click();
+    page.once('dialog',dialog=>dialog.accept());
+    await page.getByRole('button',{name:'Pausar organização',exact:true}).click();
+    await started;
+    const dialog=page.getByRole('dialog');
+    await expect(dialog.locator('.mm-universal-loader')).toBeVisible();
+    await expect(dialog.getByText('pause-synthetic',{exact:true})).toBeHidden();
+    await expect(dialog.getByText('A execução avança',{exact:false})).toBeHidden();
+    await expect(dialog.getByRole('button',{name:'Pausar organização',exact:true})).toBeHidden();
+    if(outcome==='succeeded')await page.screenshot({path:info.outputPath('pause-loading.png'),fullPage:true});
+    release();
+    if(outcome==='succeeded'){
+      await expect(dialog).toBeHidden();
+      await expect(page.getByText('Organização pausada',{exact:true})).toBeVisible();
+      await page.screenshot({path:info.outputPath('pause-success.png'),fullPage:true});
+    }else{
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('.mm-universal-loader')).toBeHidden();
+      await expect(page.getByText('Organização pausada',{exact:true})).toBeHidden();
+      await expect(dialog.getByRole('button',{name:outcome==='pending'?'Continuar pendências':'Retomar próximo item recuperável',exact:true})).toBeVisible();
+      if(outcome==='failed')await expect(dialog.getByText('Falha sintética recuperável')).toBeVisible();
+    }
+  });
+}
