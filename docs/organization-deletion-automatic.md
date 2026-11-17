@@ -27,3 +27,9 @@ Não alterar nem excluir `maono_maps`. Não mudar a política de remoção de or
 Testes de backend exercitam HTTP/autenticação/SQLite e adaptador Dropbox sintético, incluindo concorrência, opt-in, operações antigas, drenagem, revogação, backoff e perda/expiração do lease antes de remover armazenamento. Não se conectam ao Dropbox real. O lease é renovado somente enquanto ainda pertence à execução e permanece vigente, antes de remover e finalizar.
 
 A instalação npm sem lock resolveu `@kepler.gl/duckdb` 3.2.6 e encontrou um erro preexistente de export `SqlPanel`. Para validação local foi usada 3.2.0, versão registrada no yarn.lock, sem alteração dos manifestos. A CI deve ser revisada antes de considerar a PR pronta; não confundir testes locais com implantação do Worker.
+
+## Revisão da evidência histórica de runtime
+
+A referência histórica mantém o formato e as sete premissas escalares v1, o `sourceBase` de origem, o fixture e o candidato SQL imutáveis. Após revisão independente do runtime em `871828d`, o pin exato de `organization-permanent-deletion.js` foi atualizado e o novo entrypoint `workers/organization-deletion.js` também foi incluído nos pins; `runtimeReviewBase` identifica essa revisão. O hash literal do contrato foi recalculado, sem remover ou flexibilizar a detecção de drift. Testes negativos verificam alterações independentes no core e no worker.
+
+O contrato e `sourceDigest` integram o binding do operador histórico. A revisão invalida evidências e tokens de aprovação anteriores mesmo quando banco/candidato permanecem iguais; um teste verifica explicitamente essa rejeição. Não há nova autorização operacional, reaplicação de migration, mudança de SQL, afrouxamento de guards nem acesso a produção nesta manutenção.

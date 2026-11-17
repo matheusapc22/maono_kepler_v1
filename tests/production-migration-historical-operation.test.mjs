@@ -5,7 +5,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {fixtureSql} from './helpers/deletion-historical-fixture.mjs';
 import {DELETION_SCHEMA_QUERIES,evaluateDeletionSchema} from '../scripts/migrations/organization-deletion-schema-0044.mjs';
 import {evaluateHistoricalOperation} from '../scripts/migrations/deletion-historical-operation.mjs';
-import {HISTORICAL_DELETION_MIGRATION as name,listLocalMigrations,ensureMigrationFile,assertDeletionLedgerPoststate,assertDeletionLedgerPrestate,approvalMaterial} from '../scripts/migrations/production-migration-lib.mjs';
+import {HISTORICAL_DELETION_MIGRATION as name,listLocalMigrations,ensureMigrationFile,assertDeletionLedgerPoststate,assertDeletionLedgerPrestate,approvalMaterial,buildApproval,assertApprovalToken,sha256Text} from '../scripts/migrations/production-migration-lib.mjs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const snap=db=>Object.fromEntries(Object.entries(DELETION_SCHEMA_QUERIES).map(([k,q])=>[k,db.prepare(q).all()]));
 const evidence=db=>{const snapshot=snap(db);return {snapshot,snapshotDigests:Array(2).fill(evaluateDeletionSchema(snapshot).metadataDigest)};};
@@ -51,4 +51,18 @@ test('historical approval requires metadata binding and binds filename',()=>{
  const m={migration:name,migrationSha256:'a'.repeat(64),gitSha:'b'.repeat(40),pendingDigest:'c'.repeat(64),databaseId:'5bc4dc32-f3bd-4c92-bbd1-cbda63e467db'};
  assert.throws(()=>approvalMaterial(m),{code:'DELETION_EVIDENCE_REQUIRED'});
  const material=approvalMaterial({...m,evidenceDigest:'d'.repeat(64)});assert.ok(material.includes(name));assert.ok(material.includes('evidenceDigest='));
+});
+test('reviewed runtime pin revision invalidates previous evidence and approval token',t=>{
+ const current=evaluateHistoricalOperation(evidence(db(t)),context);
+ // Reconstruct the previous binding with identical DB/Git/candidate inputs:
+ // changing only reviewed contract/runtime identity must invalidate authorization.
+ const oldBinding=Object.fromEntries(['profile','phase','migration','candidateSha256','contractSha256','sourceDigest','metadataDigest','ledgerDigest','gitSha','pendingDigest'].map(k=>[k,current[k]]));
+ oldBinding.contractSha256='6b4381bbcd2480d392dc513f4ba1ab0d0b21c4b3560f53bf3193d959cfbd9e04';
+ oldBinding.sourceDigest='5a00c916b961ee4a8f44ff8349bc103b8850fedb5ca0df83515ca57d562daf95';
+ const previousDigest=sha256Text(JSON.stringify(oldBinding));assert.notEqual(current.digest,previousDigest);
+ const args={migration:name,migrationSha256:current.candidateSha256,gitSha:context.gitSha,pendingDigest:context.pendingDigest};
+ const old=buildApproval({...args,evidenceDigest:previousDigest}),fresh=buildApproval({...args,evidenceDigest:current.digest});
+ assert.notEqual(old.token,fresh.token);
+ assert.throws(()=>assertApprovalToken(old.token,fresh.token),{code:'PRODUCTION_AUTHORIZATION_MISMATCH'});
+ assert.equal(current.candidateSha256,'b04a164e85fe09d292dd8e81ac744ce4deec8927290d38cff326c77e030354fa');
 });
