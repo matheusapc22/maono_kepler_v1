@@ -8,7 +8,7 @@
   "candidate": "scripts/migrations/candidates/0044_organization_permanent_deletion_historical.sql",
   "candidateSha256": "b04a164e85fe09d292dd8e81ac744ce4deec8927290d38cff326c77e030354fa",
   "sourcePins": {
-    "functions/_lib/organization-permanent-deletion.js": "f869cd2a00d16394b137437b1d99c1c0bbe7e3cd820e998a9185b9adf14b458a",
+    "functions/_lib/organization-permanent-deletion.js": "b50907fa57b1aa73b491bf59a4e16489eaea37f8e152c043e04eb825de9d8e82",
     "functions/_lib/permissions.js": "822c90bc91822974c8c25eaa04719559555c75639efd3db0030de27bdc9b8021",
     "functions/_lib/auth.js": "9f8607144d96f9d93c7ea722d2a92b074ec5fb179819070f7de12b5e1365fbe4",
     "functions/_lib/organization-management-http.js": "0b5139aec5fe16229d0b58ed3a4461d0e6c881129256801c5a21826b5371208c",
@@ -21,7 +21,8 @@
     "tests/fixtures/deletion-historical-safety/observed-structure.json": "6982a5830101289ad5b0700b2e88253054236a538bede00fd47f5225a4bd474a",
     "tests/fixtures/deletion-historical-safety/schema.sql": "0e6f55a1ac74f130fc8979917e701b758c558172a916bc053d8e8e5b17859c23",
     "tests/fixtures/deletion-historical-safety/additional-guards.test.sql": "5d13f486390711458806fc53c8ce585a8d398e7549eff9aa1e8da32c63920cd0",
-    "scripts/migrations/candidates/0044_organization_permanent_deletion_historical.sql": "b04a164e85fe09d292dd8e81ac744ce4deec8927290d38cff326c77e030354fa"
+    "scripts/migrations/candidates/0044_organization_permanent_deletion_historical.sql": "b04a164e85fe09d292dd8e81ac744ce4deec8927290d38cff326c77e030354fa",
+    "workers/organization-deletion.js": "a5a2fbc8e254b8279244be7ac338214d90db52fc73eb4158dbf4d66b2b2785d5"
   },
   "slots": {
     "role_permissions.scope_type": {
@@ -100,5 +101,6 @@
     "migration-readiness",
     "authorization-to-apply",
     "all-application-default-behavior"
-  ]
+  ],
+  "runtimeReviewBase": "1fb628b4ee85084356b9ce787c0f61cce959e70d"
 }

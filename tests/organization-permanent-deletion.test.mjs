@@ -258,3 +258,118 @@ test('frozen deletion claim blocks membership and nullable permission escape; cl
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);
   assert.equal((await f.step(d)).state,'completed');assert.equal(f.removeCount(),1);
 });
+
+// Durable continuation uses the same real D1/Dropbox path as manual recovery.
+const {runScheduledOrganizationDeletion}=await import('../workers/organization-deletion.js');
+test('automatic enrollment is atomic, old requests are never adopted, flags stop worker',async t=>{
+  const f=fixture(t),d=await f.start();
+  f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';
+  assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,0);
+  assert.equal(f.removeCount(),0);
+  assert.equal((await f.call(`/deletions/${d.id}`)).data.deletion.automatic,false);
+  f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='false';
+  assert.equal((await runScheduledOrganizationDeletion(f.env)).executed,false);
+});
+test('confirmed request completes in scheduled worker without any browser step',async t=>{
+  const f=fixture(t);f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';
+  const d=await f.start();assert.equal(d.automatic,true);
+  const result=await runScheduledOrganizationDeletion(f.env);
+  assert.equal(result.results[0].state,'completed');assert.equal(f.removeCount(),1);
+  assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,0);
+});
+test('scheduled worker respects drain and active lease',async t=>{
+  const f=fixture(t);f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';const d=await f.start();
+  f.db.prepare("UPDATE organization_deletions SET not_before='2999-01-01T00:00:00Z' WHERE id=?").run(d.id);
+  assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,0);
+  f.db.prepare("UPDATE organization_deletions SET not_before='2020-01-01T00:00:00Z',lease_token='other',lease_until='2999-01-01T00:00:00Z' WHERE id=?").run(d.id);
+  assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,0);assert.equal(f.removeCount(),0);
+});
+test('revoked author blocks automatic execution without provider delete',async t=>{
+  const f=fixture(t);f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';const d=await f.start();
+  f.db.exec("UPDATE users SET active=0 WHERE id=1");
+  const result=await runScheduledOrganizationDeletion(f.env);
+  assert.equal(result.results[0].errorCode,'ORGANIZATION_DELETE_ACTOR_REVOKED');
+  assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,0);assert.equal(f.removeCount(),0);
+  assert.equal(f.db.prepare('SELECT state FROM organization_deletions WHERE id=?').get(d.id).state,'pending');
+});
+test('provider retry is delayed, bounded, and reported as blocked at budget exhaustion',async t=>{
+  const f=fixture(t,{fail:true});f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';const d=await f.start();
+  await runScheduledOrganizationDeletion(f.env);
+  assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,0);
+  for(let i=0;i<2;i++){
+    f.db.exec("UPDATE organization_deletions SET updated_at='2020-01-01 00:00:00'");
+    assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,1);
+  }
+  assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,0);
+  assert.equal((await f.call(`/deletions/${d.id}`)).data.deletion.automaticBlocked,true);
+  assert.equal(f.removeCount(),3);
+});
+test('nonempty or replaced Dropbox folder halts automatic continuation',async t=>{
+  const f=fixture(t,{entries:[{'.tag':'file',name:'real.txt'}]});f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';const d=await f.start();
+  await runScheduledOrganizationDeletion(f.env);
+  assert.equal(f.removeCount(),0);assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,0);
+  assert.equal((await f.call(`/deletions/${d.id}`)).data.deletion.automaticBlocked,true);
+});
+test('overlapping scheduled ticks share core lease and delete Dropbox once',async t=>{
+  const f=fixture(t);f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';await f.start();
+  await Promise.all([runScheduledOrganizationDeletion(f.env),runScheduledOrganizationDeletion(f.env)]);
+  assert.equal(f.removeCount(),1);assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,0);
+});
+test('role revocation during worker step is rechecked before storage removal',async t=>{
+  const f=fixture(t);f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';await f.start();
+  const {authorizeDeletionActor}=await import('../workers/organization-deletion.js');let calls=0;
+  await runScheduledOrganizationDeletion(f.env,{authorize:async(env,id,org)=>{
+    calls++;if(calls===3)f.db.exec("UPDATE users SET role='user' WHERE id=1");
+    return authorizeDeletionActor(env,id,org);
+  }});
+  assert.equal(f.removeCount(),0);assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,0);
+});
+test('automatic enrollment marker survives idempotent confirmation and reports pause honestly',async t=>{
+  const f=fixture(t);f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';const key=crypto.randomUUID(),version=f.version();const d=await f.start(key);
+  f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='false';
+  const again=await f.call('/organizations/3/permanent-delete',{version,confirmation:phrase},{'Idempotency-Key':key});
+  assert.equal(again.data.deletion.id,d.id);assert.equal(again.data.deletion.automatic,true);assert.equal(again.data.deletion.automaticPaused,true);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM organization_deletion_audit WHERE event_type='automatic_requested'").get().n,1);
+});
+test('concurrent automatic attempts cannot bypass backoff after provider failure',async t=>{
+  const f=fixture(t,{fail:true});f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';await f.start();
+  await Promise.all([runScheduledOrganizationDeletion(f.env),runScheduledOrganizationDeletion(f.env)]);
+  assert.equal(f.removeCount(),1);
+  assert.equal(f.db.prepare('SELECT attempts FROM organization_deletions').get().attempts,1);
+});
+test('expired lease after inventory/authorization cannot remove Dropbox folder',async t=>{
+  const f=fixture(t);f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';await f.start();
+  const {authorizeDeletionActor}=await import('../workers/organization-deletion.js');let calls=0;
+  await runScheduledOrganizationDeletion(f.env,{authorize:async(env,id,org)=>{
+    calls++;if(calls===3)f.db.exec("UPDATE organization_deletions SET lease_until='2020-01-01T00:00:00Z'");
+    return authorizeDeletionActor(env,id,org);
+  }});
+  assert.equal(f.removeCount(),0);
+  assert.equal(f.db.prepare('SELECT error_code FROM organization_deletions').get().error_code,'ORGANIZATION_DELETE_LEASE_LOST');
+});
+test('replacement lease after pin fences old worker before external removal',async t=>{
+  const f=fixture(t);f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';await f.start();
+  const {authorizeDeletionActor}=await import('../workers/organization-deletion.js');let calls=0;
+  await runScheduledOrganizationDeletion(f.env,{authorize:async(env,id,org)=>{
+    calls++;if(calls===3)f.db.exec("UPDATE organization_deletions SET lease_token='new-worker',lease_until='2999-01-01T00:00:00Z'");
+    return authorizeDeletionActor(env,id,org);
+  }});
+  assert.equal(f.removeCount(),0);assert.equal(f.db.prepare('SELECT lease_token FROM organization_deletions').get().lease_token,'new-worker');
+});
+test('revoked author with expired crashed lease is blocked rather than polled forever',async t=>{
+  const f=fixture(t);f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';await f.start();
+  f.db.exec("UPDATE organization_deletions SET lease_token='crashed',lease_until='2020-01-01T00:00:00Z'; UPDATE users SET active=0 WHERE id=1");
+  await runScheduledOrganizationDeletion(f.env);
+  assert.equal((await runScheduledOrganizationDeletion(f.env)).checked,0);
+  assert.equal(f.db.prepare('SELECT error_code FROM organization_deletions').get().error_code,'ORGANIZATION_DELETE_ACTOR_REVOKED');
+  assert.equal(f.removeCount(),0);
+});
+test('last automatic attempt remains observable while its lease is active',async t=>{
+  const f=fixture(t);f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';const d=await f.start();
+  f.db.exec("UPDATE organization_deletions SET attempts=3,lease_token='last-attempt',lease_until='2999-01-01T00:00:00Z'");
+  assert.equal((await f.call(`/deletions/${d.id}`)).data.deletion.automaticBlocked,false);
+  f.db.exec("UPDATE organization_deletions SET lease_until='2020-01-01T00:00:00Z'");
+  assert.equal((await f.call(`/deletions/${d.id}`)).data.deletion.automaticBlocked,true);
+  f.db.exec("UPDATE organization_deletions SET state='completed'");
+  assert.equal((await f.call(`/deletions/${d.id}`)).data.deletion.automaticBlocked,false);
+});

@@ -7,7 +7,7 @@ import {recognizeDefinition} from './deletion-semantic-diagnostics.mjs';
 import {sha256Text,assertDeletionLedgerPrestate} from './production-migration-lib.mjs';
 const PROFILE='deletion-safety-historical-v1';
 const CONTRACT_PATH='scripts/migrations/references/deletion-historical-safety-v1.json';
-const CONTRACT_HASH='6b4381bbcd2480d392dc513f4ba1ab0d0b21c4b3560f53bf3193d959cfbd9e04';
+const CONTRACT_HASH='47f143173c8a0610bcbb17de19f3ff4d67104ab3ddf0e03a09610912de1e0b72';
 const CANDIDATE_HASH='b04a164e85fe09d292dd8e81ac744ce4deec8927290d38cff326c77e030354fa';
 const FIXTURE='tests/fixtures/deletion-historical-safety/';
 const readDefault=path=>readFileSync(new URL('../../'+path,import.meta.url),'utf8').replace(/\r\n/g,'\n');

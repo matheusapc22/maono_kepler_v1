@@ -1,0 +1,18 @@
+name = "maono-organization-deletion"
+main = "workers/organization-deletion.js"
+compatibility_date = "2026-11-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "maono_maps"
+database_id = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db"
+
+[vars]
+ORGANIZATION_MANAGEMENT_V1 = "true"
+ORGANIZATION_PERMANENT_DELETE_V1 = "false"
+ORGANIZATION_DELETE_AUTOMATIC_ENABLED = "false"
+# Provision Dropbox secrets using the same approved provider configuration as Pages.
+# Keep both Pages enrollment and worker execution disabled until verified deployment.
