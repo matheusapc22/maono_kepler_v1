@@ -25,6 +25,7 @@ export default function AdminOrganizationsSection(){
   const [confirmed,setConfirmed]=useState(false);
   const [operation,setOperation]=useState<Operation|null>(null),[operationError,setOperationError]=useState(''),[busy,setBusy]=useState(false),[history,setHistory]=useState<{id:string;kind:string;createdAt:string}[]>([]);
   const [bulkKind,setBulkKind]=useState<'pause'|'resume'>('pause'),[reason,setReason]=useState('');
+  const [detailRevision,setDetailRevision]=useState(0);
   const [lifecyclePending,setLifecyclePending]=useState(false),[lifecycleToast,setLifecycleToast]=useState('');
   useEffect(()=>{if(!lifecycleToast)return;const timer=setTimeout(()=>setLifecycleToast(''),3000);return()=>clearTimeout(timer);},[lifecycleToast]);
   const [creationPending,setCreationPending]=useState(false),[success,setSuccess]=useState('');
@@ -56,7 +57,7 @@ export default function AdminOrganizationsSection(){
   },[query,revision,invalidate]);
   useEffect(()=>{detailReload.current?.abort();const n=++detailSequence.current,c=new AbortController();setDetail(null);setDetailError('');setDetailLoading(false);if(!id||mode==='delete')return()=>c.abort();setDetailLoading(true);
     api<Detail>(`/organizations/${encodeURIComponent(id)}`,{signal:c.signal,timeoutMs:15000}).then(d=>{if(!c.signal.aborted&&n===detailSequence.current)setDetail(d);}).catch(e=>{if(!c.signal.aborted&&n===detailSequence.current){if(denied(e))invalidate();setDetailError(errorText(e));}}).finally(()=>{if(!c.signal.aborted&&n===detailSequence.current)setDetailLoading(false);});return()=>{c.abort();};
-  },[id,mode,revision,invalidate]);
+  },[id,mode,detailRevision,invalidate]);
   useEffect(()=>{if(!operationId||operation?.id===operationId)return;const c=new AbortController();api<Operation>(`/operations/${encodeURIComponent(operationId)}`,{signal:c.signal}).then(value=>{if(!c.signal.aborted&&mounted.current)setOperation(value);}).catch(e=>{if(!c.signal.aborted){if(denied(e))invalidate();setOperationError(errorText(e));}});return()=>c.abort();},[operationId,operation?.id,invalidate]);
   useEffect(()=>{if(mode!=='operations')return;const c=new AbortController();setHistory([]);api<{operations:{id:string;kind:string;createdAt:string}[]}>('/operations',{signal:c.signal}).then(r=>{if(!c.signal.aborted&&mounted.current)setHistory(r.operations);}).catch(e=>{if(!c.signal.aborted){if(denied(e))invalidate();setOperationError(errorText(e));}});return()=>c.abort();},[mode,invalidate]);
   function url(changes:Record<string,string|null>,replace=false){const next=new URLSearchParams(params);for(const [key,value]of Object.entries(changes)){if(value===null)next.delete(key);else next.set(key,value);}setParams(next,{replace});}
@@ -108,7 +109,7 @@ export default function AdminOrganizationsSection(){
     // Only an explicit, fully successful server result dismisses the recovery UI.
     if(!['pause','resume'].includes(result.kind)||!result.done||!result.items.length||result.items.some(item=>item.state!=='succeeded'))return;
     // Individual pause keeps its URL for read-only drain recovery, including a reload.
-    if(result.kind==='pause'&&id&&result.items.length===1&&result.items[0].result?.id===Number(id)&&user?.role==='super_admin'&&workspace?.capabilities.permanentDelete===true){setDetailLoading(true);return;}
+    if(result.kind==='pause'&&id&&result.items.length===1&&result.items[0].result?.id===Number(id)&&user?.role==='super_admin'&&workspace?.capabilities.permanentDelete===true){setDetailLoading(true);setDetailRevision(v=>v+1);return;}
     close();
     const plural=result.items.length>1;
     setLifecycleToast(result.kind==='pause'?(plural?'Organizações pausadas':'Organização pausada'):(plural?'Organizações reativadas':'Organização reativada'));
@@ -178,7 +179,7 @@ export default function AdminOrganizationsSection(){
     {(id||mode)&&<Dialog title={mode==='delete'?'Excluir permanentemente organização':id?(detail?.organization.name||'Organização'):(dialogTitles[mode]||'Operação')} onClose={close} busy={busy} loadingOnly={(mode==='create'&&busy)||compactLifecycle} dirty={!pauseReadiness&&(mode==='create'||Boolean(id&&mode!=='delete'&&['general','people','policy'].includes(tab)))} wide={mode==='requests'}>
       {compactLifecycle&&<div className="aog-deletion-progress"><UniversalLoader size="page" accessibleLabel={pauseReadiness?"Aguardando liberação para exclusão":"Atualizando organização"}/></div>}
       <div hidden={compactLifecycle}>
-      <Notice message={mode==='create'&&busy?'':operationError}/>{detailLoading&&<p role="status">Carregando organização…</p>}<Notice message={detailError}/>{completedIndividualPause&&detailError&&<button type="button" onClick={()=>setRevision(v=>v+1)}>Consultar organização</button>}
+      <Notice message={mode==='create'&&busy?'':operationError}/>{detailLoading&&<p role="status">Carregando organização…</p>}<Notice message={detailError}/>{completedIndividualPause&&detailError&&<button type="button" onClick={()=>setDetailRevision(v=>v+1)}>Consultar organização</button>}
       {readinessEnabled&&!readiness.checking&&<>
         {readiness.error?<><Notice message={readiness.error}/><button type="button" onClick={readiness.refresh}>Consultar liberação para exclusão</button></>:readiness.preview&&!readiness.preview.eligible&&<><p role="status">Organização pausada. A exclusão ainda está indisponível:</p><ul>{readiness.preview.blockers.map((blocker,index)=><li key={`${blocker.code}:${index}`}>{readinessBlocker(blocker.code)}{blocker.count>1?` (${blocker.count})`:''}</li>)}</ul><button type="button" onClick={readiness.refresh}>Consultar liberação para exclusão</button></>}
       </>}
