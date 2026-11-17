@@ -130,8 +130,8 @@ export function OrganizationDeletionPanel({organizationId,onBusy,onDenied,onComp
   // A spinner represents observed active work, never a paused, blocked or unobservable operation.
   const operationError=deletion?.errorCode&&deletion.errorCode!=='ORGANIZATION_DELETE_DRAINING'&&(!automatic||deletion.automaticBlocked)?`A operação precisa de ${deletion.retryable?'nova tentativa':'verificação administrativa'}. Referência: ${deletion.errorCode}`:'';
   const visibleError=[error,pollError,operationError].filter(Boolean).join(' ');
-  useEffect(()=>{if(!visibleError){setDismissedError('');return;}setDismissedError('');const timer=setTimeout(()=>setDismissedError(visibleError),10000);return()=>clearTimeout(timer);},[visibleError]);
-  const showProgress=(loading||busy||following)&&!error&&!pollError;
+  useEffect(()=>{if(!visibleError){setDismissedError('');return;}setDismissedError('');const timer=setTimeout(()=>setDismissedError(visibleError),10000);return()=>clearTimeout(timer);},[visibleError,busy]);
+  const showProgress=(loading||busy||following)&&!visibleError;
   const compactProgress=showProgress&&(busy||Boolean(deletion));
   return <section ref={panel} tabIndex={-1} className="aog-deletion-panel" aria-label="Confirmação de exclusão permanente" aria-busy={busy||loading}>
     {visibleError&&dismissedError!==visibleError&&<div role="alert" className="aog-deletion-error-toast"><span>{visibleError}</span><button type="button" aria-label="Fechar aviso de erro" onClick={()=>setDismissedError(visibleError)}>×</button></div>}

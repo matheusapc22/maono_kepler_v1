@@ -453,4 +453,6 @@ test('erro de exclusão expira após dez segundos sem remover a recuperação',a
   await expect(page.locator('.aog-deletion-error-toast')).toHaveCount(0,{timeout:12000});
   await expect(page.getByRole('button',{name:'Retomar exclusão',exact:true})).toBeEnabled();
   await expect(page.getByText('A conclusão não foi confirmada.',{exact:false})).toBeVisible();
+  await page.getByRole('button',{name:'Retomar exclusão',exact:true}).click();
+  await expect(page.locator('.aog-deletion-error-toast')).toBeVisible();
 });
