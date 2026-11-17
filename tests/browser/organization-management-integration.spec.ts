@@ -178,7 +178,7 @@ test('exclusão compilada usa sessão, ACL, handler e D1 reais com Dropbox sint�
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
-  await expect(page.getByText('Organização excluída permanentemente. Exclusão confirmada no banco e no Dropbox.')).toBeVisible();
+  await expect(page.getByText('Organização Excluída')).toBeVisible();
   expect(folderExists).toBe(false);
   expect(providerCalls.filter(path=>path==='/2/files/delete_v2')).toHaveLength(1);
   expect(backend.db.prepare('SELECT id FROM organizations WHERE id=3').get()).toBeUndefined();

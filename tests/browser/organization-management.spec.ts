@@ -234,7 +234,7 @@ test('conclusão só após etapas Dropbox e banco e remoção da lista',async({p
   const state=await deletionSetup(page);await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
-  await expect(page.getByText('Organização excluída permanentemente. Exclusão confirmada no banco e no Dropbox.')).toBeVisible();
+  await expect(page.getByText('Organização Excluída')).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Organização Sintética Alfa',exact:true})).toHaveCount(0);
   expect(state.mutations.map(r=>r.path)).toEqual(['/organizations/1/permanent-delete','/deletions/delete-synthetic-1/step','/deletions/delete-synthetic-1/step']);
@@ -251,7 +251,7 @@ test('resposta perdida conserva chave; reload consulta sem excluir automaticamen
   await page.reload();await expect(page.getByRole('button',{name:'Retomar exclusão',exact:true})).toBeVisible();
   expect(state.mutations).toHaveLength(1);
   await page.getByRole('button',{name:'Retomar exclusão',exact:true}).click();
-  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toBeVisible();
+  await expect(page.getByText('Organização Excluída',{exact:false})).toBeVisible();
   expect(state.mutations.filter(r=>r.path==='/organizations/1/permanent-delete')).toHaveLength(1);
 });
 
@@ -261,7 +261,7 @@ test('falha do Dropbox não vira sucesso e permite retomada explícita',async({p
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('DROPBOX_DELETE_FAILED');
   await expect(page.getByRole('button',{name:'Retomar exclusão',exact:true})).toBeVisible();
-  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toHaveCount(0);
+  await expect(page.getByText('Organização Excluída',{exact:false})).toHaveCount(0);
   expect(state.mutations).toHaveLength(2);
 });
 
@@ -279,7 +279,7 @@ test('duplo clique na confirmação produz uma única exclusão',async({page})=>
   const state=await deletionSetup(page);await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).evaluate((button:HTMLButtonElement)=>{button.click();button.click();});
-  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toBeVisible();
+  await expect(page.getByText('Organização Excluída',{exact:false})).toBeVisible();
   expect(state.mutations.filter(r=>r.path==='/organizations/1/permanent-delete')).toHaveLength(1);
 });
 
@@ -302,7 +302,7 @@ test('espera pós-confirmação não indica sucesso nem retoma sozinha',async({p
   await expect(page.getByText('Aguardando até',{exact:false})).toBeVisible();
   await expect(page.getByText('A pasta ainda não foi removida.',{exact:false})).toBeVisible();
   await expect(page.getByRole('button',{name:'Retomar exclusão',exact:true})).toBeEnabled();
-  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toHaveCount(0);
+  await expect(page.getByText('Organização Excluída',{exact:false})).toHaveCount(0);
   expect(state.mutations.filter(r=>r.path==='/organizations/1/permanent-delete')).toHaveLength(1);
 });
 
@@ -322,15 +322,15 @@ test('entrar em exclusão não mantém controles de uma operação anterior',asy
 test('recibo editável não fabrica sucesso e recibo consumido não reaparece',async({page})=>{
   const state=await deletionSetup(page);
   await page.evaluate(()=>{history.replaceState({...history.state,usr:{organizationDeletionReceipt:'forged-receipt'}},'',location.href);dispatchEvent(new PopStateEvent('popstate'));});
-  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toHaveCount(0);
+  await expect(page.getByText('Organização Excluída',{exact:false})).toHaveCount(0);
   expect(state.mutations).toEqual([]);
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
-  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toBeVisible();
+  await expect(page.getByText('Organização Excluída',{exact:false})).toBeVisible();
   const writes=state.mutations.length;
   await page.reload();
-  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toHaveCount(0);
+  await expect(page.getByText('Organização Excluída',{exact:false})).toHaveCount(0);
   expect(state.mutations).toHaveLength(writes);
 });
 
@@ -347,7 +347,7 @@ test('atualização de sessão após exclusão respeita navegação posterior',a
   await page.evaluate(()=>{history.pushState(history.state,'','/admin?section=organizations&org_q=other');dispatchEvent(new PopStateEvent('popstate'));});
   release();await page.waitForLoadState('networkidle');
   await expect(page).toHaveURL(/org_q=other/);
-  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toHaveCount(0);
+  await expect(page.getByText('Organização Excluída',{exact:false})).toHaveCount(0);
   expect(state.mutations.filter(value=>value.path.endsWith('/permanent-delete'))).toHaveLength(1);
 });
 
@@ -357,11 +357,21 @@ test('exclusão automática confirma uma vez e acompanha somente por leitura at�
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
-  await expect(page.getByText('Solicitação registrada para execução automática no servidor',{exact:false})).toBeVisible();
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toBeVisible();
   await expect(page.getByRole('button',{name:'Retomar exclusão',exact:true})).toHaveCount(0);
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toBeVisible();
+  await expect(page.getByText('Esta ação remove o cadastro', {exact:false})).toHaveCount(0);
+  await expect(page.getByText('Operação', {exact:false}).filter({has:page.locator('code')})).toHaveCount(0);
+  await expect(page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Consultar exclusão',exact:true})).toHaveCount(0);
   expect(state.mutations.map(r=>r.path)).toEqual(['/organizations/1/permanent-delete']);
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader__ring')).toHaveCSS('animation-name','none');
+  await page.screenshot({path:test.info().outputPath('deletion-gold.png')});
   state.completeDeletion?.();
-  await expect(page.getByText('Organização excluída permanentemente. Exclusão confirmada no banco e no Dropbox.')).toBeVisible({timeout:10000});
+  await expect(page.getByText('Organização Excluída',{exact:true})).toBeVisible({timeout:10000});
+  await expect(page.locator('.aog-deletion-toast')).toHaveCSS('position','fixed');
+  await expect(page.getByText('Organização Excluída',{exact:true})).toHaveCount(0,{timeout:4500});
   expect(state.mutations).toHaveLength(1);
   expect(state.errors).toEqual([]);
 });
@@ -374,6 +384,7 @@ for(const mode of ['automaticPaused','automaticBlocked'] as const){
     await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
     await expect(page.getByText(mode==='automaticPaused'?'Execução automática pausada pelo administrador.':'A execução automática foi interrompida para verificação administrativa.',{exact:false})).toBeVisible();
     await expect(page.getByRole('button',{name:'Retomar exclusão',exact:true})).toHaveCount(0);
+    await expect(page.locator('.aog-deletion-progress')).toHaveCount(0);
     await page.reload();
     await expect(page.getByRole('button',{name:'Consultar exclusão',exact:true})).toBeVisible();
     await page.getByRole('button',{name:'Consultar exclusão',exact:true}).click();
@@ -389,7 +400,7 @@ test('reabrir exclusão automática perdida só consulta e fechar interrompe aco
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
   await expect(page.getByRole('button',{name:'Consultar exclusão',exact:true})).toBeVisible();
   await page.reload();
-  await expect(page.getByText('Solicitação registrada para execução automática no servidor',{exact:false})).toBeVisible();
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toBeVisible();
   let reads=0;
   page.on('request',request=>{if(request.method()==='GET'&&request.url().includes('/deletions/'))reads++;});
   await page.keyboard.press('Escape');
@@ -404,13 +415,18 @@ test('falha no acompanhamento não indica falha de exclusão e consulta permite 
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
-  await expect(page.getByText('Solicitação registrada para execução automática no servidor',{exact:false})).toBeVisible();
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toBeVisible();
   await page.route('**/deletions/delete-synthetic-1',route=>route.fulfill({status:503,json:{ok:false,error:{code:'UNAVAILABLE',message:'Indisponível'}}}));
   await expect(page.getByRole('alert')).toContainText('Isso não confirma falha da exclusão.',{timeout:10000});
+  await expect(page.locator('.aog-deletion-progress')).toHaveCount(0);
+  await expect(page.locator('.aog-deletion-error-toast')).toHaveCSS('position','fixed');
+  await page.getByRole('button',{name:'Fechar aviso de erro'}).click();
+  await expect(page.locator('.aog-deletion-error-toast')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Consultar exclusão',exact:true})).toBeVisible();
   await page.unroute('**/deletions/delete-synthetic-1');
   state.completeDeletion?.();
   await page.getByRole('button',{name:'Consultar exclusão',exact:true}).click();
-  await expect(page.getByText('Organização excluída permanentemente.',{exact:false})).toBeVisible();
+  await expect(page.getByText('Organização Excluída',{exact:false})).toBeVisible();
   expect(state.mutations).toHaveLength(1);
 });
 
@@ -420,8 +436,21 @@ test('acompanhamento automático invalida painel ao perder autorização',async(
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
-  await expect(page.getByText('Solicitação registrada para execução automática no servidor',{exact:false})).toBeVisible();
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toBeVisible();
   await page.route('**/deletions/delete-synthetic-1',route=>route.fulfill({status:403,json:{ok:false,error:{code:'FORBIDDEN',message:'Sem acesso'}}}));
   await expect(page.getByRole('dialog')).toHaveCount(0,{timeout:10000});
   expect(state.mutations).toHaveLength(1);
+});
+
+test('erro de exclusão expira após dez segundos sem remover a recuperação',async({page})=>{
+  await deletionSetup(page,{stepFailure:true});
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+  await expect(page.locator('.aog-deletion-error-toast')).toBeVisible();
+  await expect(page.locator('.aog-deletion-error-toast')).toHaveCSS('top','24px');
+  await expect(page.getByRole('button',{name:'Fechar aviso de erro'})).toBeVisible();
+  await expect(page.locator('.aog-deletion-error-toast')).toHaveCount(0,{timeout:12000});
+  await expect(page.getByRole('button',{name:'Retomar exclusão',exact:true})).toBeEnabled();
+  await expect(page.getByText('A conclusão não foi confirmada.',{exact:false})).toBeVisible();
 });
