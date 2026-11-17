@@ -122,14 +122,15 @@ test('pausa e reativação pela interface preservam vínculos',async({page,backe
   await page.getByRole('button',{name:'Offline A',exact:true}).click();
   let dialog=page.getByRole('dialog');
   await dialog.getByRole('button',{name:'Pausar organização',exact:true}).click();
-  await expect(dialog.getByText('Concluído',{exact:true})).toBeVisible();
+  await expect(page.getByText('Organização pausada',{exact:true})).toBeVisible();
+  await expect(dialog).toHaveCount(0);
   expect(backend.db.prepare('SELECT active FROM organizations WHERE id=1').get().active).toBe(0);
   expect(backend.db.prepare('SELECT * FROM organization_users ORDER BY id').all()).toEqual(links);
-  await dialog.getByRole('button',{name:'Fechar painel'}).click();
   await page.getByRole('button',{name:'Offline A',exact:true}).click();
   dialog=page.getByRole('dialog');
   await dialog.getByRole('button',{name:'Reativar / verificar armazenamento',exact:true}).click();
-  await expect(dialog.getByText('Concluído',{exact:true})).toBeVisible();
+  await expect(page.getByText('Organização reativada',{exact:true})).toBeVisible();
+  await expect(dialog).toHaveCount(0);
   expect(backend.db.prepare('SELECT active FROM organizations WHERE id=1').get().active).toBe(1);
   expect(backend.db.prepare('SELECT * FROM organization_users ORDER BY id').all()).toEqual(links);
 });
