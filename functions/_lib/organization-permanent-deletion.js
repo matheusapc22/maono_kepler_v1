@@ -11,7 +11,9 @@ const quote = name => { check(/^[a-zA-Z_][a-zA-Z_0-9]*$/.test(name), 'Schema des
 const removable = new Set(['organization_access_delegations','organization_users','user_permission_denials','user_permissions']);
 const retained = new Set(['organization_management_events','organization_deletions','organization_deleted_management_events']);
 export const automaticDeletionEnabled = env => String(env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED)==='true';
-export const automaticDeletionBlocked = row => Number(row.attempts)>=3 || Boolean(row.error_code && row.error_code!=='ORGANIZATION_DELETE_PROVIDER_FAILED');
+export const automaticDeletionBlocked = row => row.state!=='completed' && (
+  (Number(row.attempts)>=3 && !(row.lease_token && Date.parse(row.lease_until)>Date.now())) ||
+  Boolean(row.error_code && row.error_code!=='ORGANIZATION_DELETE_PROVIDER_FAILED'));
 const deletionSelect = `SELECT d.*, EXISTS(SELECT 1 FROM organization_deletion_audit a WHERE a.deletion_id=d.id AND a.event_type='automatic_requested') AS automatic FROM organization_deletions d`;
 const publicDeletion = (row,env) => ({id:row.id,organizationId:row.organization_id,state:row.state,retryable:row.state!=='completed',errorCode:row.error_code || null,notBefore:row.not_before,
   automatic:Boolean(row.automatic),automaticPaused:Boolean(row.automatic)&&!automaticDeletionEnabled(env),automaticBlocked:Boolean(row.automatic)&&automaticDeletionBlocked(row)});

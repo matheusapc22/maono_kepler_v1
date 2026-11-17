@@ -8,7 +8,7 @@
   "candidate": "scripts/migrations/candidates/0044_organization_permanent_deletion_historical.sql",
   "candidateSha256": "b04a164e85fe09d292dd8e81ac744ce4deec8927290d38cff326c77e030354fa",
   "sourcePins": {
-    "functions/_lib/organization-permanent-deletion.js": "198bb3bcf81cd9ec786c8f3e3732510e5030c575d288511fa92d97b95d6bd68c",
+    "functions/_lib/organization-permanent-deletion.js": "b50907fa57b1aa73b491bf59a4e16489eaea37f8e152c043e04eb825de9d8e82",
     "functions/_lib/permissions.js": "822c90bc91822974c8c25eaa04719559555c75639efd3db0030de27bdc9b8021",
     "functions/_lib/auth.js": "9f8607144d96f9d93c7ea722d2a92b074ec5fb179819070f7de12b5e1365fbe4",
     "functions/_lib/organization-management-http.js": "0b5139aec5fe16229d0b58ed3a4461d0e6c881129256801c5a21826b5371208c",
@@ -102,5 +102,5 @@
     "authorization-to-apply",
     "all-application-default-behavior"
   ],
-  "runtimeReviewBase": "871828d4bee7c384e12b731fc3f7790094e4b519"
+  "runtimeReviewBase": "1fb628b4ee85084356b9ce787c0f61cce959e70d"
 }

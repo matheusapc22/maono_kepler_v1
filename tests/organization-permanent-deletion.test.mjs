@@ -364,3 +364,12 @@ test('revoked author with expired crashed lease is blocked rather than polled fo
   assert.equal(f.db.prepare('SELECT error_code FROM organization_deletions').get().error_code,'ORGANIZATION_DELETE_ACTOR_REVOKED');
   assert.equal(f.removeCount(),0);
 });
+test('last automatic attempt remains observable while its lease is active',async t=>{
+  const f=fixture(t);f.env.ORGANIZATION_DELETE_AUTOMATIC_ENABLED='true';const d=await f.start();
+  f.db.exec("UPDATE organization_deletions SET attempts=3,lease_token='last-attempt',lease_until='2999-01-01T00:00:00Z'");
+  assert.equal((await f.call(`/deletions/${d.id}`)).data.deletion.automaticBlocked,false);
+  f.db.exec("UPDATE organization_deletions SET lease_until='2020-01-01T00:00:00Z'");
+  assert.equal((await f.call(`/deletions/${d.id}`)).data.deletion.automaticBlocked,true);
+  f.db.exec("UPDATE organization_deletions SET state='completed'");
+  assert.equal((await f.call(`/deletions/${d.id}`)).data.deletion.automaticBlocked,false);
+});
