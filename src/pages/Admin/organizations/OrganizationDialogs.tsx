@@ -1,4 +1,4 @@
-import {useEffect,useId,useRef,useState,type ReactNode} from 'react';
+import {useEffect,useId,useRef,useState,type ReactNode,type KeyboardEvent} from 'react';
 import {createPortal} from 'react-dom';
 import {MaonoSelect} from '../../../components/selection/MaonoSelect';
 import {StaticLoadingText} from '../../../components/loading/Skeleton';
@@ -8,8 +8,20 @@ import {PLAN_LABELS,type Detail,type EventRow,type FileRow,type LimitRequest,typ
 export function Dialog({title,children,onClose,dirty=false,busy=false,wide=false,loadingOnly=false}:{title:string;children:ReactNode;onClose:()=>void;dirty?:boolean;busy?:boolean;wide?:boolean;loadingOnly?:boolean}){
   const ref=useRef<HTMLDialogElement>(null),heading=useId();
   useEffect(()=>{const before=document.activeElement as HTMLElement|null,dialog=ref.current;dialog?.showModal();return()=>{dialog?.close();if(before?.isConnected)before.focus();};},[]);
+  useEffect(()=>{if(loadingOnly)ref.current?.focus();},[loadingOnly]);
   function close(){if(busy)return;if(dirty&&!window.confirm('Descartar as alterações não salvas?'))return;onClose();}
-  return createPortal(<dialog ref={ref} className={`admin-organizations-dialog${wide?' is-wide':''}${loadingOnly?' is-processing':''}`} aria-labelledby={heading} onCancel={e=>{e.preventDefault();close();}}>
+  function keepFocus(event:KeyboardEvent<HTMLDialogElement>){
+    if(event.key!=='Tab'||event.defaultPrevented)return;
+    const dialog=ref.current;if(!dialog)return;
+    const controls=[...dialog.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]')].filter(element=>element.tabIndex>=0&&!element.matches(':disabled')&&!element.closest('[inert]')&&element.getClientRects().length>0&&getComputedStyle(element).visibility!=='hidden');
+    const first=controls[0],last=controls[controls.length-1],active=document.activeElement;
+    // Native modal tab order can briefly focus BODY/chrome at its boundary.
+    if(!first){event.preventDefault();dialog.focus();}
+    else if(event.shiftKey&&(active===first||active===dialog)){event.preventDefault();last.focus();}
+    else if(!event.shiftKey&&(active===last||active===dialog)){event.preventDefault();first.focus();}
+  }
+
+  return createPortal(<dialog ref={ref} tabIndex={-1} onKeyDown={keepFocus} className={`admin-organizations-dialog${wide?' is-wide':''}${loadingOnly?' is-processing':''}`} aria-labelledby={heading} onCancel={e=>{e.preventDefault();close();}}>
     <header hidden={loadingOnly}><div><small>ADMINISTRAÇÃO MAÕNO</small><h2 id={heading}>{title}</h2></div><button type="button" onClick={close} disabled={busy} aria-label="Fechar painel">×</button></header>
     <div className="aog-dialog-body">{children}</div>
   </dialog>,document.body);
