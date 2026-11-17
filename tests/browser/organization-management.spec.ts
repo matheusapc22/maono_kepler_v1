@@ -222,9 +222,9 @@ test('exclusão exige frase literal e Enter não envia operação',async({page},
 });
 
 test('dados vinculados bloqueiam exclusão sem chamar API mutável',async({page})=>{
-  const state=await deletionSetup(page,{eligible:false});await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
-  await expect(page.getByText('Exclusão bloqueada.',{exact:false})).toBeVisible();
-  await expect(page.getByText('Dados vinculados, inclusive inativos ou históricos (2)')).toBeVisible();
+  const state=await deletionSetup(page,{eligible:false});
+  await expect(page.getByRole('button',{name:'Excluir permanentemente organização',exact:true})).toBeDisabled();
+  await expect(page.getByText('A organização possui dados vinculados que impedem a exclusão.',{exact:false})).toBeVisible();
   await expect(page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true})).toHaveCount(0);
   expect(state.mutations).toEqual([]);
@@ -285,6 +285,7 @@ test('duplo clique na confirmação produz uma única exclusão',async({page})=>
 
 test('permissão revogada ao abrir exclusão remove dados e impede confirmação',async({page})=>{
   const state=await deletionSetup(page);
+  await expect(page.getByRole('button',{name:'Excluir permanentemente organização',exact:true})).toBeEnabled();
   await page.route('**/api/admin/organization-management/organizations/1/deletion-preview',route=>route.fulfill({status:403,json:{ok:false,error:{code:'MANAGEMENT_SUPER_ADMIN_REQUIRED',message:'Acesso negado'}}}));
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await expect(page.getByRole('link',{name:'Entrar novamente'})).toBeVisible();
@@ -309,13 +310,18 @@ test('espera pós-confirmação não indica sucesso nem retoma sozinha',async({p
 test('entrar em exclusão não mantém controles de uma operação anterior',async({page})=>{
   const state=await deletionSetup(page);
   await page.route('**/api/admin/organization-management/operations/previous-pause',route=>route.fulfill({json:{ok:true,id:'previous-pause',kind:'pause',createdAt:'2026-01-01',done:false,items:[{index:0,label:'Pausa anterior',state:'pending',attempts:0,result:null,error:null,code:null,retryable:true}]}}));
+  let recoverySteps=0;
+  await page.route('**/api/admin/organization-management/operations/previous-pause/step',route=>{recoverySteps++;return route.fulfill({json:{ok:true,id:'previous-pause',kind:'pause',createdAt:'2026-01-01',done:true,items:[{index:0,label:'Pausa anterior',state:'succeeded',attempts:1,result:{id:1},error:null,code:null,retryable:false}]}});});
   await page.goto('/admin?section=organizations&org_id=1&org_operation=previous-pause');
   await expect(page.getByRole('button',{name:'Continuar pendências',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Excluir permanentemente organização',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'Continuar pendências',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Excluir permanentemente organização',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await expect(page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Continuar pendências',exact:true})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Retomar próximo item recuperável',exact:true})).toHaveCount(0);
-  expect(state.mutations).toEqual([]);
+  expect(state.mutations).toEqual([]);expect(recoverySteps).toBe(1);
 });
 
 
@@ -469,3 +475,213 @@ test('falha de sessão após exclusão mantém sucesso comprovado e erro fecháv
   await expect(page.locator('.aog-deletion-error-toast')).toHaveCount(0);
   await expect(page.getByText('Sessão desatualizada. Recarregue a página antes de continuar.',{exact:true})).toBeVisible();
 });
+
+test('toast de exclusão sobrevive refresh lento e troca do contexto ativo da sessão',async({page},info)=>{
+  const state=await deletionSetup(page,{automatic:true});
+  await page.goto('/admin?section=organizations&org_q=QA%20Exclus%C3%A3o%20Autom%C3%A1tica%2020261117&org_id=1');
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  let release!:()=>void,entered!:()=>void;
+  const pending=new Promise<void>(resolve=>{release=resolve;}),started=new Promise<void>(resolve=>{entered=resolve;});
+  await page.route('**/api/session',async route=>{
+    entered();await pending;
+    await route.fulfill({json:{authenticated:true,user:{id:1,name:'Operador sintético',email:'qa@example.test',role:'super_admin',activeOrganizationId:2},projects:[],organizations:[],activeOrganization:null}});
+  });
+  await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toBeVisible();
+  state.completeDeletion?.();
+  await started;
+  await expect(page.locator('.admin-organizations-workspace')).toHaveCount(0);
+  await page.waitForTimeout(3500);
+  await expect(page.getByText('Organização Excluída',{exact:true})).toHaveCount(0);
+  await freezeClock(page);
+  release();
+  const toast=page.getByText('Organização Excluída',{exact:true});
+  await expect(toast).toBeVisible();
+  await expect(toast).toBeInViewport();
+  await page.screenshot({path:info.outputPath('deletion-toast-after-session-remount.png'),fullPage:true});
+  await expect(page).toHaveURL(/org_q=QA[+%]/);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.clock.fastForward(2999);
+  await expect(toast).toBeVisible();
+  await page.clock.fastForward(1);
+  await expect(toast).toHaveCount(0);
+  expect(state.mutations).toHaveLength(1);
+});
+
+for(const outcome of ['succeeded','failed','partial','pending'] as const){
+  test(`pausa compacta ${outcome}: loader sem detalhes e recuperação preservada`,async({page},info)=>{
+    await setup(page);
+    let release!:()=>void,entered!:()=>void;
+    const pending=new Promise<void>(resolve=>{release=resolve;}),started=new Promise<void>(resolve=>{entered=resolve;});
+    const operation={id:'pause-synthetic',kind:'pause',createdAt:'2026-01-01',done:false,items:[{index:0,label:'Organização Sintética Alfa',state:'pending',attempts:0,result:null,error:null,code:null,retryable:false}]};
+    await page.route('**/api/admin/organization-management/operations',route=>route.fulfill({json:{ok:true,...operation}}));
+    await page.route('**/api/admin/organization-management/operations/pause-synthetic/step',async route=>{
+      entered();await pending;
+      await route.fulfill({json:{ok:true,...operation,done:outcome!=='pending',items:[{...operation.items[0],state:outcome,retryable:outcome==='failed'||outcome==='partial',error:outcome==='failed'?'Falha sintética recuperável':null}]}});
+    });
+    await page.getByRole('button',{name:'Organização Sintética Alfa',exact:true}).click();
+    page.once('dialog',dialog=>dialog.accept());
+    await page.getByRole('button',{name:'Pausar organização',exact:true}).click();
+    await started;
+    const dialog=page.getByRole('dialog');
+    await expect(dialog.locator('.mm-universal-loader')).toBeVisible();
+    await expect(dialog.getByText('pause-synthetic',{exact:true})).toBeHidden();
+    await expect(dialog.getByText('A execução avança',{exact:false})).toBeHidden();
+    await expect(dialog.getByRole('button',{name:'Pausar organização',exact:true})).toBeHidden();
+    if(outcome==='succeeded')await page.screenshot({path:info.outputPath('pause-loading.png'),fullPage:true});
+    release();
+    if(outcome==='succeeded'){
+      await expect(dialog).toBeHidden();
+      await expect(page.getByText('Organização pausada',{exact:true})).toBeVisible();
+      await page.screenshot({path:info.outputPath('pause-success.png'),fullPage:true});
+    }else{
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('.mm-universal-loader')).toBeHidden();
+      await expect(page.getByText('Organização pausada',{exact:true})).toBeHidden();
+      await expect(dialog.getByRole('button',{name:outcome==='pending'?'Continuar pendências':'Retomar próximo item recuperável',exact:true})).toBeVisible();
+      if(outcome==='failed')await expect(dialog.getByText('Falha sintética recuperável')).toBeVisible();
+    }
+  });
+}
+
+async function pauseDrainSetup(page:Page,enabled=true){
+  await setup(page);
+  let org={id:1,name:'Organização Sintética Alfa',slug:'qa-alfa',description:'',active:true,version:3,plan:'free',owner:null,projectCount:0,userCount:1,fileCount:0,storageStatus:'DISABLED',updatedAt:'2026-01-01T12:00:00Z',lastActivityAt:null};
+  let draining=true,otherBlocker=false,previewStatus=200,previewReads=0;
+  let operation={id:'pause-drain',kind:'pause',createdAt:'2026-01-01',done:false,items:[{index:0,label:'#1',state:'pending',attempts:0,result:{id:1},error:null,code:null,retryable:false}]};
+  const posts:string[]=[];
+  await page.route('**/api/admin/organization-management/**',async route=>{
+    const request=route.request(),path=new URL(request.url()).pathname.replace('/api/admin/organization-management','');
+    if(request.method()==='POST')posts.push(path);
+    if(path==='/organizations')return route.fulfill({json:{ok:true,organizations:[org],pagination:{total:1,page:1,size:10,pages:1},summary:{organizations:1,active:org.active?1:0,users:1,files:0,requests:0},capabilities:{projectQuotaEnforced:true,edits:true,permanentDelete:enabled}}});
+    if(path==='/organizations/1')return route.fulfill({json:{ok:true,organization:org,policy:{plan:'free',projects:5,storageMb:500,projectOverride:null,used:0,reserved:0,remaining:5,storageUsedMb:0,projectQuotaEnforced:true,informational:[]}}});
+    if(path==='/operations'||path==='/operations/pause-drain')return route.fulfill({json:{ok:true,...operation}});
+    if(path==='/operations/pause-drain/step'){
+      org={...org,active:false,version:4};operation={...operation,done:true,items:[{...operation.items[0],state:'succeeded'}]};
+      return route.fulfill({json:{ok:true,...operation}});
+    }
+    if(path==='/organizations/1/deletion-preview'){
+      previewReads++;
+      if(previewStatus!==200)return route.fulfill({status:previewStatus,json:{ok:false,error:{code:'PREVIEW_UNAVAILABLE',message:'Indisponível'}}});
+      const blockers=[...(draining?[{code:'STORAGE_DRAIN_REQUIRED',count:1}]:[]),...(otherBlocker?[{code:'LINKED_DATA',count:2}]:[])];
+      return route.fulfill({json:{ok:true,organizationId:1,name:org.name,version:org.version,eligible:!blockers.length,blockers,confirmation:'EXCLUIR PERMANENTEMENTE'}});
+    }
+    return route.fallback();
+  });
+  await page.reload();await page.getByRole('button',{name:org.name,exact:true}).click();
+  await page.clock.install();
+  return {posts,reads:()=>previewReads,release:()=>{draining=false;},block:()=>{otherBlocker=true;},status:(value:number)=>{previewStatus=value;}};
+}
+async function confirmPause(page:Page){
+  page.once('dialog',dialog=>dialog.accept());
+  await page.getByRole('button',{name:'Pausar organização',exact:true}).click();
+}
+
+test('pausa aguarda liberação do servidor, não relógio; exclusão permanece confirmação separada',async({page})=>{
+  const state=await pauseDrainSetup(page);await confirmPause(page);
+  await expect.poll(state.reads).toBeGreaterThan(0);
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toBeVisible();
+  await expect(page.getByText('pause-drain',{exact:true})).toBeHidden();
+  await freezeClock(page,true);
+  await page.clock.fastForward(120000);
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Excluir permanentemente organização',exact:true})).toBeHidden();
+  const reads=state.reads();state.release();await page.clock.fastForward(5000);
+  await expect.poll(state.reads).toBeGreaterThan(reads);
+  await expect(page.getByRole('button',{name:'Excluir permanentemente organização',exact:true})).toBeEnabled();
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toHaveCount(0);
+  expect(state.posts).toEqual(['/operations','/operations/pause-drain/step']);
+  await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
+  await expect(page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'})).toBeVisible();
+  expect(state.posts).toEqual(['/operations','/operations/pause-drain/step']);
+});
+
+test('reload da drenagem retoma só leituras e ESC interrompe acompanhamento',async({page})=>{
+  const state=await pauseDrainSetup(page);await confirmPause(page);
+  await expect.poll(state.reads).toBeGreaterThan(0);await expect(page).toHaveURL(/org_operation=pause-drain/);
+  const before=state.reads();await page.reload();
+  await expect.poll(state.reads).toBeGreaterThan(before);
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toBeVisible();
+  expect(state.posts).toEqual(['/operations','/operations/pause-drain/step']);
+  await page.keyboard.press('Tab');
+  expect(await page.getByRole('dialog').evaluate(element=>element.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toHaveCount(0);
+  const after=state.reads();await page.waitForTimeout(5500);expect(state.reads()).toBe(after);
+});
+
+for(const scenario of ['blocker','error','denied'] as const){
+  test(`fim da drenagem com ${scenario} não libera exclusão indevidamente`,async({page})=>{
+    const state=await pauseDrainSetup(page);if(scenario==='blocker')state.block();await confirmPause(page);
+    await expect.poll(state.reads).toBeGreaterThan(0);
+    await freezeClock(page,true);
+    if(scenario==='blocker'){state.block();state.release();}else state.status(scenario==='denied'?403:503);
+    await page.clock.fastForward(5000);
+    if(scenario==='denied'){
+      await expect(page.getByRole('link',{name:'Entrar novamente'})).toBeVisible();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+    }else{
+      await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toHaveCount(0);
+      await expect(page.getByRole('button',{name:'Excluir permanentemente organização',exact:true})).toBeDisabled();
+      await expect(page.getByRole('button',{name:'Consultar liberação para exclusão'})).toBeVisible();
+      if(scenario==='blocker')await expect(page.getByText('A organização possui dados vinculados que impedem a exclusão.',{exact:false})).toBeVisible();
+      else{
+        await expect(page.getByRole('alert')).toContainText('Não foi possível confirmar a liberação');
+        state.status(200);state.release();await page.getByRole('button',{name:'Consultar liberação para exclusão'}).click();
+        await expect(page.getByRole('button',{name:'Excluir permanentemente organização',exact:true})).toBeEnabled();
+      }
+    }
+    expect(state.posts).toEqual(['/operations','/operations/pause-drain/step']);
+  });
+}
+
+test('limite de cinco minutos encerra espera sem habilitar exclusão',async({page})=>{
+  const state=await pauseDrainSetup(page);await confirmPause(page);
+  await expect.poll(state.reads).toBeGreaterThan(0);
+  await freezeClock(page,true);
+  await page.clock.fastForward(300000);
+  await expect(page.getByRole('alert')).toContainText('A espera de segurança ainda não foi liberada');
+  await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Excluir permanentemente organização',exact:true})).toBeDisabled();
+  // Drain the request already dispatched before the deadline before asserting no new polls.
+  await page.waitForTimeout(100);
+  const reads=state.reads();await page.clock.fastForward(10000);await page.waitForTimeout(100);expect(state.reads()).toBe(reads);
+  expect(state.posts).toEqual(['/operations','/operations/pause-drain/step']);
+});
+
+for(const invalid of ['identity','contradiction'] as const){
+  test(`prévia ${invalid} falha fechada após pausa`,async({page})=>{
+    const state=await pauseDrainSetup(page);await confirmPause(page);
+    await expect.poll(state.reads).toBeGreaterThan(0);
+    await freezeClock(page,true);
+    await page.route('**/api/admin/organization-management/organizations/1/deletion-preview',route=>route.fulfill({json:{ok:true,organizationId:invalid==='identity'?2:1,eligible:true,blockers:invalid==='contradiction'?[{code:'STORAGE_DRAIN_REQUIRED',count:1}]:[]}}));
+    await page.clock.fastForward(5000);
+    await expect(page.getByRole('alert')).toContainText('Não foi possível confirmar a liberação');
+    await expect(page.getByRole('button',{name:'Excluir permanentemente organização',exact:true})).toBeDisabled();
+    await expect(page.locator('.aog-deletion-progress .mm-universal-loader')).toHaveCount(0);
+    expect(state.posts).toEqual(['/operations','/operations/pause-drain/step']);
+  });
+}
+
+test('pausa sem capability de exclusão mantém conclusão sem consultar drenagem',async({page})=>{
+  const state=await pauseDrainSetup(page,false);await confirmPause(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('Organização pausada',{exact:true})).toBeVisible();
+  expect(state.reads()).toBe(0);
+  expect(state.posts).toEqual(['/operations','/operations/pause-drain/step']);
+});
+
+test('voltar durante drenagem cancela leitura sem repetir pausa',async({page})=>{
+  const state=await pauseDrainSetup(page);await confirmPause(page);
+  await expect.poll(state.reads).toBeGreaterThan(0);
+  await page.goBack();await expect(page.getByRole('dialog')).toHaveCount(0);
+  const reads=state.reads();await page.waitForTimeout(5500);expect(state.reads()).toBe(reads);
+  expect(state.posts).toEqual(['/operations','/operations/pause-drain/step']);
+});
+
+async function freezeClock(page:Page,installed=false){
+  if(!installed)await page.clock.install();
+  // Install before creating timers; pause at a future boundary to avoid clock races.
+  const now=await page.evaluate(()=>Date.now());
+  await page.clock.pauseAt(new Date(now+1000));
+}
