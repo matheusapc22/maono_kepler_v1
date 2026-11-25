@@ -63,7 +63,7 @@ const AdminRouteGuard: React.FC<{ children: React.ReactNode }> = ({
   const { authenticated, loading, user } = useSession();
   const location = useLocation();
 
-  if (loading) {
+  if (loading && !authenticated) {
     return <AdminPageSkeleton />;
   }
 

@@ -982,3 +982,32 @@ test('versão da exclusão desatualizada exige consultar prévia sem repetir env
   expect(starts).toBe(1);expect(state.mutations).toEqual([]);
   expect(state.managementReads.some(value=>value.startsWith('/deletions/by-key?key='))).toBe(true);
 });
+
+for(const width of [1280,390]){
+  for(const mode of ['requests','operations'] as const){
+    test(`modal compartilhado ${mode} em ${width}px mantém centro, foco e fechamento voluntário`,async({page},info)=>{
+      await page.setViewportSize({width,height:844});
+      const state=await setup(page);
+      await page.route('**/api/admin/organization-management/requests?*',route=>route.fulfill({json:{ok:true,requests:[],hasMore:false}}));
+      const trigger=mode==='requests'?page.getByRole('button',{name:'Solicitações 0',exact:true}):page.getByRole('button',{name:'Minhas operações',exact:true});
+      const title=mode==='requests'?'Solicitações de plano e limites':'Minhas operações';
+      await trigger.click();
+      const dialog=page.getByRole('dialog');
+      await expect(dialog.getByRole('heading',{name:title,exact:true})).toBeVisible();
+      await expect(dialog.getByText(mode==='requests'?'Nenhuma solicitação neste estado.':'Nenhuma operação encontrada.',{exact:true})).toBeVisible();
+      await expectCenteredDialog(page);
+      for(let index=0;index<6;index++){
+        await page.keyboard.press(index%2?'Shift+Tab':'Tab');
+        expect(await dialog.evaluate(element=>element.contains(document.activeElement))).toBe(true);
+      }
+      await page.screenshot({path:info.outputPath(`shared-dialog-${mode}-${width}.png`)});
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);await expect(trigger).toBeFocused();
+      await expect(page).not.toHaveURL(/org_mode=/);
+      await trigger.click();await expect(dialog).toBeVisible();
+      await dialog.getByRole('button',{name:'Fechar painel',exact:true}).click();
+      await expect(dialog).toHaveCount(0);await expect(trigger).toBeFocused();
+      expect(state.writes).toEqual([]);expect(state.errors).toEqual([]);
+    });
+  }
+}

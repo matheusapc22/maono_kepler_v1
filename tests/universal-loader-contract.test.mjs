@@ -100,12 +100,12 @@ test("rota /login não possui Suspense ou loader alternativo", () => {
   assert.doesNotMatch(routes, /lazy\(routeModules\.login\)/);
 });
 
-test("Projects e Admin preservam seus skeletons estruturais", () => {
+test("Projects e Admin preservam seus skeletons estruturais na primeira carga", () => {
   assert.match(skeleton, /export function ProjectsPageSkeleton/);
   assert.match(skeleton, /export function AdminPageSkeleton/);
   assert.match(routes, /fallback=\{<ProjectsPageSkeleton \/>\}/);
   assert.match(routes, /fallback=\{<AdminPageSkeleton \/>\}/);
-  assert.match(routes, /if \(loading\)[\s\S]*return <AdminPageSkeleton \/>/);
+  assert.match(routes, /if \(loading && !authenticated\)[\s\S]*return <AdminPageSkeleton \/>/);
 });
 
 test("rotas lazy legadas também ficam protegidas por Suspense", () => {

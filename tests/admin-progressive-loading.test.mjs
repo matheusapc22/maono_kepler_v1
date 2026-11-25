@@ -430,3 +430,30 @@ test('actor or permission transition removes resumable operation URLs and receip
     assert.equal(locationState.organizationDeletionReceipt,'old-actor-proof','Router history state is copied, not mutated');
   }
 });
+
+function renderAdminRouteGuard({authenticated=true,loading=false,user=boundaryActor}={}) {
+  const routes=read('src/Routes.tsx');
+  const start=routes.indexOf('const AdminRouteGuard:'),end=routes.indexOf('\n\nconst AuthCallback',start);
+  assert.ok(start>=0&&end>start);
+  const {code}=transformSync(routes.slice(start,end),{loader:'tsx',format:'cjs',target:'es2022',jsxFactory:'element',jsxFragment:'Fragment'});
+  const location={pathname:'/admin',search:'?section=organizations&org_id=1'};
+  const child={type:'persistent-organization-form'};
+  const names=['useSession','useLocation','normalizeRole','buildLoginRedirect','AdminPageSkeleton','RestrictedAccess','Navigate','element','Fragment','child'];
+  const values=[()=>({authenticated,loading,user}),()=>location,role=>role,value=>`/login?next=${encodeURIComponent(value.pathname+value.search)}`,'skeleton','restricted','redirect',(type,props,...children)=>({type,props,children}),'fragment',child];
+  const result=new Function(...names,`${code}; return AdminRouteGuard({children:child});`)(...values);
+  return {result,child};
+}
+
+test('outer Admin route guard keeps authenticated refresh children while initial loading and revoked access remain blocked',()=>{
+  for(const loading of [false,true]){
+    const {result,child}=renderAdminRouteGuard({loading});
+    assert.equal(result.type,'fragment');assert.deepEqual(result.children,[child]);
+    const revokedRole=renderAdminRouteGuard({loading,user:{...boundaryActor,role:'viewer'}}).result;
+    assert.equal(revokedRole.type,'restricted');assert.deepEqual(revokedRole.children,[]);
+  }
+  assert.equal(renderAdminRouteGuard({authenticated:false,loading:true,user:null}).result.type,'skeleton');
+  const anonymous=renderAdminRouteGuard({authenticated:false,user:null}).result;
+  assert.equal(anonymous.type,'redirect');assert.equal(anonymous.props.replace,true);
+  assert.equal(anonymous.props.to,'/login?next=%2Fadmin%3Fsection%3Dorganizations%26org_id%3D1');
+  assert.equal(renderAdminRouteGuard({loading:true,user:null}).result.type,'restricted');
+});
