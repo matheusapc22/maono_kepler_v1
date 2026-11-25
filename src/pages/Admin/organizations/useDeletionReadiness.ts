@@ -1,7 +1,9 @@
 import {useEffect,useState} from 'react';
 import {api,denied,errorText} from './organizations-api';
+import {isDeletionBlocker,type DeletionBlocker} from './organization-deletion-contract';
 
-type Preview={organizationId:number;eligible:boolean;blockers:{code:string;count:number}[]};
+export type ReadinessPreview={organizationId:number;eligible:boolean;blockers:DeletionBlocker[];waitUntil?:string|null};
+type Preview=ReadinessPreview;
 type Readiness={key:string;checking:boolean;preview:Preview|null;error:string};
 const blockerLabels:Record<string,string>={
   PAUSE_REQUIRED:'Pause a organização antes de excluir.',
@@ -9,6 +11,7 @@ const blockerLabels:Record<string,string>={
   LINKED_DATA:'A organização possui dados vinculados que impedem a exclusão.',
   UNRESOLVED_OPERATION:'Há uma operação pendente de conclusão.',
   DELETION_IN_PROGRESS:'Já existe uma exclusão em andamento. Consulte a mesma operação.',
+  STORAGE_DRAIN_REQUIRED:'Aguarde o encerramento das operações de armazenamento após a pausa.',
   MIXED_SCOPE_PERMISSION:'Permissões vinculadas a projetos precisam de revisão.',
   UNGUARDED_DEPENDENCY:'A estrutura de dados precisa de revisão antes da exclusão.',
   ORGANIZATION_DELETE_UNSAFE_PATH:'Não foi possível confirmar a segurança da pasta.',
@@ -17,7 +20,7 @@ const blockerLabels:Record<string,string>={
 export function readinessBlocker(code:string){return blockerLabels[code]||'Há uma condição de segurança pendente antes da exclusão.';}
 
 /** Read-only readiness, including reload recovery. A local timer never grants eligibility. */
-export function useDeletionReadiness(organizationId:number|null,version:number|undefined,onDenied:()=>void){
+export function useDeletionReadiness(organizationId:number|null,version:number|undefined,onDenied:()=>void,resolverEnabled=false){
   const key=organizationId===null?'':`${organizationId}:${version??''}`;
   const [attempt,setAttempt]=useState(0),[state,setState]=useState<Readiness>({key:'',checking:false,preview:null,error:''});
   useEffect(()=>{
@@ -30,8 +33,8 @@ export function useDeletionReadiness(organizationId:number|null,version:number|u
       try{
         const preview=await api<Preview>(`/organizations/${organizationId}/deletion-preview`,{signal:c.signal,timeoutMs:15000});
         if(c.signal.aborted)return;
-        if(preview.organizationId!==organizationId||typeof preview.eligible!=='boolean'||!Array.isArray(preview.blockers)||preview.blockers.some(b=>!b||typeof b.code!=='string')||preview.eligible!==(preview.blockers.length===0))throw new Error('Prévia de exclusão inválida.');
-        const draining=preview.blockers.some(b=>b.code==='STORAGE_DRAIN_REQUIRED');
+        if(preview.organizationId!==organizationId||typeof preview.eligible!=='boolean'||!Array.isArray(preview.blockers)||preview.blockers.some(b=>!isDeletionBlocker(b)||(b.action&&b.action.organizationId!==organizationId))||preview.eligible!==(preview.blockers.length===0))throw new Error('Prévia de exclusão inválida.');
+        const draining=preview.blockers.some(b=>b.code==='STORAGE_DRAIN_REQUIRED')&&(!resolverEnabled||preview.blockers.every(b=>b.code==='STORAGE_DRAIN_REQUIRED'));
         if(!draining)clearTimeout(deadline);
         setState({key,checking:draining,preview,error:''});
         if(draining)timer=setTimeout(()=>void check(),5000);
@@ -44,7 +47,7 @@ export function useDeletionReadiness(organizationId:number|null,version:number|u
     }
     void check();
     return()=>{c.abort();clearTimeout(deadline);if(timer)clearTimeout(timer);};
-  },[organizationId,key,attempt,onDenied]);
+  },[organizationId,key,attempt,onDenied,resolverEnabled]);
   const current=key&&state.key===key?state:null;
   return {checking:Boolean(key)&&(!current||current.checking),preview:current?.preview??null,error:current?.error??'',refresh:()=>setAttempt(v=>v+1)};
 }

@@ -13,6 +13,7 @@ import {
 import { requirePermission } from "../../../_lib/permissions.js";
 import { logAudit } from "../../../_lib/projects.js";
 import { readOrganizationStorageIncident } from "../../../_lib/organization-storage-retry.js";
+import { auditRequestContext } from '../../../_lib/operation-audit.js';
 
 function normalizePositiveInteger(value) {
   const numberValue = Number(value);
@@ -124,7 +125,7 @@ export async function onRequest(context) {
         env,
         organizationId,
         body,
-        { correlationId },
+        { correlationId, auditContext: auditRequestContext(request, user) },
       );
       const organization = lifecycle.organization;
 

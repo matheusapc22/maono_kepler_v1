@@ -10,6 +10,8 @@ main = "workers/organization-storage-recovery.js"
 compatibility_date = "2026-05-21"
 
 [vars]
+ADMIN_AUDIT_OPERATIONS_V1 = "false"
+# AU requires migration 0045 and coordinated Pages/Worker validation before activation.
 MAONO_STORAGE_RECOVERY_ENABLED = "false"
 MAONO_STORAGE_RECOVERY_KILL_SWITCH = "true"
 MAONO_STORAGE_RECOVERY_DRY_RUN = "true"

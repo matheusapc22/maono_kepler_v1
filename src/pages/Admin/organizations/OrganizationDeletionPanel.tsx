@@ -1,7 +1,8 @@
 import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {useSearchParams} from 'react-router';
 import {api,denied,errorText,dateLabel,ManagementApiError} from './organizations-api';
-import {DELETION_CONFIRMATION,isDeletionPreview,type DeletionPreview} from './organization-deletion-contract';
+import {DELETION_CONFIRMATION,isDeletionPreview,type DeletionPreview,type DeletionBlockerAction} from './organization-deletion-contract';
+import {OrganizationBlockerResolver} from './OrganizationBlockerResolver';
 
 const CONFIRMATION=DELETION_CONFIRMATION;
 type Deletion={id:string;organizationId:number;state:'pending'|'storage_deleted'|'completed';retryable:boolean;errorCode:string|null;notBefore?:string;automatic?:boolean;automaticPaused?:boolean;automaticBlocked?:boolean};
@@ -19,13 +20,14 @@ const blockerLabels:Record<string,string>={
 };
 
 /** No mutation on mount. URL stores only recovery identifiers, never the phrase or document data. */
-export function OrganizationDeletionPanel({organizationId,initialPreview,onBusy,onLoading,onError,onDenied,onComplete,onCancel}:{organizationId:number;initialPreview?:DeletionPreview;onBusy:(value:boolean)=>void;onLoading?:(value:boolean,label:string)=>void;onError?:(message:string)=>void;onDenied:()=>void;onComplete:()=>void;onCancel:()=>void}){
+export function OrganizationDeletionPanel({organizationId,initialPreview,onBusy,onLoading,onError,onDenied,onComplete,onCancel,cleanReports=false,onAudit,onResolverAction}:{organizationId:number;initialPreview?:DeletionPreview;onBusy:(value:boolean)=>void;onLoading?:(value:boolean,label:string)=>void;onError?:(message:string)=>void;onDenied:()=>void;onComplete:()=>void;onCancel:()=>void;cleanReports?:boolean;onAudit?:(operationId:string)=>void;onResolverAction?:(action:DeletionBlockerAction)=>void}){
   const [params,setParams]=useSearchParams();
   const operationId=params.get('org_deletion'),requestKey=params.get('org_delete_key');
   const prepared = !operationId && !requestKey && isDeletionPreview(initialPreview,organizationId) ? initialPreview : null;
   const [preview,setPreview]=useState<DeletionPreview|null>(prepared),[deletion,setDeletion]=useState<Deletion|null>(null);
   const [confirmation,setConfirmation]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(!prepared),[uncertain,setUncertain]=useState(Boolean(operationId||requestKey));
   const [previewStale,setPreviewStale]=useState(false);
+  const [resolverOpen,setResolverOpen]=useState(false);
   const [dismissedError,setDismissedError]=useState('');
   const [pollError,setPollError]=useState(''),[pollRevision,setPollRevision]=useState(0);
   const controller=useRef<AbortController|null>(null),mounted=useRef(true),submitting=useRef(false),complete=useRef(false);
@@ -169,7 +171,9 @@ export function OrganizationDeletionPanel({organizationId,initialPreview,onBusy,
     finally{submitting.current=false;if(mounted.current){setBusy(false);callbacks.current.onBusy(false);}}
   }
   // A spinner represents observed active work, never a paused, blocked or unobservable operation.
-  const operationError=deletion?.errorCode&&deletion.errorCode!=='ORGANIZATION_DELETE_DRAINING'&&(!automatic||deletion.automaticBlocked)?`A operação precisa de ${deletion.retryable?'nova tentativa':'verificação administrativa'}. Referência: ${deletion.errorCode}`:'';
+  const operationError=deletion?.errorCode&&deletion.errorCode!=='ORGANIZATION_DELETE_DRAINING'&&(!automatic||deletion.automaticBlocked)
+    ?cleanReports?'Não foi possível confirmar a conclusão da exclusão. Consulte o resultado e as opções disponíveis na Auditoria.'
+      :`A operação precisa de ${deletion.retryable?'nova tentativa':'verificação administrativa'}. Referência: ${deletion.errorCode}`:'';
   const visibleError=[error,pollError,operationError].filter(Boolean).join(' ');
   const activeError = busy || loading ? '' : visibleError;
   useEffect(()=>{callbacks.current.onError?.(activeError);},[activeError]);
@@ -189,15 +193,23 @@ export function OrganizationDeletionPanel({organizationId,initialPreview,onBusy,
   const controlsBusy=showProgress||complete.current;
   return <section className="aog-deletion-panel" aria-label="Confirmação de exclusão permanente" aria-busy={showProgress}>
     {!onError&&activeError&&dismissedError!==activeError&&<div role="alert" className="aog-deletion-error-toast"><span>{activeError}</span><button type="button" aria-label="Fechar aviso de erro" onClick={()=>setDismissedError(activeError)}>×</button></div>}
-    {presentation.error&&<p role="status">{presentation.previewStale?'Revise a prévia atual antes de confirmar novamente.':'A conclusão não foi confirmada. Consulte a mesma exclusão para verificar o estado e as opções de recuperação.'}</p>}
-    {shownPreview&&<><p><strong>{shownPreview.name}</strong> · organização #{organizationId}</p><p>Esta ação remove o cadastro e a pasta exclusiva da organização no Dropbox. Organizações com dados vinculados não podem ser excluídas por este fluxo. As contas de usuários e o histórico de auditoria são preservados.</p>
+    {!cleanReports&&presentation.error&&<p role="status">{presentation.previewStale?'Revise a prévia atual antes de confirmar novamente.':'A conclusão não foi confirmada. Consulte a mesma exclusão para verificar o estado e as opções de recuperação.'}</p>}
+    {shownPreview&&<><p><strong>{shownPreview.name}</strong>{!cleanReports&&` · organização #${organizationId}`}</p><p>Esta ação remove o cadastro e a pasta exclusiva da organização no Dropbox. Organizações com dados vinculados não podem ser excluídas por este fluxo. As contas de usuários e o histórico de auditoria são preservados.</p>
       <p>Não há opção de desfazer na aplicação. Histórico e backups do Dropbox continuam sujeitos à retenção do serviço.</p>
-      {!shownPreview.eligible&&<><p role="status">Exclusão bloqueada. Resolva as dependências antes de abrir uma nova confirmação.</p><ul className="aog-records">{shownPreview.blockers.map((blocker,index)=><li key={`${blocker.code}:${index}`}>{blockerLabels[blocker.code]||'Dependência ou condição de segurança pendente'}{blocker.count>0?` (${blocker.count})`:''}<small>Referência: {blocker.code}</small></li>)}</ul></>}
+      {cleanReports&&!shownPreview.eligible&&<button type="button" disabled={controlsBusy} onClick={()=>setResolverOpen(true)}>Resolver impedimentos ({shownPreview.blockers.length})</button>}
+      {!cleanReports&&!shownPreview.eligible&&<><p role="status">Exclusão bloqueada. Resolva as dependências antes de abrir uma nova confirmação.</p><ul className="aog-records">{shownPreview.blockers.map((blocker,index)=><li key={`${blocker.code}:${index}`}>{blockerLabels[blocker.code]||'Dependência ou condição de segurança pendente'}{blocker.count>0?` (${blocker.count})`:''}<small>Referência: {blocker.code}</small></li>)}</ul></>}
       {shownPreview.eligible&&<label className="aog-form">Digite EXCLUIR PERMANENTEMENTE<input autoComplete="off" spellCheck={false} value={confirmation} disabled={controlsBusy||Boolean(deletion)} onChange={e=>setConfirmation(e.target.value)} aria-describedby="organization-deletion-exact-help"/><small id="organization-deletion-exact-help">Use exatamente as letras maiúsculas e o espaço indicado, sem espaços extras.</small></label>}
     </>}
-    {shownDeletion&&<><p>Operação <code>{shownDeletion.id}</code> · organização #{shownDeletion.organizationId}</p><p role="status">{shownDeletion.errorCode==='ORGANIZATION_DELETE_DRAINING'?`Aguardando ${shownDeletion.notBefore?'até '+dateLabel(shownDeletion.notBefore):'dois minutos'} para encerrar operações de armazenamento em andamento. A pasta ainda não foi removida. `:shownDeletion.state==='storage_deleted'?'Pasta removida do Dropbox. Finalização no banco ainda pendente.':shownDeletion.state==='completed'?'Exclusão concluída.':'Exclusão iniciada. A conclusão ainda não foi confirmada.'}</p></>}
-    {shownAutomatic&&shownDeletion?.state!=='completed'&&<p role="status">{shownDeletion?.automaticPaused?'Execução automática pausada pelo administrador. Consulte o andamento; não é necessário iniciar outra exclusão.':shownDeletion?.automaticBlocked?'A execução automática foi interrompida para verificação administrativa. Não inicie outra exclusão.':'Solicitação registrada para execução automática no servidor após a espera de segurança. Você pode fechar este painel; não é necessário iniciar outra exclusão. A conclusão ainda depende da confirmação do servidor.'}</p>}
-    {(shownDeletion||presentation.uncertain)&&!shownAutomatic&&<p>Fechar este painel não cancela etapas já enviadas. Guarde este endereço para consultar e retomar a mesma operação. Nenhuma nova etapa será enviada automaticamente ao reabrir.</p>}
+    {!cleanReports&&shownDeletion&&<><p>Operação <code>{shownDeletion.id}</code> · organização #{shownDeletion.organizationId}</p><p role="status">{shownDeletion.errorCode==='ORGANIZATION_DELETE_DRAINING'?`Aguardando ${shownDeletion.notBefore?'até '+dateLabel(shownDeletion.notBefore):'dois minutos'} para encerrar operações de armazenamento em andamento. A pasta ainda não foi removida. `:shownDeletion.state==='storage_deleted'?'Pasta removida do Dropbox. Finalização no banco ainda pendente.':shownDeletion.state==='completed'?'Exclusão concluída.':'Exclusão iniciada. A conclusão ainda não foi confirmada.'}</p></>}
+    {!cleanReports&&shownAutomatic&&shownDeletion?.state!=='completed'&&<p role="status">{shownDeletion?.automaticPaused?'Execução automática pausada pelo administrador. Consulte o andamento; não é necessário iniciar outra exclusão.':shownDeletion?.automaticBlocked?'A execução automática foi interrompida para verificação administrativa. Não inicie outra exclusão.':'Solicitação registrada para execução automática no servidor após a espera de segurança. Você pode fechar este painel; não é necessário iniciar outra exclusão. A conclusão ainda depende da confirmação do servidor.'}</p>}
+    {!cleanReports&&(shownDeletion||presentation.uncertain)&&!shownAutomatic&&<p>Fechar este painel não cancela etapas já enviadas. Guarde este endereço para consultar e retomar a mesma operação. Nenhuma nova etapa será enviada automaticamente ao reabrir.</p>}
+    {cleanReports&&shownDeletion&&onAudit&&<button type="button" disabled={controlsBusy} onClick={()=>onAudit(shownDeletion.id)}>Ver detalhes na Auditoria</button>}
+    {cleanReports&&resolverOpen&&<OrganizationBlockerResolver embedded preview={shownPreview} name={shownPreview?.name||'Organização'} busy={controlsBusy} onClose={()=>setResolverOpen(false)} onRefresh={()=>void refreshPreview()} onAction={selectedAction=>{
+      if(!selectedAction.enabled)return;
+      if(selectedAction.deletionId){remember(selectedAction.deletionId,null);setResolverOpen(false);void consult();}
+      else if(selectedAction.operationId||selectedAction.kind==='pause'){onResolverAction?.(selectedAction);}
+      else if(selectedAction.kind==='query'||selectedAction.kind==='follow')void refreshPreview();
+    }}/>}
     <div className="aog-danger-zone">
       {!shownDeletion&&!presentation.uncertain&&<button type="button" disabled={controlsBusy} onClick={onCancel}>Cancelar</button>}
       {(presentation.uncertain||shownAutomatic)&&<button type="button" disabled={controlsBusy} onClick={()=>void consult()}>Consultar exclusão</button>}

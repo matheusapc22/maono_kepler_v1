@@ -79,3 +79,8 @@
 .aog-danger-zone[hidden]{display:none}.aog-deletion-toast{position:fixed;right:24px;bottom:24px;z-index:120001;max-width:calc(100vw - 48px);padding:16px 22px;border:1px solid var(--maono-accent-muted);border-radius:12px;background:#171b23;color:var(--maono-accent-text);box-shadow:0 6px 24px #0006}
 
 .aog-deletion-error-toast{position:fixed;right:24px;top:24px;z-index:120001;display:flex;align-items:flex-start;gap:16px;width:420px;max-width:calc(100vw - 48px);padding:16px 20px;border:1px solid #b65b60;border-radius:12px;background:#35171d;color:#ffc8cc;box-shadow:0 6px 24px #0006}.aog-deletion-error-toast button{flex:none;border:0;background:transparent;color:inherit;font-size:24px;cursor:pointer}
+.aog-operation-actions{display:flex;flex-wrap:wrap;gap:10px;padding-top:16px;border-top:1px solid #2e3741;margin-top:16px}
+.aog-blocker-resolver .aog-records{display:grid;gap:12px;padding:0;list-style:none}
+.aog-blocker-resolver .aog-records li{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:14px;border:1px solid #36414c;border-radius:10px}
+.aog-blocker-resolver .aog-records p{margin:0;color:#b6c0cc}
+.aog-blocker-resolver footer{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}

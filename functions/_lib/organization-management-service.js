@@ -2,6 +2,7 @@ import { check, object, integer, text, createInput, changeInput, queryInput, req
 import { assertOrganizationNameAvailable, canonicalOrganizationName, organizationIdentity } from './organization-identity.js';
 import { deletionEnabled } from './organization-permanent-deletion.js';
 import { resolveProjectQuotaPolicy } from './organization-limit-service.js';
+import { operationAuditEnabled, requireOperationAuditReady, auditRequestContext, auditFrameStatement, operationAuditIdentity, operationOrganization, organizationAction, managementOutcome } from './operation-audit.js';
 
 const db = env => env.DB;
 const one = (env, sql, ...args) => db(env).prepare(sql).bind(...args).first();
@@ -41,6 +42,7 @@ export async function requireManagementReady(env) {
   const requiredTriggers=['org_identity_reservation','org_identity_insert','org_identity_update','org_management_created','org_management_updated','org_management_legacy_version','org_management_owner_insert','org_management_owner_valid','org_management_owner_delete','org_management_owner_change','org_management_owner_deactivate','org_management_assertion_cleanup','org_management_quota_reserve_insert','org_management_quota_reserve_update'];
   const triggers=await all(env, `SELECT name FROM sqlite_master WHERE type='trigger' AND name IN (${requiredTriggers.map(()=>'?').join(',')})`,...requiredTriggers);
   check(triggers.length===requiredTriggers.length, 'Proteções de integridade da gestão incompletas.', 503, 'ORGANIZATION_MANAGEMENT_SCHEMA_REQUIRED');
+  if(operationAuditEnabled(env)) await requireOperationAuditReady(env);
 
 }
 export async function workspace(env, url, deps) {
@@ -60,7 +62,7 @@ export async function workspace(env, url, deps) {
   const total = Number(count.results[0].total), pages = Math.max(1, Math.ceil(total / q.size)); q.page = Math.min(q.page, pages);
   const rows = await all(env, `${CTE}${SELECT} WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`, ...values, q.size, (q.page - 1) * q.size);
   return { organizations: rows.map(r => publicRow(r, env, deps)), pagination: { total, page: q.page, size: q.size, pages }, summary: summary.results[0],
-    capabilities: { projectQuotaEnforced: deps.quotaEnabled(env), edits: true, imports: false, permanentDelete: await deletionEnabled(env),
+    capabilities: { projectQuotaEnforced: deps.quotaEnabled(env), edits: true, imports: false, permanentDelete: await deletionEnabled(env), auditOperations:operationAuditEnabled(env),
       usersLimitEditable: false, storageLimitEditable: false, exportsLimitEditable: false } };
 }
 export async function organizationRow(env, id) {
@@ -128,7 +130,7 @@ function operationInput(input) {
   check(new Set(items.map(i => i.id ?? i.slug)).size === items.length, 'Itens repetidos na operação.');
   return { kind: input.kind, items };
 }
-export async function startOperation(env, actor, key, input) {
+export async function startOperation(env, actor, key, input, auditContext) {
   check(input?.kind!=='import','A importação de organizações foi descontinuada.',410,'ORGANIZATION_IMPORT_RETIRED');
   key = text(key || '', 'Chave de idempotência', 16, 160); const payload = operationInput(input), hash = await requestHash(payload);
   const current = await one(env, 'SELECT * FROM organization_management_operations WHERE actor_id=? AND idempotency_key=?', actor.id, key);
@@ -138,15 +140,27 @@ export async function startOperation(env, actor, key, input) {
   // Hash the logical input before generating anything. The operation and its
   // reserved identity commit together; losing a response cannot allocate again.
   const automatic = payload.kind === 'create';
+  const audited=operationAuditEnabled(env);
+  if(audited) await requireOperationAuditReady(env);
+  const context=auditContext || auditRequestContext(null,actor,{origin:'domain:organization-management'});
+  if(audited && !context.actorName) context.actorName=(await one(env,'SELECT name FROM users WHERE id=?',actor.id))?.name || null;
+  if(audited && !context.originalActorName) context.originalActorName=context.actorName;
+  const targets=audited ? await Promise.all(payload.items.map(item=>operationOrganization(env,payload.kind,item,null))) : [];
   let persisted = false;
   for (let attempt = 0; attempt < (automatic ? 12 : 1); attempt++) {
     const id = crypto.randomUUID(), identity = automatic ? organizationIdentity(payload.items[0].name) : null;
     const items = identity ? [{...payload.items[0], slug: identity.slug}] : payload.items;
     try {
       await db(env).batch([
+        ...(audited?targets.filter(Boolean).map(target=>db(env).prepare(`INSERT INTO organization_management_assertions(ok) SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM organization_deletions WHERE organization_id=?) THEN 1 ELSE 0 END`).bind(target.id)):[]),
         db(env).prepare(`INSERT INTO organization_management_operations(id,actor_id,idempotency_key,payload_hash,kind,payload_json) VALUES(?,?,?,?,?,?) ON CONFLICT(actor_id,idempotency_key) DO NOTHING`).bind(id,actor.id,key,hash,payload.kind,JSON.stringify(items)),
         ...(identity ? [db(env).prepare(`INSERT INTO organization_creation_identities(operation_id,suffix,slug,path) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM organization_management_operations WHERE id=?)`).bind(id,identity.suffix,identity.slug,identity.path,id)] : []),
         ...items.map((_,i) => db(env).prepare(`INSERT INTO organization_management_operation_items(operation_id,item_index) SELECT ?,? WHERE EXISTS(SELECT 1 FROM organization_management_operations WHERE id=?)`).bind(id,i,id)),
+        ...(audited ? items.flatMap((input,i)=>['requested','authorized'].map(outcome=>auditFrameStatement(env,{
+          source:'organization_operation',sourceEventId:`${id}:${i}:${outcome}`,operationId:id,itemIndex:i,eventType:outcome==='authorized'?'authorization_granted':'requested',outcome,
+          context,organization:targets[i] || (automatic?{name:input.name,slug:input.slug}:{}),action:organizationAction(payload.kind),
+          version:input.version,details:{operationKind:payload.kind,reason:outcome==='authorized'?'global_management_permission':null},
+        },{sql:'EXISTS(SELECT 1 FROM organization_management_operations WHERE id=?)',args:[id]}))) : []),
       ]);
       persisted = true; break;
     } catch (e) {
@@ -214,7 +228,7 @@ async function createItem(env,actor,payload,key,deps) {
   }
   try {
     const result = await deps.createLifecycle(env,{name:payload.name,slug:payload.slug,description:payload.description,active:true},
-      {correlationId:key,management:{actorId:actor.id,requestId:`${key}:lifecycle`,action:'organization.created',creationKey:key,reason:'Criação de organização confirmada'}});
+      {correlationId:key,auditContext:auditRequestContext(deps.request,actor,{origin:'domain:organization-management'}),management:{actorId:actor.id,requestId:`${key}:lifecycle`,action:'organization.created',creationKey:key,reason:'Criação de organização confirmada'}});
     row=result.organization;
   } catch(e) {
     row=await one(env,'SELECT * FROM organizations WHERE management_create_key=?',key);
@@ -238,6 +252,12 @@ async function changeItem(env,actor,payload,key,deps) {
   if(done) {
     const row=await organizationRow(env,payload.id);
     if(payload.active===true && row.active===1 && !['READY','ACTIVE','CONFIGURED'].includes(row.storage_status)) {
+      if(deps.recoverStorage===true) {
+        const out=await deps.updateLifecycle(env,row.id,{active:true},{correlationId:key,auditContext:auditRequestContext(deps.request,actor,{origin:'domain:organization-management'}),management:{actorId:actor.id,requestId:`${key}:storage`,expectedVersion:row.management_version,reason:payload.reason,action:'organization.storage_recovery'}});
+        return ['READY','ACTIVE','CONFIGURED'].includes(out.organization.storage_status)
+          ? {state:'succeeded',result:{id:row.id,confirmed:true,storageStatus:out.organization.storage_status}}
+          : {state:'partial',result:{id:row.id,confirmed:true,storageStatus:out.organization.storage_status},code:'STORAGE_UNCONFIRMED',error:'O armazenamento continua pendente de verificação.',retryable:false};
+      }
       return {state:'partial',result:{id:row.id,confirmed:true,storageStatus:row.storage_status},
         error:'Reativação cadastral confirmada; armazenamento pendente. Consulte a versão atual e execute Verificar armazenamento.',code:'STORAGE_UNCONFIRMED',retryable:false};
     }
@@ -245,10 +265,13 @@ async function changeItem(env,actor,payload,key,deps) {
   }
   const row=await organizationRow(env,payload.id);
   check(row.management_version===payload.version,'A organização foi alterada. Consulte e revise antes de repetir.',412,'ORGANIZATION_VERSION_CONFLICT');
+  const fields={name:'name',description:'description',active:'active',plan:'plan',projectLimit:'project_limit',ownerId:'management_owner_id'};
+  const changed=Object.entries(fields).some(([key,column])=>key in payload && (key==='active'?Number(payload[key]):payload[key])!==(row[column]??null));
+  if(!changed && !(payload.active===true && !['READY','ACTIVE','CONFIGURED'].includes(row.storage_status))) return {state:'succeeded',result:{id:row.id,changed:false}};
   if('name' in payload || 'description' in payload || 'active' in payload) {
     const patch=Object.fromEntries(['name','description','active'].filter(k=>k in payload).map(k=>[k,payload[k]]));
     try {
-      const out=await deps.updateLifecycle(env,row.id,patch,{correlationId:key,management:{actorId:actor.id,requestId:key,expectedVersion:payload.version,reason:payload.reason,action:payload.active===false?'organization.paused':payload.active===true?'organization.resumed':'organization.updated'}});
+      const out=await deps.updateLifecycle(env,row.id,patch,{correlationId:key,auditContext:auditRequestContext(deps.request,actor,{origin:'domain:organization-management'}),management:{actorId:actor.id,requestId:key,expectedVersion:payload.version,reason:payload.reason,action:payload.active===false?'organization.paused':payload.active===true?'organization.resumed':'organization.updated'}});
       if(payload.active===true && !['READY','ACTIVE','CONFIGURED'].includes(out.organization.storage_status)) {
         return {state:'partial',result:{id:row.id,storageStatus:out.organization.storage_status},code:'STORAGE_UNCONFIRMED',
           error:'Estado cadastral salvo; armazenamento pendente. Consulte a versão atual e use Verificar armazenamento.',retryable:false};
@@ -301,13 +324,29 @@ async function reviewItem(env,actor,payload,key,deps) {
 export async function stepOperation(env,actor,id,retry,deps) {
   const op=await one(env,'SELECT * FROM organization_management_operations WHERE id=? AND actor_id=?',id,actor.id); check(op,'Operação não encontrada.',404,'ORGANIZATION_OPERATION_NOT_FOUND');
   check(op.kind!=='import','A importação foi descontinuada. O histórico permanece disponível, sem retomar gravações.',410,'ORGANIZATION_IMPORT_RETIRED');
+  const audited=operationAuditEnabled(env);
+  if(audited) await requireOperationAuditReady(env);
   const payload=parse(op.payload_json,[]), timestamp=now();
-  const item=await one(env,`SELECT * FROM organization_management_operation_items WHERE operation_id=? AND (state='pending' OR (state='running' AND lease_until<?) OR (?=1 AND state IN ('partial','failed') AND retryable=1)) ORDER BY item_index LIMIT 1`,id,timestamp,retry?1:0);
+  const selected=Number.isSafeInteger(deps.auditItemIndex)?deps.auditItemIndex:null;
+  const reconciledFence=audited?' AND NOT EXISTS(SELECT 1 FROM organization_operation_reconciliations r WHERE r.operation_id=organization_management_operation_items.operation_id AND r.item_index=organization_management_operation_items.item_index AND r.observed_attempts=organization_management_operation_items.attempts)':'';
+  const recoverStorage=deps.recoverStorage===true?1:0;
+  const item=await one(env,`SELECT * FROM organization_management_operation_items WHERE operation_id=? AND (? IS NULL OR item_index=?) AND (state='pending' OR (state='running' AND lease_until<?) OR (?=1 AND state IN ('partial','failed') AND retryable=1) OR (?=1 AND state='partial' AND error_code='STORAGE_UNCONFIRMED'))${reconciledFence} ORDER BY item_index LIMIT 1`,id,selected,selected,timestamp,retry?1:0,recoverStorage);
   if(!item) return operation(env,actor,id);
   const token=crypto.randomUUID(), lease=new Date(Date.now()+5*60*1000).toISOString();
-  const claim=await db(env).prepare(`UPDATE organization_management_operation_items SET state='running',lease_token=?,lease_until=?,attempts=attempts+1,updated_at=? WHERE operation_id=? AND item_index=? AND (state='pending' OR (state='running' AND lease_until<?) OR (?=1 AND state IN ('partial','failed') AND retryable=1)) RETURNING item_index`).bind(token,lease,timestamp,id,item.item_index,timestamp,retry?1:0).first();
+  const claimStatement=db(env).prepare(`UPDATE organization_management_operation_items SET state='running',lease_token=?,lease_until=?,attempts=attempts+1,updated_at=? WHERE operation_id=? AND item_index=? AND attempts=? AND (state='pending' OR (state='running' AND lease_until<?) OR (?=1 AND state IN ('partial','failed') AND retryable=1) OR (?=1 AND state='partial' AND error_code='STORAGE_UNCONFIRMED'))${reconciledFence} RETURNING item_index`).bind(token,lease,timestamp,id,item.item_index,item.attempts,timestamp,retry?1:0,recoverStorage);
+  const input=payload[item.item_index], key=`${id}:${item.item_index}`;
+  const context=audited ? await operationAuditIdentity(env,actor,id,deps.request,{origin:'domain:organization-management',originalActorId:op.actor_id}) : null;
+  const organization=audited ? await operationOrganization(env,op.kind,input,key) : null;
+  const previous=audited ? await one(env,"SELECT attempt_id FROM audit_operation_frames WHERE operation_id=? AND item_index=? AND event_type='attempt_started' ORDER BY id DESC LIMIT 1",id,item.item_index) : null;
+  const attemptFrame={source:'organization_operation',operationId:id,itemIndex:item.item_index,attemptId:token,parentAttemptId:previous?.attempt_id,context,organization:organization||{},action:organizationAction(op.kind),version:input?.version,details:{attempt:item.attempts+1,operationKind:op.kind}};
+  let claim;
+  if(audited) {
+    const results=await db(env).batch([claimStatement,auditFrameStatement(env,{...attemptFrame,sourceEventId:`${token}:started`,eventType:'attempt_started',outcome:'running'},
+      {sql:'EXISTS(SELECT 1 FROM organization_management_operation_items WHERE operation_id=? AND item_index=? AND lease_token=?)',args:[id,item.item_index,token]})]);
+    claim=results[0]?.results?.[0];
+  } else claim=await claimStatement.first();
   if(!claim) return operation(env,actor,id);
-  const input=payload[item.item_index], key=`${id}:${item.item_index}`; let outcome, deniedError;
+  let outcome, deniedError;
   try {
     if(op.kind==='review') {
       const req=await one(env,'SELECT organization_id FROM organization_limit_requests WHERE id=?',input.id); check(req,'Pedido não encontrado.',404);
@@ -319,9 +358,16 @@ export async function stepOperation(env,actor,id,retry,deps) {
   } catch(e) {
     if([401,403,404].includes(Number(e.status||e.statusCode))) deniedError=e;
     const expected=e instanceof ManagementError || (e.status>=400 && e.status<600);
-    outcome={state:'failed',error:e instanceof ManagementError?e.message:e.publicMessage||(e.status===401?'Sessão expirada.':e.status===403?'Operação não autorizada para este contexto.':'A operação não foi confirmada. Consulte seu estado antes de repetir.'),code:e.code||'ORGANIZATION_OPERATION_FAILED',retryable:expected?e.retryable===true:false};
+    outcome={state:'failed',error:e instanceof ManagementError?e.message:e.publicMessage||(e.status===401?'Sessão expirada.':e.status===403?'Operação não autorizada para este contexto.':'A operação não foi confirmada. Consulte seu estado antes de repetir.'),code:e.code||'ORGANIZATION_OPERATION_FAILED',retryable:expected?e.retryable===true:false,confirmedFailure:expected&&Number(e.status||e.statusCode)<500};
   }
-  await db(env).prepare(`UPDATE organization_management_operation_items SET state=?,result_json=?,error_code=?,error_message=?,retryable=?,lease_token=NULL,lease_until=NULL,updated_at=? WHERE operation_id=? AND item_index=? AND lease_token=?`).bind(outcome.state,JSON.stringify(outcome.result??parse(item.result_json)),outcome.code||null,outcome.error||null,outcome.retryable?1:0,now(),id,item.item_index,token).run();
+  const complete=db(env).prepare(`UPDATE organization_management_operation_items SET state=?,result_json=?,error_code=?,error_message=?,retryable=?,lease_token=NULL,lease_until=NULL,updated_at=? WHERE operation_id=? AND item_index=? AND lease_token=?`).bind(outcome.state,JSON.stringify(outcome.result??parse(item.result_json)),outcome.code||null,outcome.error||null,outcome.retryable?1:0,now(),id,item.item_index,token);
+  if(audited) {
+    const currentOrganization=await operationOrganization(env,op.kind,input,key);
+    await db(env).batch([
+      auditFrameStatement(env,{...attemptFrame,organization:currentOrganization||organization||{},sourceEventId:`${token}:finished`,eventType:'attempt_finished',outcome:managementOutcome(outcome),code:outcome.code,
+        details:{...attemptFrame.details,state:outcome.state}},
+        {sql:'EXISTS(SELECT 1 FROM organization_management_operation_items WHERE operation_id=? AND item_index=? AND lease_token=?)',args:[id,item.item_index,token]}),complete]);
+  } else await complete.run();
   if(deniedError) throw deniedError;
   return operation(env,actor,id);
 }

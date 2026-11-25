@@ -5,6 +5,7 @@ import {
   repairActiveOrganizationStorages,
 } from "../functions/_lib/organization-storage.js";
 import { recordAuditLog } from "../functions/_lib/permissions.js";
+import { auditRequestContext } from '../functions/_lib/operation-audit.js';
 
 const DEFAULT_BATCH_SIZE = 10;
 const MAX_BATCH_SIZE = 50;
@@ -128,6 +129,7 @@ export async function runScheduledStorageRecovery(
       fairOrder: true,
       dryRun: config.dryRun,
       telemetrySource: "scheduled",
+      auditContext: auditRequestContext(null, null, { executorKind: 'worker', origin: 'worker:organization-storage-recovery' }),
     });
 
     const finishedAtMs = clockMillis(nowFn);

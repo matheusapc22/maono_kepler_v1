@@ -7,7 +7,7 @@ const fail = () => { throw gateError('DELETION_DIAGNOSTIC_BLOCKED','Diagnostico 
 const keys = (row, expected) => row && JSON.stringify(Object.keys(row).sort()) === JSON.stringify([...expected].sort());
 const count = n => Number.isSafeInteger(n) && n >= 0;
 const removable = new Set(['organization_access_delegations','organization_users','user_permission_denials','user_permissions']);
-const retained = new Set(['organization_management_events','organization_deletions','organization_deleted_management_events']);
+const retained = new Set(['organization_management_events','organization_deletions','organization_deleted_management_events','audit_operation_frames','organization_operation_reconciliations']);
 export const DIAGNOSTIC_QUERIES = Object.freeze({
   target: `SELECT id, active, management_version AS version,
     CASE WHEN slug='maono-qa-organizacoes-20261102' THEN 1 ELSE 0 END AS identityMatches,

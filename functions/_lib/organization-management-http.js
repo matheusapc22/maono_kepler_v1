@@ -1,6 +1,8 @@
 import { ManagementError, check, object, integer, text } from './organization-management-contract.js';
 import * as deletion from './organization-permanent-deletion.js';
 import * as service from './organization-management-service.js';
+import { auditRequestContext } from './operation-audit.js';
+import { consultOrganizationOperation } from './organization-audit-recovery.js';
 
 const base = '/api/admin/organization-management';
 const headers = { 'Content-Type':'application/json; charset=utf-8','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff' };
@@ -26,7 +28,7 @@ export async function handleOrganizationManagement(context,deps) {
     const auth=await deps.authorize(env,request,null);const actor=auth.user;
     check(actor && actor.role==='super_admin','A gestão global é restrita ao Super Admin.',403,'MANAGEMENT_SUPER_ADMIN_REQUIRED');
     await service.requireManagementReady(env);
-    const bound={...deps,authorizeGlobal:()=>deps.authorize(env,request,null),authorizeOrganization:id=>deps.authorize(env,request,integer(id))};
+    const bound={...deps,request,authorizeGlobal:()=>deps.authorize(env,request,null),authorizeOrganization:id=>deps.authorize(env,request,integer(id))};
     const method=request.method;
     check(['GET','POST'].includes(method),'Método não permitido.',405,'METHOD_NOT_ALLOWED');
     const body=method==='POST'?await readBody(request):null;
@@ -35,7 +37,7 @@ export async function handleOrganizationManagement(context,deps) {
     else if(method==='GET' && route[0]==='organizations' && route.length>=2 && route.length<=3) {
       const id=integer(route[1]);await bound.authorizeOrganization(id);
       if(route.length===2) result=await service.detail(env,id,bound);
-      else if(route[2]==='deletion-preview') result=await deletion.deletionPreview(env,id);
+      else if(route[2]==='deletion-preview') result=await deletion.deletionPreview(env,id,actor);
       else if(route[2]==='people') result={people:await service.people(env,id)};
       else if(route[2]==='documents') result=await service.documents(env,id,request.url);
       else if(route[2]==='activity') result=await service.activity(env,id,request.url);
@@ -45,14 +47,17 @@ export async function handleOrganizationManagement(context,deps) {
     else if(method==='GET' && route.join('/')==='requests') result=await service.requests(env,request.url);
     else if(method==='POST' && route.join('/')==='import/validate') throw new ManagementError('A importação de organizações foi descontinuada.',410,'ORGANIZATION_IMPORT_RETIRED');
     else if(method==='POST' && route.length===3 && route[0]==='organizations' && route[2]==='permanent-delete') {
-      const id=integer(route[1]);await bound.authorizeOrganization(id);result=await deletion.startDeletion(env,actor,id,request.headers.get('Idempotency-Key'),body);
+      const id=integer(route[1]);await bound.authorizeOrganization(id);result=await deletion.startDeletion(env,actor,id,request.headers.get('Idempotency-Key'),body,auditRequestContext(request,actor));
     } else if(method==='GET' && route.join('/')==='deletions/by-key') result=await deletion.deletionByKey(env,actor,url.searchParams.get('key'));
     else if(route[0]==='deletions' && route.length===2 && method==='GET') result=await deletion.deletionStatus(env,actor,route[1]);
     else if(route[0]==='deletions' && route.length===3 && route[2]==='step' && method==='POST') {object(body,[]);result=await deletion.stepDeletion(env,actor,route[1],bound);}
     else if(route.join('/')==='operations') {
-      result=method==='GET'?{operations:await service.operations(env,actor)}:await service.startOperation(env,actor,request.headers.get('Idempotency-Key'),body);
+      result=method==='GET'?{operations:await service.operations(env,actor)}:await service.startOperation(env,actor,request.headers.get('Idempotency-Key'),body,auditRequestContext(request,actor));
     } else if(route.join('/')==='operations/by-key' && method==='GET') result=await service.operationByKey(env,actor,url.searchParams.get('key'));
     else if(route[0]==='operations' && route.length===2 && method==='GET') result=await service.operation(env,actor,text(route[1],'Operação',1,80));
+    else if(route[0]==='operations' && route.length===3 && route[2]==='consult' && method==='POST') {
+      object(body,['itemIndex']);result=await consultOrganizationOperation(env,actor,route[1],body.itemIndex??0,request,bound);
+    }
     else if(route[0]==='operations' && route.length===3 && route[2]==='step' && method==='POST') {
       object(body,['retry']);check(body.retry===undefined || typeof body.retry==='boolean','Retomada inválida.');
       result=await service.stepOperation(env,actor,text(route[1],'Operação',1,80),body.retry===true,bound);

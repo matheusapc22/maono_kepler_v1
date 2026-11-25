@@ -1,0 +1,222 @@
+{
+  "profileId": "deletion-safety-historical-v2",
+  "version": 2,
+  "scope": "super-admin-empty-organization-veto-and-bounded-acl-cleanup",
+  "operationalApproval": false,
+  "sourceBase": "e1613ce803c5852f5eacb838f9f7d81c0a091ac7",
+  "fixtureSourceBase": "4f48ed5d8299fca3745807e47baf78369578e5e8",
+  "candidate": "scripts/migrations/candidates/0044_organization_permanent_deletion_historical.sql",
+  "candidateSha256": "b04a164e85fe09d292dd8e81ac744ce4deec8927290d38cff326c77e030354fa",
+  "sourcePins": {
+    "functions/_lib/admin-operation-audit-http.js": "6dd5c8eb5970b99b8d22a93ae1b8b7a92d1d65158f41059cd092944e86567016",
+    "functions/_lib/admin-operation-audit-reader.js": "e377fca818de88d6bc700c934ec49845e4c62ebf42f17abb0ea64faf5c2379da",
+    "functions/_lib/auth.js": "9f8607144d96f9d93c7ea722d2a92b074ec5fb179819070f7de12b5e1365fbe4",
+    "functions/_lib/d1-protected-metadata.js": "c4e5a2e64dd5e08b05d7e5de9878a5fba033163c9f31948c8884c5aba4c0e8d7",
+    "functions/_lib/dropbox-client.js": "556d23e401a3b919b6fcef76f7635a27dab4d0f2e1ae372caf892c0e21ea9966",
+    "functions/_lib/dropbox.js": "b18f5ecf01889e064fff1b3fdb5bdc5dd34c5d0500a6518b02e893dcbbaecc2a",
+    "functions/_lib/error-catalog.js": "e4ff3db994702f13fb6d4f7ba94c341e254716a9b2770480c4f2d90c0346fe12",
+    "functions/_lib/error-categories.js": "e937bc422362761c27bce5601d96896de40dedbd63a891e1f72a1ee4031a4cee",
+    "functions/_lib/http.js": "c9ad876567bb0b38568a5ba9038a20b376fb021e6b02c773856b94694be42c87",
+    "functions/_lib/local-storage.js": "8d2fa3d874ebd756dd8e6fcf7a6084243b47665783643bc49c8339b83aeee1ac",
+    "functions/_lib/maono-error.js": "6512cd2315137f4101e090fe5a7c2bd4d216e63bb960fd3f6e3c82d68c74e05c",
+    "functions/_lib/operation-audit.js": "d6e68a8bd05794f477751fcaf500800c86ada7046326405881efd0204977fcbe",
+    "functions/_lib/organization-audit-recovery.js": "3e0e08dff2b59b9797ce41fad8c4ccb5255d7397f002fe83f8eb0cc9918d3fd3",
+    "functions/_lib/organization-audited-mutation.js": "31237f30a22fcc8c318b028f17264177ab46d982fbfe9701cb172f7c8de09078",
+    "functions/_lib/organization-identity.js": "bb59fa2454ea114b54f85adfd03939e4c06acb91f3841e2718189766f374df31",
+    "functions/_lib/organization-lifecycle.js": "df2e99286ecc3c83ecdcc13f12ab32b898e02b0541ca0ee4a79d1d1cafecc19f",
+    "functions/_lib/organization-limit-service.js": "087895c24d4ec55a35949081be71676ed99cae1a0ddf8e1fcc714b84422de175",
+    "functions/_lib/organization-management-contract.js": "b8d4cdf095a5f1708aa2cde6827825b3e8ff40750bf11c0a0326624a970ea9d5",
+    "functions/_lib/organization-management-http.js": "7855367a1596592def17eacdd6f26095b334a98740dff1c2a6f129edf03529cc",
+    "functions/_lib/organization-management-service.js": "80c5db8f96778fcb66f391d862208060ef3f048347072a61d92e9ae46f270e39",
+    "functions/_lib/organization-name.js": "624ff74fa16bf2869ec0a8b29e30c6490dd732caabcb1bd73f97076355c29948",
+    "functions/_lib/organization-permanent-deletion.js": "9e83f641ed0e78bedaea3a63d0d682035bc5d591e82903ba33dfccd162e91071",
+    "functions/_lib/organization-storage-policy.js": "757aa66b37b1ba0bf3d349a5ff1363417d7d7a9fb0ca2ab2ce7adbdc89f5309a",
+    "functions/_lib/organization-storage-readiness.js": "e8285e681e5b09f15ca7e5f942ec2c3ca44c1251bb2de760a21e7450bf6f3400",
+    "functions/_lib/organization-storage-retry.js": "6d1c756e16f74b3758f21e7673d4f95a2624032f0d90c0a2679b5fbac8324bda",
+    "functions/_lib/organization-storage-telemetry.js": "c9d309855a5f7bc13b0d995bdff9ec0f84f2405fcd48d788db68d64e699ad9b4",
+    "functions/_lib/organization-storage.js": "2c485d52bbcb2c97016547fc4275e59d02b9ca7e635bba0c5ec91afa5617bf8c",
+    "functions/_lib/organizations.js": "fede7483b8fec0cbd2f6f105bdf67c6b2d51dc1bc1aca7a6d26a371e9040011d",
+    "functions/_lib/owner-retention.js": "275925b59abab9eaf9af5d8e619820061e9dccb9946762aece637a5c659225bb",
+    "functions/_lib/permissions.js": "d484b8de4bd274a2b87d584b3fb726fd3fd70760c3d7a6f7636e81f1af0d10df",
+    "functions/_lib/project-lifecycle.js": "50ef0ff0d838093bc54f938505ccae2fcec29c6f4ee5413df0668316aa65aa9d",
+    "functions/_lib/project-preview.js": "744da4a846edb3347a9b2019f59c3e1c0154ea78025de35c4149daace89ac359",
+    "functions/_lib/project-service.js": "e305d372ade2f4d448a7d27288a1e07da92a4b3c358901c6fabd2505829c4903",
+    "functions/_lib/projects.js": "e55a089de003b0b3e83de82995c63f0734ab3a79fb42f29d3e7aec3cc8ac7eeb",
+    "functions/_lib/request-schema.js": "6468e612946f7b37bb46052294b1266e0f354ade3a35eb0e66633ea67cd087e1",
+    "functions/api/admin/organization-management/[[path]].js": "ceb9e33e2190d124c3e96605819b4b83cb08965cc2052f2870d97e83f9adf90c",
+    "functions/api/admin/organizations/[id].js": "72a786ea10bb5f5aeb13f0e787db35aee2e8a4291c6de1e18be35937458ef051",
+    "functions/api/admin/organizations/index.js": "9ca7d4572b944c6184e59cd8e181a6b60f8ca7b99f322589fe248c06961ac020",
+    "functions/api/admin/organizations/repair-storage.js": "a3d38025e1dfd570816b00b68814541bc79fd0f1dd35d5db98fce3db9044f345",
+    "functions/api/admin/organizations/sync-dropbox.js": "685189b2df5bc5d1f67e2739dd642423c97cb7c4b5dfa3aaa0560d6fb06ea4fb",
+    "migrations/0039_project_save_operations.sql": "0ef8d78946235a089b754f818e35c83aa3a754a2e3092d09d86c88248cd98ab8",
+    "migrations/0044_organization_permanent_deletion.sql": "cde2cbad6ded662faf004eac176309b3003641ec2f0714eda06b890127fb3aba",
+    "scripts/migrations/candidates/0044_organization_permanent_deletion_historical.sql": "b04a164e85fe09d292dd8e81ac744ce4deec8927290d38cff326c77e030354fa",
+    "scripts/migrations/organization-schema-snapshot.mjs": "d943bca534069bd6a643aab7eac00a527ee542b3f8f82a99c6cb91f22a44cf56",
+    "scripts/migrations/references/organization-schema-pre-0045.sql": "7016dbc64d6502af557bc9fd5cab9cc2be71770a1d56ff74d5c88219d61026fc",
+    "tests/fixtures/deletion-historical-safety/additional-guards.test.sql": "5d13f486390711458806fc53c8ce585a8d398e7549eff9aa1e8da32c63920cd0",
+    "tests/fixtures/deletion-historical-safety/manifest.json": "eba41d065824c0bf24c8a446906f570f9f94d2de551b760b80d86488fa290d6a",
+    "tests/fixtures/deletion-historical-safety/observed-structure.json": "6982a5830101289ad5b0700b2e88253054236a538bede00fd47f5225a4bd474a",
+    "tests/fixtures/deletion-historical-safety/schema.sql": "0e6f55a1ac74f130fc8979917e701b758c558172a916bc053d8e8e5b17859c23",
+    "workers/organization-deletion.js": "258ac9681791a62fa514c5ef84c94df23faded9d5e3f427328e3ab811e84ece1",
+    "workers/organization-storage-recovery.js": "935f6e6f663d2865133607dbcd576244b280594263385e30fef763f95561b5a1"
+  },
+  "slots": {
+    "role_permissions.scope_type": {
+      "literalClass": "text",
+      "effects": [
+        "global-unique-role-permission-scope"
+      ],
+      "deletionArgument": "Global table is not mutated or selected by deletion; SuperAdmin path bypasses role grants. General authorization/uniqueness equivalence is not claimed."
+    },
+    "role_permissions.active": {
+      "literalClass": "number",
+      "effects": [
+        "two-nonunique-permission-indexes"
+      ],
+      "deletionArgument": "Global table untouched; SuperAdmin path does not query role grants."
+    },
+    "user_permissions.active": {
+      "literalClass": "number",
+      "effects": [
+        "three-nonunique-lookup-indexes",
+        "unconditional-authorization-epoch-on-insert-update-delete"
+      ],
+      "deletionArgument": "Ownership guards use OLD/NEW organization_id; mixed veto uses organization_id/project_id; cleanup DELETE uses organization_id only, regardless active or expiry."
+    },
+    "organization_feature_flags.enabled": {
+      "literalClass": "number",
+      "effects": [
+        "nonunique-organization-enabled-index"
+      ],
+      "deletionArgument": "Every organization row vetoes deletion independently of enabled. Scalar default does not affect ownership or guard."
+    },
+    "ticket_comments.internal": {
+      "literalClass": "number",
+      "effects": [],
+      "deletionArgument": "Not cleaned up; mandatory ticket_id FK references tickets whose mandatory organization_id is fully vetoed. Requires valid FK integrity and planned ticket guards."
+    },
+    "tickets.status": {
+      "literalClass": "text",
+      "effects": [
+        "nonunique-organization-status-index"
+      ],
+      "deletionArgument": "Every organization row vetoes deletion regardless status; ownership guard is independent."
+    },
+    "tickets.priority": {
+      "literalClass": "text",
+      "effects": [],
+      "deletionArgument": "Every organization row vetoes deletion regardless priority; ownership guard is independent."
+    }
+  },
+  "triggerContract": {
+    "names": [
+      "project_save_auth_role_permissions_insert",
+      "project_save_auth_role_permissions_update",
+      "project_save_auth_role_permissions_delete",
+      "project_save_auth_user_permissions_insert",
+      "project_save_auth_user_permissions_update",
+      "project_save_auth_user_permissions_delete"
+    ],
+    "body": "BEGIN UPDATE project_save_authorization_generation SET version = version + 1 WHERE id = 1; END",
+    "readsDefaultSlots": false,
+    "destination": "project_save_authorization_generation",
+    "destinationIsTriggerAndForeignKeyLeaf": true
+  },
+  "preconditions": [
+    "complete-object-and-metadata-match",
+    "two-identical-full-snapshots",
+    "quick-check-ok-and-empty-fk-check",
+    "strict-ledger-no-0044-entry",
+    "pinned-super-admin-auth-and-runtime",
+    "exact-static-candidate-and-planned-guards"
+  ],
+  "nonClaims": [
+    "general-DDL-equivalence",
+    "production-literal-recovery",
+    "guards-installed",
+    "migration-readiness",
+    "authorization-to-apply",
+    "all-application-default-behavior",
+    "apply-or-reapply-authorization",
+    "already-applied-0044-reexecution",
+    "0045-installed",
+    "runtime-deployed",
+    "Production-acceptance"
+  ],
+  "runtimeReviewBase": "e1613ce803c5852f5eacb838f9f7d81c0a091ac7",
+  "runtimeReviewScope": "Current local runtime files and their transitive local imports are bound by SHA-256; the base commit only identifies the starting revision. This profile does not authorize apply or reapply and does not attest deployment.",
+  "supersedes": {
+    "profileId": "deletion-safety-historical-v1",
+    "contract": "scripts/migrations/references/deletion-historical-safety-v1.json",
+    "sha256": "47f143173c8a0610bcbb17de19f3ff4d67104ab3ddf0e03a09610912de1e0b72",
+    "previousEvidenceAndApprovalReusable": false
+  },
+  "sourceLocations": {
+    "schema.sql": {
+      "path": "scripts/migrations/references/organization-schema-pre-0045.sql",
+      "revision": "e1613ce803c5852f5eacb838f9f7d81c0a091ac7",
+      "sha256": "7016dbc64d6502af557bc9fd5cab9cc2be71770a1d56ff74d5c88219d61026fc",
+      "scope": "Immutable structural baseline from schema.sql before 0045; this is not the current bootstrap or runtime."
+    }
+  },
+  "runtimeRoots": [
+    "functions/_lib/admin-operation-audit-http.js",
+    "functions/_lib/admin-operation-audit-reader.js",
+    "functions/_lib/auth.js",
+    "functions/_lib/d1-protected-metadata.js",
+    "functions/_lib/organization-management-http.js",
+    "functions/_lib/organization-permanent-deletion.js",
+    "functions/_lib/permissions.js",
+    "functions/api/admin/organization-management/[[path]].js",
+    "functions/api/admin/organizations/[id].js",
+    "functions/api/admin/organizations/index.js",
+    "functions/api/admin/organizations/repair-storage.js",
+    "functions/api/admin/organizations/sync-dropbox.js",
+    "workers/organization-deletion.js",
+    "workers/organization-storage-recovery.js"
+  ],
+  "runtimeSources": [
+    "functions/_lib/admin-operation-audit-http.js",
+    "functions/_lib/admin-operation-audit-reader.js",
+    "functions/_lib/auth.js",
+    "functions/_lib/d1-protected-metadata.js",
+    "functions/_lib/dropbox-client.js",
+    "functions/_lib/dropbox.js",
+    "functions/_lib/error-catalog.js",
+    "functions/_lib/error-categories.js",
+    "functions/_lib/http.js",
+    "functions/_lib/local-storage.js",
+    "functions/_lib/maono-error.js",
+    "functions/_lib/operation-audit.js",
+    "functions/_lib/organization-audit-recovery.js",
+    "functions/_lib/organization-audited-mutation.js",
+    "functions/_lib/organization-identity.js",
+    "functions/_lib/organization-lifecycle.js",
+    "functions/_lib/organization-limit-service.js",
+    "functions/_lib/organization-management-contract.js",
+    "functions/_lib/organization-management-http.js",
+    "functions/_lib/organization-management-service.js",
+    "functions/_lib/organization-name.js",
+    "functions/_lib/organization-permanent-deletion.js",
+    "functions/_lib/organization-storage-policy.js",
+    "functions/_lib/organization-storage-readiness.js",
+    "functions/_lib/organization-storage-retry.js",
+    "functions/_lib/organization-storage-telemetry.js",
+    "functions/_lib/organization-storage.js",
+    "functions/_lib/organizations.js",
+    "functions/_lib/owner-retention.js",
+    "functions/_lib/permissions.js",
+    "functions/_lib/project-lifecycle.js",
+    "functions/_lib/project-preview.js",
+    "functions/_lib/project-service.js",
+    "functions/_lib/projects.js",
+    "functions/_lib/request-schema.js",
+    "functions/api/admin/organization-management/[[path]].js",
+    "functions/api/admin/organizations/[id].js",
+    "functions/api/admin/organizations/index.js",
+    "functions/api/admin/organizations/repair-storage.js",
+    "functions/api/admin/organizations/sync-dropbox.js",
+    "workers/organization-deletion.js",
+    "workers/organization-storage-recovery.js"
+  ]
+}

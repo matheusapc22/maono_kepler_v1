@@ -158,7 +158,7 @@ test('real routes stay below Free D1 invocation budget with bounded read batches
   const f=fixture(t),original=f.env.DB;let calls=0,batchSizes=[];
   f.env.DB={...original,prepare(sql){const result=original.prepare(sql);for(const method of ['first','all','run']){const execute=result[method];result[method]=function(...args){calls++;return execute.apply(this,args);};}return result;},batch(statements){calls++;batchSizes.push(statements.length);return original.batch(statements);}};
   async function measured(label,run){calls=0;batchSizes=[];const value=await run();assert.ok(calls<50,`${label}: ${calls} D1 calls exceed Free invocation budget`);assert.ok(batchSizes.every(size=>size<=64),`${label}: oversized batch`);t.diagnostic(`${label}: ${calls} D1 calls; batches ${batchSizes.join(',')}`);return value;}
-  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE type='table'").get().n,107);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE type='table'").get().n,109);
   const p=await measured('preview',()=>f.call('/organizations/3/deletion-preview'));assert.equal(p.data.eligible,true);
   const d=await measured('start',()=>f.start());
   assert.equal((await measured('step with real Dropbox adapter',()=>f.step(d))).state,'completed');

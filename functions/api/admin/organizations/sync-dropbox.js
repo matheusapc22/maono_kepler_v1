@@ -1,3 +1,4 @@
+import { auditRequestContext } from '../../../_lib/operation-audit.js';
 import {
   errorResponse,
   errorResponseFromError,
@@ -136,6 +137,7 @@ async function upsertOrganizationFromFolder(
   env,
   folderEntry,
   correlationId,
+  auditContext = null,
 ) {
   const folderName = normalizeText(folderEntry.name);
   const folderPath = normalizeDropboxFolderPath(
@@ -161,7 +163,7 @@ async function upsertOrganizationFromFolder(
         dropboxRootPath: folderPath,
         active: true,
       },
-      { correlationId },
+      { correlationId, auditContext },
     );
 
     return {
@@ -186,7 +188,7 @@ async function upsertOrganizationFromFolder(
       dropboxRootPath: folderPath,
       active: true,
     },
-    { correlationId },
+    { correlationId, auditContext },
   );
 
   return {
@@ -403,6 +405,7 @@ export async function onRequest(context) {
         env,
         folder,
         correlationId,
+        auditRequestContext(request, user),
       );
 
       if (!result?.organization) continue;

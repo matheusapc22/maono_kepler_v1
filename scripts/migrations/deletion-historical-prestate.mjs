@@ -5,9 +5,9 @@ import {isDeepStrictEqual} from 'node:util';
 import {DELETION_SCHEMA_QUERIES,evaluateDeletionSchema} from './organization-deletion-schema-0044.mjs';
 import {recognizeDefinition} from './deletion-semantic-diagnostics.mjs';
 import {sha256Text,assertDeletionLedgerPrestate} from './production-migration-lib.mjs';
-const PROFILE='deletion-safety-historical-v1';
-const CONTRACT_PATH='scripts/migrations/references/deletion-historical-safety-v1.json';
-const CONTRACT_HASH='47f143173c8a0610bcbb17de19f3ff4d67104ab3ddf0e03a09610912de1e0b72';
+const PROFILE='deletion-safety-historical-v2';
+const CONTRACT_PATH='scripts/migrations/references/deletion-historical-safety-v2.json';
+const CONTRACT_HASH='91d3fe899ea241ce37910f0595cc4603f033d0b9774420417a178176f3effb83';
 const CANDIDATE_HASH='b04a164e85fe09d292dd8e81ac744ce4deec8927290d38cff326c77e030354fa';
 const FIXTURE='tests/fixtures/deletion-historical-safety/';
 const readDefault=path=>readFileSync(new URL('../../'+path,import.meta.url),'utf8').replace(/\r\n/g,'\n');
@@ -18,9 +18,17 @@ const snapshot=db=>Object.fromEntries(Object.entries(DELETION_SCHEMA_QUERIES).ma
 export function historicalDeletionReference(read=readDefault){
  const contractText=read(CONTRACT_PATH);demand(sha256Text(contractText)===CONTRACT_HASH,'HISTORICAL_SOURCE_DRIFT');
  const contract=JSON.parse(contractText),files={};
+ demand(contract.profileId===PROFILE&&contract.version===2&&contract.operationalApproval===false,'HISTORICAL_SOURCE_DRIFT');
  for(const [path,hash] of Object.entries(contract.sourcePins)){files[path]=read(path);demand(sha256Text(files[path])===hash,'HISTORICAL_SOURCE_DRIFT');}
  const manifest=JSON.parse(files[FIXTURE+'manifest.json']);
- for(const [key,pin] of Object.entries(manifest.sourcePins)){files[key]=read(pin.localPath);demand(sha256Text(files[key])===pin.sha256,'HISTORICAL_SOURCE_DRIFT');}
+ // Preserve the manifest's original logical source and hash. A versioned mapping
+ // identifies its immutable physical snapshot; live runtime files stay separately
+ // pinned above. Historical schema bytes are never presented as today's runtime.
+ for(const [key,pin] of Object.entries(manifest.sourcePins)){
+  const location=contract.sourceLocations[pin.localPath],path=location?.path||pin.localPath;
+  if(location)demand(location.sha256===pin.sha256&&contract.sourcePins[path]===pin.sha256,'HISTORICAL_SOURCE_DRIFT');
+  files[key]=files[path]??read(path);demand(sha256Text(files[key])===pin.sha256,'HISTORICAL_SOURCE_DRIFT');
+ }
  const canonical=new DatabaseSync(':memory:');canonical.exec(files['schema.sql'].split('-- Organization permanent deletion (migration 0044)')[0]);
  try{for(const object of manifest.objects){
   if(object.category==='canonical-source')demand(canonical.prepare('SELECT sql FROM sqlite_schema WHERE name=?').get(object.name)?.sql===object.sql,'HISTORICAL_SOURCE_DRIFT');
@@ -61,7 +69,7 @@ function maskedMetadata(metadata,reference){
  return out;
 }
 export function evaluateHistoricalDeletionPrestate(observed,context={},injected={}){
- const base={profileId:PROFILE,version:1,status:'blocked',scope:'deletion-safety-prestate-evidence-only',compatible:false,readyForAuthorization:false,approvalEligible:false,guards:'planned-not-installed',candidate:{name:'0044_organization_permanent_deletion_historical.sql',sha256:CANDIDATE_HASH,genericDiscovery:false},generalDdlEquivalent:false,productionLiteralsRecovered:false,atomicDatabaseSnapshot:false,ongoingMonitoring:false,integrityObservation:'same-audit-before-metadata-reads'};
+ const base={profileId:PROFILE,version:2,status:'blocked',scope:'deletion-safety-prestate-evidence-only; no apply or reapply authority',compatible:false,readyForAuthorization:false,approvalEligible:false,guards:'planned-not-installed',candidate:{name:'0044_organization_permanent_deletion_historical.sql',sha256:CANDIDATE_HASH,genericDiscovery:false},generalDdlEquivalent:false,productionLiteralsRecovered:false,atomicDatabaseSnapshot:false,ongoingMonitoring:false,integrityObservation:'same-audit-before-metadata-reads'};
  try{
   const ref=historicalDeletionReference(injected.readSource||readDefault),report=evaluateDeletionSchema(observed);
   demand(context.integrity?.quickCheck==='ok'&&context.integrity.quickCheckOk===true&&context.integrity.foreignKeyCheckOk===true&&Array.isArray(context.integrity.foreignKeyViolations)&&context.integrity.foreignKeyViolations.length===0,'HISTORICAL_INTEGRITY_REQUIRED');
@@ -79,7 +87,7 @@ export function evaluateHistoricalDeletionPrestate(observed,context={},injected=
    }else demand(report.objects.find(o=>o.name===object.name)?.definitionDigest===ref.report.objects.find(o=>o.name===object.name)?.definitionDigest,'HISTORICAL_VERSIONED_DEFINITION_DRIFT');
   }
   demand(isDeepStrictEqual(maskedMetadata(report.structuralMetadata,ref),maskedMetadata(ref.report.structuralMetadata,ref)),'HISTORICAL_METADATA_DRIFT');
-  const evidence={...base,status:'matched-prestate',canonicalCompatible:report.compatible,contractSha256:CONTRACT_HASH,sourceDigest:ref.sourceDigest,sourcePins:ref.contract.sourcePins,observedSnapshotDigest:report.metadataDigest,snapshotDigests:context.snapshotDigests,gitSha:context.gitSha,pendingDigest:context.pendingDigest,ledgerDigest:digest(context.ledger),integrity:{quickCheck:'ok',foreignKeyViolations:0},applicationObjects:530,plannedGuardCount:147,plannedGuards:ref.planned,scalarDefaultSlots:Object.keys(ref.contract.slots),propertyContract:'seven-fixed-scalar-slots-with-exact-remaining-schema-and-super-admin-runtime',applicationRowsRead:false};
+  const evidence={...base,status:'matched-prestate',canonicalCompatible:report.compatible,contractSha256:CONTRACT_HASH,sourceDigest:ref.sourceDigest,sourcePins:ref.contract.sourcePins,sourceLocations:ref.contract.sourceLocations,observedSnapshotDigest:report.metadataDigest,snapshotDigests:context.snapshotDigests,gitSha:context.gitSha,pendingDigest:context.pendingDigest,ledgerDigest:digest(context.ledger),integrity:{quickCheck:'ok',foreignKeyViolations:0},applicationObjects:530,plannedGuardCount:147,plannedGuards:ref.planned,scalarDefaultSlots:Object.keys(ref.contract.slots),propertyContract:'seven-fixed-scalar-slots-with-exact-remaining-schema-and-super-admin-runtime',applicationRowsRead:false};
   demand(report.compatible===false,'HISTORICAL_NOT_CANONICAL_FALLBACK');
   return {...evidence,evidenceDigest:digest(evidence)};
  }catch(error){

@@ -1,6 +1,7 @@
 import {automaticDeletionEnabled, automaticDeletionBlocked, deletionEnabled, stepDeletion} from '../functions/_lib/organization-permanent-deletion.js';
 import {check} from '../functions/_lib/organization-management-contract.js';
 import {requirePermission} from '../functions/_lib/permissions.js';
+import {operationAuditEnabled,requireOperationAuditReady,operationAuditIdentity,auditFrameStatement} from '../functions/_lib/operation-audit.js';
 
 // Re-read the original author before each destructive boundary. Browser sessions
 // are not kept alive or impersonated; the original explicit request is durable.
@@ -12,6 +13,7 @@ export async function authorizeDeletionActor(env, actorId, organizationId=null) 
 
 export async function runScheduledOrganizationDeletion(env,{step=stepDeletion,authorize=authorizeDeletionActor}={}) {
   if(!automaticDeletionEnabled(env)||!await deletionEnabled(env))return {executed:false,reason:'FEATURE_DISABLED'};
+  if(operationAuditEnabled(env))await requireOperationAuditReady(env);
   // No retroactive adoption: only new, atomically enrolled requests are eligible.
   // Existing D1 leases fence concurrent ticks/manual recovery. Conservative retry
   // budget; only explicit provider failures retry, all other failures stop.
@@ -38,8 +40,15 @@ export async function runScheduledOrganizationDeletion(env,{step=stepDeletion,au
       // Failure before the core lease (e.g. revoked author). Never clear another
       // executor's lease, and never expose provider payloads in logs or status.
       const code=error?.code==='ORGANIZATION_DELETE_ACTOR_REVOKED'?error.code:'ORGANIZATION_DELETE_AUTOMATIC_BLOCKED';
-      await env.DB.prepare(`UPDATE organization_deletions SET error_code=?,updated_at=CURRENT_TIMESTAMP
-        WHERE id=? AND state<>'completed' AND (lease_token IS NULL OR julianday(lease_until)<julianday('now'))`).bind(code,row.id).run();
+      const update=env.DB.prepare(`UPDATE organization_deletions SET error_code=?,updated_at=CURRENT_TIMESTAMP
+        WHERE id=? AND state<>'completed' AND (lease_token IS NULL OR julianday(lease_until)<julianday('now'))`).bind(code,row.id);
+      if(operationAuditEnabled(env)) {
+        const context=await operationAuditIdentity(env,{id:row.actor_id},row.id,null,{executorKind:'worker',origin:'worker:organization-deletion',originalActorId:row.actor_id});
+        await env.DB.batch([auditFrameStatement(env,{source:'organization_deletion_worker',sourceEventId:`${row.id}:${row.attempts}:${code}`,operationId:row.id,
+          eventType:'authorization_blocked',outcome:'blocked',code,context,organization:{id:row.organization_id,name:row.name,slug:row.slug},action:'organization.permanent_delete',
+          details:{checkpoint:'worker_authorization',attempt:row.attempts}},
+          {sql:"EXISTS(SELECT 1 FROM organization_deletions WHERE id=? AND state<>'completed' AND (lease_token IS NULL OR julianday(lease_until)<julianday('now')))",args:[row.id]}),update]);
+      } else await update.run();
       results.push({id:row.id,errorCode:code});
     }
   }

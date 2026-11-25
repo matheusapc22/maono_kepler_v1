@@ -3,10 +3,11 @@ import {classifyProtectedMetadata, protectedMetadataName} from '../../functions/
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { PRODUCTION_DATABASE_NAME, runWranglerJson, rowsFromD1Json, gateError, sha256Text } from './production-migration-lib.mjs';
+import { ORGANIZATION_SCHEMA_SNAPSHOT } from './organization-schema-snapshot.mjs';
 
 export const DELETION_MIGRATION = '0044_organization_permanent_deletion.sql';
 const SOURCE_HASHES = Object.freeze({
-  'schema.sql':'7016dbc64d6502af557bc9fd5cab9cc2be71770a1d56ff74d5c88219d61026fc',
+  [ORGANIZATION_SCHEMA_SNAPSHOT.path]:ORGANIZATION_SCHEMA_SNAPSHOT.sha256,
   'migrations/0044_organization_permanent_deletion.sql':'cde2cbad6ded662faf004eac176309b3003641ec2f0714eda06b890127fb3aba',
 });
 // Fixed metadata-only queries: never select application rows or interpolate names.
@@ -74,7 +75,7 @@ function validate(snapshot) {
 const readSource = path => readFileSync(new URL('../../'+path,import.meta.url),'utf8').replace(/\r\n/g,'\n');
 export function deletionSchemaReference(read=readSource){
   const source=Object.fromEntries(Object.entries(SOURCE_HASHES).map(([path,hash])=>{let text;try{text=read(path);}catch{fail('DELETION_SOURCE_DRIFT');}if(typeof text!=='string'||sha256Text(text)!==hash)fail('DELETION_SOURCE_DRIFT');return [path,text];}));
-  const parts=source['schema.sql'].split('-- Organization permanent deletion (migration 0044)');
+  const parts=source[ORGANIZATION_SCHEMA_SNAPSHOT.path].split('-- Organization permanent deletion (migration 0044)');
   if(parts.length!==2)fail('DELETION_SOURCE_DRIFT');
   const db=new DatabaseSync(':memory:');
   try {
@@ -109,7 +110,7 @@ export function evaluateDeletionSchema(snapshot,reference=deletionSchemaReferenc
   for(const [name,want] of expected){const got=observed.get(name);if(!got||got.type!==want.type||got.tbl_name!==want.tbl_name||digest(sqlTokens(got.sql))!==digest(sqlTokens(want.sql)))mismatches.push({code:'OBJECT_DEFINITION',name});}
   for(const row of compared.objects)if(!expected.has(row.name))mismatches.push({code:'UNREVIEWED_OBJECT',name:row.name});
   for(const key of ['columns','foreignKeys','indexes','indexColumns'])if(digest(compared[key])!==digest(reference.before[key]))mismatches.push({code:'METADATA_SHAPE',name:key});
-  const retained=new Set(['organization_management_events','organization_deletions','organization_deleted_management_events']);
+  const retained=new Set(['organization_management_events','organization_deletions','organization_deleted_management_events','audit_operation_frames','organization_operation_reconciliations']);
   const direct=new Set(snapshot.columns.filter(r=>r.name==='organization_id').map(r=>r.table_name));
   for(const row of snapshot.foreignKeys)if(row.parent_table==='organizations')direct.add(row.table_name);
   const linked=new Set(['organizations',...direct]);

@@ -1237,6 +1237,7 @@ export async function requirePermission(
           decision.context?.organizationId ||
           null,
         result: "denied",
+        phase: "authorization",
         metadata: {
           reason: decision.reason,
           permission,
@@ -1267,7 +1268,9 @@ export async function requirePermission(
         decision.context?.projectId ||
         decision.context?.organizationId ||
         null,
-      result: "success",
+      // Permission is granted before the domain writes. It is not proof of a save.
+      result: "authorized",
+      phase: "authorization",
       metadata: {
         reason: decision.reason,
         permission,
@@ -1334,6 +1337,7 @@ export async function requireOrganizationPermission(
 
 export async function recordAuditLog(env, event) {
   const details = JSON.stringify({
+    ...(event.phase === "authorization" ? { auditVersion: 2, phase: "authorization" } : {}),
     organizationId: event.organizationId || null,
     resourceType: event.resourceType || null,
     resourceId: event.resourceId || null,

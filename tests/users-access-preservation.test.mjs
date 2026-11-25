@@ -1,4 +1,5 @@
 import { restoreOrganizationManagementDomain } from './helpers/organization-management-preservation.mjs';
+import { restoreOperationAuditReceipts } from './helpers/operation-audit-preservation.mjs';
 import { isRegionAccessDenied, isRegionAuthenticationError } from "../src/components/loading/region-loading-policy.ts";
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -42,7 +43,7 @@ test('redesigned overview preserves independently pinned helpers, gates, filters
 });
 for (const [path, expected] of Object.entries(usersAccessBaseline.unchangedFiles)) {
   test(`domain source preserves 158e2b3 outside the reviewed password fix: ${path}`, () => {
-    let value=restorePasswordManagement(path, restoreOrganizationManagementDomain(path, restoreLintModuleExtraction(path, read(path))));
+    let value=restorePasswordManagement(path, restoreOrganizationManagementDomain(path, restoreLintModuleExtraction(path, restoreOperationAuditReceipts(path, read(path)))));
     if(path === "src/lib/api.ts") {
       const marker="export function listOrganizationFiles(";
       assert.equal(value.split(marker).length,2);
