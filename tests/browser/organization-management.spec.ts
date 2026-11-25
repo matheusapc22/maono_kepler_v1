@@ -296,10 +296,11 @@ test('duplo clique na confirmação produz uma única exclusão',async({page})=>
   expect(state.mutations.filter(r=>r.path==='/organizations/1/permanent-delete')).toHaveLength(1);
 });
 
-test('permissão revogada ao abrir exclusão remove dados e impede confirmação',async({page})=>{
+for(const status of [401,403])test(`acesso ${status} ao abrir exclusão remove dados e impede confirmação`,async({page})=>{
   const state=await deletionSetup(page);
   await expect(page.getByRole('button',{name:'Excluir permanentemente organização',exact:true})).toBeEnabled();
-  await page.route('**/api/admin/organization-management/organizations/1/deletion-preview',route=>route.fulfill({status:403,json:{ok:false,error:{code:'MANAGEMENT_SUPER_ADMIN_REQUIRED',message:'Acesso negado'}}}));
+  await expect(page.getByRole('dialog').getByLabel('Nome',{exact:true})).toHaveValue('Organização Sintética Alfa');
+  await page.route('**/api/admin/organization-management/organizations/1/deletion-preview',route=>route.fulfill({status,json:{ok:false,error:{code:status===401?'UNAUTHORIZED':'MANAGEMENT_SUPER_ADMIN_REQUIRED',message:'Acesso negado'}}}));
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await expect(page.getByRole('link',{name:'Entrar novamente'})).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -455,30 +456,43 @@ test('falha no acompanhamento não indica falha de exclusão e consulta permite 
 });
 
 
-test('acompanhamento automático invalida painel ao perder autorização',async({page})=>{
+for(const status of [401,403])test(`acompanhamento automático invalida formulário aberto após acesso ${status}`,async({page})=>{
   const state=await deletionSetup(page,{automatic:true});
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
   await expect(page.getByRole('dialog').locator('.mm-universal-loader')).toBeVisible();
-  await page.route('**/deletions/delete-synthetic-1',route=>route.fulfill({status:403,json:{ok:false,error:{code:'FORBIDDEN',message:'Sem acesso'}}}));
+  await expect(page.getByLabel('Digite EXCLUIR PERMANENTEMENTE')).toHaveValue('EXCLUIR PERMANENTEMENTE');
+  await page.route('**/deletions/delete-synthetic-1',route=>route.fulfill({status,json:{ok:false,error:{code:status===401?'UNAUTHORIZED':'FORBIDDEN',message:'Sem acesso'}}}));
   await expect(page.getByRole('dialog')).toHaveCount(0,{timeout:10000});
+  await expect(page.getByLabel('Digite EXCLUIR PERMANENTEMENTE')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Organização Sintética Alfa',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('link',{name:'Entrar novamente'})).toBeVisible();
+  await expect(page.getByText('Organização Excluída',{exact:true})).toHaveCount(0);
   expect(state.mutations).toHaveLength(1);
 });
 
 test('erro de exclusão expira após dez segundos sem remover a recuperação',async({page})=>{
-  await deletionSetup(page,{stepFailure:true});
+  const state=await deletionSetup(page,{stepFailure:true});
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await freezeClock(page);
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
-  await expect(page.locator('.aog-deletion-error-toast')).toBeVisible();
-  await expect(page.locator('.aog-deletion-error-toast')).toHaveCSS('top','24px');
+  const dialog=page.getByRole('dialog'),toast=page.locator('.aog-deletion-error-toast'),recover=page.getByRole('button',{name:'Retomar exclusão',exact:true});
+  await expect(toast).toBeVisible();
+  await expect(toast).toHaveCSS('top','24px');await expect(toast).toHaveCSS('right','24px');
   await expect(page.getByRole('button',{name:'Fechar aviso de erro'})).toBeVisible();
-  await expect(page.locator('.aog-deletion-error-toast')).toHaveCount(0,{timeout:12000});
-  await expect(page.getByRole('button',{name:'Retomar exclusão',exact:true})).toBeEnabled();
+  const mutations=state.mutations.length;
+  await page.clock.fastForward(9999);
+  await expect(toast).toBeVisible();await expect(dialog).toBeVisible();await expect(recover).toBeEnabled();
+  await page.clock.fastForward(1);
+  await expect(toast).toHaveCount(0);
+  await expect(dialog).toBeVisible();await expect(recover).toBeEnabled();
   await expect(page.getByText('A conclusão não foi confirmada.',{exact:false})).toBeVisible();
-  await page.getByRole('button',{name:'Retomar exclusão',exact:true}).click();
-  await expect(page.locator('.aog-deletion-error-toast')).toBeVisible();
+  expect(state.mutations).toHaveLength(mutations);
+  await recover.click();
+  await expect(toast).toBeVisible();
+  expect(state.mutations.filter(value=>value.path.endsWith('/permanent-delete'))).toHaveLength(1);
 });
 
 test('falha de sessão após exclusão mantém sucesso e recupera continuidade na primeira consulta',async({page})=>{
@@ -486,19 +500,31 @@ test('falha de sessão após exclusão mantém sucesso e recupera continuidade n
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await page.route('**/api/session',route=>route.fulfill({status:503,json:{error:'unavailable'}}));
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
+  await freezeClock(page);
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
   await expect(page.getByText('Organização Excluída',{exact:true})).toBeVisible();
-  await expect(page.locator('.aog-deletion-error-toast')).toContainText('A exclusão foi concluída');
-  await page.getByRole('button',{name:'Fechar aviso de erro'}).click();
-  await expect(page.locator('.aog-deletion-error-toast')).toHaveCount(0);
+  const dialog=page.getByRole('dialog'),toast=page.locator('.aog-deletion-error-toast');
+  await expect(toast).toContainText('A exclusão foi concluída');
   await expect(page.getByText('Sessão desatualizada. Recarregue a página antes de continuar.',{exact:true})).toBeVisible();
   await expect(page.getByLabel('Selecionar organização',{exact:true})).toBeDisabled();
   let recoveredSessions=0;
-  await page.route('**/api/session',route=>{
-    recoveredSessions++;
+  let release!:()=>void,entered!:()=>void;
+  const pending=new Promise<void>(resolve=>{release=resolve;}),started=new Promise<void>(resolve=>{entered=resolve;});
+  await page.route('**/api/session',async route=>{
+    recoveredSessions++;entered();await pending;
     return route.fulfill({json:{authenticated:true,user:{id:1,name:'Operador sintético',email:'qa@example.test',role:'super_admin',activeOrganizationId:2},projects:[],organizations:[],activeOrganization:null}});
   });
   await page.getByRole('button',{name:'Consultar organizações',exact:true}).click();
+  await started;
+  await expect(dialog.locator('.aog-dialog-loading-overlay')).toBeVisible();
+  await expect(dialog.locator('.aog-dialog-body')).toHaveAttribute('inert','');
+  await expectToastAboveDialog(page,toast);
+  await page.screenshot({path:test.info().outputPath('error-toast-with-overlay.png')});
+  await page.getByRole('button',{name:'Fechar aviso de erro'}).click();
+  await expect(toast).toHaveCount(0);
+  await expect(dialog).toBeVisible();await expect(dialog.locator('.aog-dialog-loading-overlay')).toBeVisible();
+  await expect(page.getByText('Sessão desatualizada. Recarregue a página antes de continuar.',{exact:true})).toBeVisible();
+  release();
   await expect(page.getByText('Sessão desatualizada. Recarregue a página antes de continuar.',{exact:true})).toHaveCount(0);
   await expect(page.getByLabel('Selecionar organização',{exact:true})).toBeEnabled();
   await expect(page.getByRole('dialog').locator('.mm-universal-loader')).toHaveCount(0);
@@ -549,14 +575,19 @@ for(const outcome of ['succeeded','failed','partial','pending'] as const){
   test(`pausa ${outcome}: formulário persistente e recuperação preservada`,async({page},info)=>{
     await setup(page);
     let currentOrg={id:1,name:'Organização Sintética Alfa',slug:'qa-alfa',description:'Dados de teste',active:true,version:0,plan:'free',owner:null,projectCount:2,userCount:2,fileCount:1,storageStatus:'READY'};
-    await page.route('**/api/admin/organization-management/organizations/1',route=>route.fulfill({json:{ok:true,organization:currentOrg,policy:{plan:'free',projects:5,storageMb:500,projectOverride:null,used:2,reserved:0,remaining:3,storageUsedMb:1,projectQuotaEnforced:true,informational:[]}}}));
+    let refreshing=false,releaseDetail!:()=>void,detailEntered!:()=>void;
+    const pendingDetail=new Promise<void>(resolve=>{releaseDetail=resolve;}),detailStarted=new Promise<void>(resolve=>{detailEntered=resolve;});
+    await page.route('**/api/admin/organization-management/organizations/1',async route=>{
+      if(refreshing){detailEntered();await pendingDetail;}
+      return route.fulfill({json:{ok:true,organization:currentOrg,policy:{plan:'free',projects:5,storageMb:500,projectOverride:null,used:2,reserved:0,remaining:3,storageUsedMb:1,projectQuotaEnforced:true,informational:[]}}});
+    });
     let release!:()=>void,entered!:()=>void;
     const pending=new Promise<void>(resolve=>{release=resolve;}),started=new Promise<void>(resolve=>{entered=resolve;});
     const operation={id:'pause-synthetic',kind:'pause',createdAt:'2026-01-01',done:false,items:[{index:0,label:'Organização Sintética Alfa',state:'pending',attempts:0,result:null,error:null,code:null,retryable:false}]};
     await page.route('**/api/admin/organization-management/operations',route=>route.fulfill({json:{ok:true,...operation}}));
     await page.route('**/api/admin/organization-management/operations/pause-synthetic/step',async route=>{
       entered();await pending;
-      if(outcome==='succeeded')currentOrg={...currentOrg,active:false,version:1};
+      if(outcome==='succeeded'){currentOrg={...currentOrg,active:false,version:1};refreshing=true;}
       await route.fulfill({json:{ok:true,...operation,done:outcome!=='pending',items:[{...operation.items[0],state:outcome,result:outcome==='succeeded'?{id:1}:null,retryable:outcome==='failed'||outcome==='partial',error:outcome==='failed'?'Falha sintética recuperável':null}]}});
     });
     await page.getByRole('button',{name:'Organização Sintética Alfa',exact:true}).click();
@@ -573,9 +604,21 @@ for(const outcome of ['succeeded','failed','partial','pending'] as const){
     await expect(dialog.getByLabel('Nome',{exact:true})).toBeVisible();
     await expect(dialog.getByLabel('Nome',{exact:true})).toHaveValue('Rascunho de gestão');
     await expect(dialog.locator('.aog-dialog-body')).toHaveAttribute('inert','');
-    if(outcome==='succeeded')await page.screenshot({path:info.outputPath('pause-loading.png'),fullPage:true});
+    if(outcome==='succeeded'){
+      await freezeClock(page);
+      await expect(dialog.getByRole('heading',{name:'Organização Sintética Alfa',exact:true})).toBeFocused();
+      await page.screenshot({path:info.outputPath('pause-loading.png'),fullPage:true});
+    }
     release();
     if(outcome==='succeeded'){
+      await detailStarted;
+      await expectToastAboveDialog(page,page.locator('.aog-deletion-toast'));
+      await expect(dialog.locator('.aog-dialog-loading-overlay')).toBeVisible();
+      // The same form is still loading: only the toast has appeared, so focus must not move.
+      await expect(dialog.getByRole('heading',{name:'Organização Sintética Alfa',exact:true})).toBeFocused();
+      await expect(dialog.getByLabel('Nome',{exact:true})).toHaveValue('Rascunho de gestão');
+      await page.screenshot({path:info.outputPath('success-toast-with-overlay.png'),fullPage:true});
+      releaseDetail();
       await expect(dialog).toBeVisible();
       await expect(dialog.locator('.mm-universal-loader')).toHaveCount(0);
       await expect(dialog.getByLabel('Nome',{exact:true})).toHaveValue('Rascunho de gestão');
@@ -776,7 +819,10 @@ async function expectCenteredDialog(page:Page){
 }
 async function expectToastAboveDialog(page:Page,toast:Locator){
   await expect(toast).toBeVisible();await expect(toast).toBeInViewport();
-  const bounds=await dialogBounds(toast);
+  const bounds=await dialogBounds(toast),viewport=page.viewportSize()!;
+  expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.x+bounds.width).toBeLessThanOrEqual(viewport.width+1);
+  expect(bounds.y+bounds.height).toBeLessThanOrEqual(viewport.height+1);
   expect(await page.evaluate(({x,y})=>Boolean(document.elementFromPoint(x,y)?.closest('.aog-deletion-toast,.aog-deletion-error-toast')),{x:bounds.x+bounds.width/2,y:bounds.y+bounds.height/2})).toBe(true);
   expect(await toast.evaluate(element=>Boolean(element.closest('dialog[open]'))&&!element.closest('[inert]'))).toBe(true);
 }
@@ -819,6 +865,8 @@ for(const width of [1280,1440,390]){
     await expect(page.getByRole('heading',{name:'Continuar gestão',exact:true})).toBeVisible();
     await expect(dialog).toBeVisible();await expect(dialog.locator('.mm-universal-loader')).toHaveCount(0);
     await expectToastAboveDialog(page,page.locator('.aog-deletion-toast'));
+    await expect(page.locator('.aog-deletion-toast')).toHaveCSS('bottom','24px');
+    await expect(page.locator('.aog-deletion-toast')).toHaveCSS('right','24px');
     await expectCenteredDialog(page);expect(state.deletedDetailReads()).toBe(0);
     await page.screenshot({path:info.outputPath(`deletion-destination-${width}.png`)});
     expect(state.errors).toEqual([]);
@@ -871,6 +919,30 @@ test('falha na prévia mantém rascunho e erro utilizável no topo do modal aber
   await page.unroute('**/api/admin/organization-management/organizations/1/deletion-preview');
   await trigger.click();await expect(page.getByLabel('Digite EXCLUIR PERMANENTEMENTE')).toBeVisible();
   expect(state.mutations).toEqual([]);expect(state.errors).toEqual([]);
+});
+
+test('aviso de erro aparece sem tirar o foco do formulário que permanece aberto',async({page})=>{
+  const state=await setup(page);
+  let release!:()=>void,entered!:()=>void;
+  const pending=new Promise<void>(resolve=>{release=resolve;}),started=new Promise<void>(resolve=>{entered=resolve;});
+  await page.route('**/api/admin/organization-management/organizations/1/documents',async route=>{
+    entered();await pending;
+    return route.fulfill({status:503,json:{ok:false,error:{code:'UNAVAILABLE',message:'Indisponível'}}});
+  });
+  await page.getByRole('button',{name:'Organização Sintética Alfa',exact:true}).click();
+  await page.getByRole('button',{name:'Documentos',exact:true}).click();await started;
+  const dialog=page.getByRole('dialog'),control=dialog.getByRole('button',{name:'Abrir esta organização em Projetos',exact:true});
+  await expect(dialog.getByText('Carregando dados da organização…',{exact:true})).toBeVisible();
+  await expect(dialog.locator('.aog-dialog-loading-overlay')).toHaveCount(0);
+  await control.focus();await expect(control).toBeFocused();
+  const node=await control.elementHandle(),currentUrl=page.url();
+  // The destination tab and focus have settled before releasing this read failure.
+  release();
+  await expectToastAboveDialog(page,page.locator('.aog-deletion-error-toast'));
+  await expect(control).toBeFocused();expect(await node!.evaluate(element=>element.isConnected)).toBe(true);
+  await expect(dialog).toBeVisible();await expect(page).toHaveURL(currentUrl);
+  await expect(dialog.locator('.aog-dialog-loading-overlay')).toHaveCount(0);
+  expect(state.writes).toEqual([]);expect(state.errors).toEqual([]);
 });
 
 test('conclusão permite abrir outra organização na mesma janela',async({page})=>{
@@ -932,14 +1004,21 @@ test('conflito de versão conserva rascunhos e consulta explícita não os apaga
   });
   await page.getByRole('button',{name:'Salvar dados',exact:true}).click();
   await expectToastAboveDialog(page,page.locator('.aog-deletion-error-toast'));
+  await expect(page.locator('.aog-deletion-error-toast')).toContainText('Atualize a página e tente novamente.');
   await expect(name).toHaveValue('Meu rascunho local');await expect(reason).toHaveValue('Justificativa que deve continuar');
-  await page.route('**/api/admin/organization-management/organizations/1',route=>route.fulfill({json:{ok:true,organization:{id:1,name:'Nome atualizado no servidor',slug:'qa-alfa',description:'Descrição atualizada no servidor',active:true,version:1,plan:'free',owner:null,projectCount:2,userCount:2,fileCount:1,storageStatus:'READY'},policy:{plan:'free',projects:5,storageMb:500,projectOverride:null,used:2,reserved:0,remaining:3,storageUsedMb:1,projectQuotaEnforced:true,informational:[]}}}));
+  expect(writes).toBe(1);
+  let detailReads=0;
+  await page.route('**/api/admin/organization-management/organizations/1',route=>{
+    detailReads++;
+    return route.fulfill({json:{ok:true,organization:{id:1,name:'Nome atualizado no servidor',slug:'qa-alfa',description:'Descrição atualizada no servidor',active:true,version:1,plan:'free',owner:null,projectCount:2,userCount:2,fileCount:1,storageStatus:'READY'},policy:{plan:'free',projects:5,storageMb:500,projectOverride:null,used:2,reserved:0,remaining:3,storageUsedMb:1,projectQuotaEnforced:true,informational:[]}}});
+  });
+  await expect(page.getByRole('button',{name:'Consultar versão atual',exact:true})).toBeEnabled();expect(detailReads).toBe(0);
   page.once('dialog',dialog=>dialog.accept());
   await page.getByRole('button',{name:'Consultar versão atual',exact:true}).click();
   await expect(page.getByText('Versão de edição: 1.',{exact:false})).toBeVisible();
   await expect(name).toHaveValue('Meu rascunho local');await expect(reason).toHaveValue('Justificativa que deve continuar');
   await expect(page.getByLabel('Descrição',{exact:true})).toHaveValue('Descrição atualizada no servidor');
-  expect(writes).toBe(1);await expect(page.getByRole('dialog')).toBeVisible();
+  expect(detailReads).toBe(1);expect(writes).toBe(1);await expect(page.getByRole('dialog')).toBeVisible();
 });
 
 for(const invalid of ['identity','contradiction','confirmation','version'] as const){

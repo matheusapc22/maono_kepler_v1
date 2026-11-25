@@ -54,6 +54,46 @@ async function fill(page:Page){
   await expect(dialog.getByRole('button',{name:'Criar organização',exact:true})).toBeEnabled();
   return dialog;
 }
+
+async function expectCenteredDialog(page:Page){
+  const bounds=await page.getByRole('dialog').boundingBox(),viewport=page.viewportSize()!;
+  expect(bounds).not.toBeNull();
+  expect(Math.abs(bounds!.x+bounds!.width/2-viewport.width/2)).toBeLessThanOrEqual(1);
+  expect(Math.abs(bounds!.y+bounds!.height/2-viewport.height/2)).toBeLessThanOrEqual(1);
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(viewport.width+1);
+  expect(bounds!.y+bounds!.height).toBeLessThanOrEqual(viewport.height+1);
+}
+
+for(const width of [1280,390])test(`criação ${width}px mantém centro e permite cancelar voluntariamente sem cadastrar`,async({page},info)=>{
+  await page.setViewportSize({width,height:844});
+  const state=await setup(page),dialog=page.getByRole('dialog'),trigger=page.getByRole('button',{name:'Nova organização',exact:false});
+  await dialog.getByLabel('Nome',{exact:true}).fill('Rascunho para descartar');
+  await expect(dialog.getByText('Nome disponível.',{exact:true})).toBeVisible();
+  await expectCenteredDialog(page);
+  await page.screenshot({path:info.outputPath(`create-dialog-centered-${width}.png`)});
+  page.once('dialog',async confirmation=>{
+    expect(confirmation.message()).toBe('Descartar as alterações não salvas?');await confirmation.dismiss();
+  });
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();await expect(dialog.getByLabel('Nome',{exact:true})).toHaveValue('Rascunho para descartar');
+  page.once('dialog',async confirmation=>{
+    expect(confirmation.message()).toBe('Descartar as alterações não salvas?');await confirmation.accept();
+  });
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);await expect(trigger).toBeFocused();
+  await expect(page).not.toHaveURL(/org_mode=/);await expect(page).toHaveURL(/org_q=filtro-preservado/);
+  await trigger.click();await expect(dialog).toBeVisible();await expectCenteredDialog(page);
+  page.once('dialog',async confirmation=>{
+    expect(confirmation.message()).toBe('Descartar as alterações não salvas?');await confirmation.accept();
+  });
+  await dialog.getByRole('button',{name:'Fechar painel',exact:true}).click();
+  await expect(dialog).toHaveCount(0);await expect(trigger).toBeFocused();
+  await expect(page).not.toHaveURL(/org_mode=/);await expect(page).toHaveURL(/org_q=filtro-preservado/);
+  expect(state.starts).toBe(0);expect(state.steps).toBe(0);
+  expect(state.requests.filter(request=>request.startsWith('POST '))).toEqual([]);
+});
+
 test('nome invalida imediatamente, ignora resposta antiga e consulta falha sem liberar criação',async({page})=>{
   await setup(page);const d=await fill(page),name=d.getByLabel('Nome',{exact:true}),submit=d.getByRole('button',{name:'Criar organização',exact:true});
   await expect(d.getByLabel('Identificador',{exact:true})).toHaveCount(0);
