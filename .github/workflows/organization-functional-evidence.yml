@@ -7,6 +7,7 @@ on:
       - 'functions/**'
       - 'scripts/acceptance/**'
       - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
       - 'tests/organization-functional-*.test.mjs'
       - 'tests/production-acceptance-operator-organization-readiness.test.mjs'
       - 'tests/helpers/organization-functional-evidence-fixture.mjs'

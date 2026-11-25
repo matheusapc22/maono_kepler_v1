@@ -93,7 +93,7 @@ test('all equivalent CI installs use the shared recovery and track its changes',
       assert.match(source, /- 'tests\/ci-browser-installation.test.mjs'/);
     }
   }
-  assert.equal(consumers, 16); // Includes the new Operation Audit browser workflow.
+  assert.equal(consumers, 17); // Includes Operation Audit and Organization Functional Evidence.
 });
 
 
@@ -247,5 +247,5 @@ test('browser installer jobs pin Ubuntu 24.04 supported by Playwright 1.55 inste
       assert.doesNotMatch(job, /^    runs-on: ubuntu-latest\s*$/m, name);
     }
   }
-  assert.equal(browserJobs, 16);
+  assert.equal(browserJobs, 17); // The evidence collector adds one compiled Chromium job.
 });
