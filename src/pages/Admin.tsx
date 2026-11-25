@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useSession, type MaonoUser } from "../auth/session.ts";
 import { StaticLoadingText, useInitialLoadingPresentation } from "../components/loading";
 import { AdminPageSkeleton, LoadingStatus, Skeleton } from "../components/loading/Skeleton";
@@ -109,12 +109,29 @@ const regionLabels: Record<string, string> = { projects: "Projetos", organizatio
 const AdminPage: React.FC = () => {
   const { authenticated, loading, user, logout } = useSession();
   const [params] = useSearchParams();
-  if (loading) return <AdminPageSkeleton section={params.get("section") || "overview"} />;
+  const location = useLocation();
+  const accessKey = authenticated ? JSON.stringify([user?.id, user?.role, user?.permissions, user?.deniedPermissions, user?.scopes]) : null;
+  const previousAccess = useRef<string | null>(null);
+  const accessChanged = previousAccess.current !== null && previousAccess.current !== accessKey;
+  useEffect(() => { previousAccess.current = accessKey; }, [accessKey]);
+  if (loading && !authenticated) return <AdminPageSkeleton section={params.get("section") || "overview"} />;
   if (!authenticated) return <Navigate to="/login?next=/admin" replace />;
   if (normalizeRole(user?.role) !== "super_admin") return <Navigate to="/projects" replace />;
+  if (accessChanged && ["org_id", "org_mode", "org_operation", "org_deletion", "org_delete_key"].some(name => params.has(name))) {
+    // Remounting alone would reopen the prior actor's operation from its URL.
+    const next = new URLSearchParams(params);
+    for (const name of ["org_id", "org_tab", "org_mode", "org_operation", "org_deletion", "org_delete_key"]) next.delete(name);
+    const state = { ...location.state };
+    delete state.organizationDeletionReceipt;
+    return <Navigate to={`${location.pathname}?${next}`} replace state={state} />;
+  }
   // Only access-context changes remount the workspace; ordinary refreshes keep
   // inputs, selection and revealed content intact. No prior-context data leaks.
-  const contextKey = JSON.stringify([user?.id, user?.role, user?.activeOrganizationId, user?.organizationId, user?.organization_id, user?.permissions, user?.deniedPermissions, user?.scopes]);
+  // Global organization management does not change scope when deletion selects
+  // another active organization. Still discard state on actor/authorization changes.
+  const globalOrganizations = import.meta.env.VITE_ORGANIZATION_MANAGEMENT_V1 === "true" && params.get("section") === "organizations";
+  const organizationContext = globalOrganizations ? null : [user?.activeOrganizationId, user?.organizationId, user?.organization_id];
+  const contextKey = JSON.stringify([user?.id, user?.role, organizationContext, user?.permissions, user?.deniedPermissions, user?.scopes]);
   return <AdminWorkspace key={contextKey} user={user} logout={logout} />;
 };
 

@@ -99,7 +99,7 @@ test('cadastro compilado grava organização, responsável e operação pelo han
   expect(backend.db.prepare('SELECT access_level FROM organization_users WHERE organization_id=? AND user_id=2').get(row.id).access_level).toBe('owner');
 });
 
-test('conflito real preserva rascunho e recarrega apenas após decisão do operador',async({page,backend})=>{
+test('conflito real preserva rascunho e consulta a versão atual sem apagá-lo',async({page,backend})=>{
   await page.goto('/admin?section=organizations');
   await page.getByRole('button',{name:'Offline A',exact:true}).click();
   const dialog=page.getByRole('dialog');
@@ -112,7 +112,10 @@ test('conflito real preserva rascunho e recarrega apenas após decisão do opera
   expect(backend.db.prepare('SELECT name FROM organizations WHERE id=1').get().name).toBe('Edição concorrente');
   page.once('dialog',async d=>d.accept());
   await dialog.getByRole('button',{name:'Consultar versão atual'}).click();
-  await expect(dialog.getByLabel('Nome',{exact:true})).toHaveValue('Edição concorrente');
+  const currentVersion=backend.db.prepare('SELECT management_version FROM organizations WHERE id=1').get().management_version;
+  await expect(dialog.getByText(`Versão de edição: ${currentVersion}.`,{exact:false})).toBeVisible();
+  await expect(dialog.getByLabel('Nome',{exact:true})).toHaveValue('Meu rascunho');
+  await expect(dialog.getByLabel('Justificativa',{exact:true})).toHaveValue('Correção cadastral');
 });
 
 test('pausa e reativação pela interface preservam vínculos',async({page,backend})=>{
@@ -120,17 +123,19 @@ test('pausa e reativação pela interface preservam vínculos',async({page,backe
   await page.goto('/admin?section=organizations');
   page.on('dialog',async d=>d.accept());
   await page.getByRole('button',{name:'Offline A',exact:true}).click();
-  let dialog=page.getByRole('dialog');
+  const dialog=page.getByRole('dialog'),node=await page.getByRole('dialog').elementHandle();
   await dialog.getByRole('button',{name:'Pausar organização',exact:true}).click();
   await expect(page.getByText('Organização pausada',{exact:true})).toBeVisible();
-  await expect(dialog).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'Reativar / verificar armazenamento',exact:true})).toBeVisible();
+  expect(await node!.evaluate(element=>element.isConnected)).toBe(true);
   expect(backend.db.prepare('SELECT active FROM organizations WHERE id=1').get().active).toBe(0);
   expect(backend.db.prepare('SELECT * FROM organization_users ORDER BY id').all()).toEqual(links);
-  await page.getByRole('button',{name:'Offline A',exact:true}).click();
-  dialog=page.getByRole('dialog');
   await dialog.getByRole('button',{name:'Reativar / verificar armazenamento',exact:true}).click();
   await expect(page.getByText('Organização reativada',{exact:true})).toBeVisible();
-  await expect(dialog).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'Pausar organização',exact:true})).toBeVisible();
+  expect(await node!.evaluate(element=>element.isConnected)).toBe(true);
   expect(backend.db.prepare('SELECT active FROM organizations WHERE id=1').get().active).toBe(1);
   expect(backend.db.prepare('SELECT * FROM organization_users ORDER BY id').all()).toEqual(links);
 });
@@ -180,6 +185,9 @@ test('exclusão compilada usa sessão, ACL, handler e D1 reais com Dropbox sint�
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
   await expect(page.getByText('Organização Excluída')).toBeVisible();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Continuar gestão',exact:true})).toBeVisible();
+  await expect(page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'})).toHaveCount(0);
   expect(folderExists).toBe(false);
   expect(providerCalls.filter(path=>path==='/2/files/delete_v2')).toHaveLength(1);
   expect(backend.db.prepare('SELECT id FROM organizations WHERE id=3').get()).toBeUndefined();
