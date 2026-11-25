@@ -500,11 +500,12 @@ test('falha de sessão após exclusão mantém sucesso e recupera continuidade n
   await page.getByRole('button',{name:'Excluir permanentemente organização',exact:true}).click();
   await page.route('**/api/session',route=>route.fulfill({status:503,json:{error:'unavailable'}}));
   await page.getByRole('textbox',{name:'Digite EXCLUIR PERMANENTEMENTE'}).fill('EXCLUIR PERMANENTEMENTE');
-  await freezeClock(page);
+  await page.clock.install();
   await page.getByRole('button',{name:'Confirmar exclusão permanente',exact:true}).click();
   await expect(page.getByText('Organização Excluída',{exact:true})).toBeVisible();
   const dialog=page.getByRole('dialog'),toast=page.locator('.aog-deletion-error-toast');
   await expect(toast).toContainText('A exclusão foi concluída');
+  await freezeClock(page,true);
   await expect(page.getByText('Sessão desatualizada. Recarregue a página antes de continuar.',{exact:true})).toBeVisible();
   await expect(page.getByLabel('Selecionar organização',{exact:true})).toBeDisabled();
   let recoveredSessions=0;
