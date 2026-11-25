@@ -116,7 +116,7 @@ test('existing canonical commit, binding and pending-deploy gates still apply',a
   assert.equal(p.baseUrl,PRODUCTION_APP_ORIGIN);
 });
 
-async function invoke(t,mode,f) {
+async function invoke(t,mode,f,runnerContext={}) {
   const root=resolve(tmpdir()),dir=await mkdtemp(join(root,'maono-org-readiness-test-'));
   t.after(async()=>{
     assert.equal(dirname(dir),root);assert.ok(basename(dir).startsWith('maono-org-readiness-test-'));
@@ -124,7 +124,7 @@ async function invoke(t,mode,f) {
   });
   const path=join(dir,'report.json');
   const code=await main(['--mode',mode,'--suite',manifest.id,'--organization-id','9','--expected-commit',sha,'--report',path],
-    {MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN:'SYNTHETIC_TOKEN'},{fetchImpl:f.fetchImpl});
+    {MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN:'SYNTHETIC_TOKEN',...runnerContext},{fetchImpl:f.fetchImpl});
   return {code,report:JSON.parse(await readFile(path,'utf8'))};
 }
 
@@ -138,6 +138,38 @@ test('operator preflight performs only two control-plane GETs and exports explic
   assert.equal(f.calls.length,2);
   assert.equal(JSON.stringify(report).includes('SYNTHETIC_TOKEN'),false);
   assert.equal(JSON.stringify(report).includes('NEVER_EXPORT'),false);
+});
+
+for (const attempt of ['1','2']) test('read-only Organization preflight binds its actual workflow attempt '+attempt,async t=>{
+  const f=fixture();
+  const {code,report}=await invoke(t,'preflight',f,{GITHUB_RUN_ID:'12345678901234567890',GITHUB_RUN_ATTEMPT:attempt});
+  assert.equal(code,0);
+  assert.equal(report.workflowRunId,'12345678901234567890');
+  assert.equal(report.workflowRunAttempt,Number(attempt));
+  assert.equal(f.calls.length,2);
+  assert.equal(report.acceptanceExecuted,false);
+  assert.equal(report.writesPerformed,false);
+  assert.equal(report.suitePreflight.functionalAcceptanceExecuted,false);
+  assert.equal(report.suitePreflight.rolloutAuthorized,false);
+  assert.equal(JSON.stringify(report).includes('SYNTHETIC_TOKEN'),false);
+});
+
+for (const [label,runnerContext] of [
+  ['missing',{}],
+  ['partial',{GITHUB_RUN_ID:'123'}],
+  ['trailing newline',{GITHUB_RUN_ID:'123\n',GITHUB_RUN_ATTEMPT:'1'}],
+  ['noncanonical attempt',{GITHUB_RUN_ID:'123',GITHUB_RUN_ATTEMPT:'01'}],
+  ['secret-like value',{GITHUB_RUN_ID:'PRIVATE_NOT_A_RUN_ID',GITHUB_RUN_ATTEMPT:'1'}],
+]) test('preflight does not invent provenance for '+label+' runner context',async t=>{
+  const f=fixture();
+  const {code,report}=await invoke(t,'preflight',f,runnerContext);
+  assert.equal(code,0);
+  assert.equal(Object.hasOwn(report,'workflowRunId'),false);
+  assert.equal(Object.hasOwn(report,'workflowRunAttempt'),false);
+  assert.equal(JSON.stringify(report).includes('PRIVATE_NOT_A_RUN_ID'),false);
+  assert.equal(report.acceptanceExecuted,false);
+  assert.equal(report.writesPerformed,false);
+  assert.equal(f.calls.length,2);
 });
 for (const mode of ['run','closure']) test('operator refuses '+mode+' before any network request',async t=>{
   const f=fixture();
