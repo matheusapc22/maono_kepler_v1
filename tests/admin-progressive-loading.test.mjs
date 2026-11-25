@@ -277,6 +277,12 @@ test('Admin workspace extraction preserves the complete pinned predecessor and r
     ['sum + Number(org.fileCount || 0)', 'sum + Number(org.fileCount || 1)'],
     ['onRefresh={refreshAdminData}', 'onRefresh={async () => {}}'],
     ['retryable: !denied && presentation.retryable === true', 'retryable: presentation.retryable === true'],
+    ['loading && !authenticated', 'loading && authenticated'],
+    ['const globalOrganizations = import.meta.env.VITE_ORGANIZATION_MANAGEMENT_V1 === "true" && params.get("section") === "organizations";', 'const globalOrganizations = true;'],
+    ['user?.role, organizationContext, user?.permissions', 'user?.role, organizationContext'],
+    ['if (accessChanged && ["org_id"', 'if (false && ["org_id"'],
+    ['delete state.organizationDeletionReceipt;', 'void state.organizationDeletionReceipt;'],
+
   ]) {
     const changed = admin.replace(before, after);
     assert.notEqual(changed, admin, before);
@@ -361,4 +367,66 @@ test('Admin loading announcements distinguish first partial/held results from re
   assert.equal(refreshing({ projects: ready, organizations: ready, users: ready }, held, held, held), false, 'fast ready data still in initial presentation is not updating');
   assert.equal(refreshing({ projects: updating, organizations: ready, users: ready }, shown, shown, shown), true, 'a real refresh of mounted data is updating');
   assert.equal(refreshing({ projects: ready, organizations: ready, users: updating }, shown, shown, shown), true);
+});
+
+
+function renderAdminBoundary({authenticated=true,loading=false,user,section='organizations',enabled=true,query={},locationState=null,accessRef={current:null},effects=[]}={}) {
+  const start=admin.indexOf('const AdminPage: React.FC = '),end=admin.indexOf('\n\nfunction AdminWorkspace',start);
+  assert.ok(start>=0&&end>start);
+  const {code}=transformSync(admin.slice(start,end),{loader:'tsx',format:'cjs',target:'es2022',jsxFactory:'element',define:{'import.meta.env.VITE_ORGANIZATION_MANAGEMENT_V1':JSON.stringify(enabled?'true':'false')}});
+  const params=new URLSearchParams({section,...query});
+  const names=['useSession','useSearchParams','useLocation','useRef','useEffect','normalizeRole','AdminPageSkeleton','Navigate','AdminWorkspace','element'];
+  const values=[()=>({authenticated,loading,user,logout:()=>{}}),()=>[params],()=>({pathname:'/admin',search:`?${params}`,state:locationState}),()=>accessRef,effect=>effects.push(effect),role=>role,'skeleton','redirect','workspace',(type,props)=>({type,props})];
+  return new Function(...names,`${code}; return AdminPage();`)(...values);
+}
+const boundaryActor={id:1,role:'super_admin',activeOrganizationId:1,organizationId:1,organization_id:1,permissions:['admin.panel.access'],deniedPermissions:[],scopes:['admin']};
+
+test('authenticated session refresh retains global organization workspace but authentication and role loss still deny it',()=>{
+  const ready=renderAdminBoundary({user:boundaryActor});
+  const refreshing=renderAdminBoundary({user:boundaryActor,loading:true});
+  assert.equal(ready.type,'workspace');assert.equal(refreshing.type,'workspace');
+  assert.equal(refreshing.props.key,ready.props.key);
+  assert.equal(renderAdminBoundary({authenticated:false,loading:true,user:null}).type,'skeleton');
+  const anonymous=renderAdminBoundary({authenticated:false,user:null});
+  assert.equal(anonymous.type,'redirect');assert.equal(anonymous.props.to,'/login?next=/admin');
+  const revoked=renderAdminBoundary({user:{...boundaryActor,role:'viewer'},loading:true});
+  assert.equal(revoked.type,'redirect');assert.equal(revoked.props.to,'/projects');
+});
+
+test('only global organization management keeps state across active organization changes; actor and permissions still remount',()=>{
+  const first=renderAdminBoundary({user:boundaryActor});
+  const nextOrganization={...boundaryActor,activeOrganizationId:2,organizationId:2,organization_id:2};
+  assert.equal(renderAdminBoundary({user:nextOrganization}).props.key,first.props.key);
+  for(const changed of [
+    {...boundaryActor,id:2},
+    {...boundaryActor,permissions:[]},
+    {...boundaryActor,deniedPermissions:['admin.panel.access']},
+    {...boundaryActor,scopes:[]},
+  ])assert.notEqual(renderAdminBoundary({user:changed}).props.key,first.props.key);
+  for(const options of [{section:'projects'},{section:'users'},{section:'overview'},{section:'organizations',enabled:false}]){
+    assert.notEqual(renderAdminBoundary({...options,user:boundaryActor}).props.key,renderAdminBoundary({...options,user:nextOrganization}).props.key);
+  }
+});
+
+test('actor or permission transition removes resumable operation URLs and receipts before mounting another workspace',()=>{
+  const accessRef={current:null},effects=[];
+  const query={org_q:'Consulta preservada',org_status:'paused',org_page:'2',org_id:'1',org_tab:'general',org_mode:'delete',org_operation:'operation-1',org_deletion:'deletion-1',org_delete_key:'same-key'};
+  const locationState={organizationDeletionReceipt:'old-actor-proof',returnTo:'organizations'};
+  const context={query,locationState,accessRef,effects};
+  const initial=renderAdminBoundary({...context,user:boundaryActor});
+  assert.equal(initial.type,'workspace');
+  effects.splice(0).forEach(effect=>effect());
+  const activeChange=renderAdminBoundary({...context,user:{...boundaryActor,activeOrganizationId:2,organizationId:2,organization_id:2},loading:true});
+  assert.equal(activeChange.type,'workspace');assert.equal(activeChange.props.key,initial.props.key);
+  effects.splice(0).forEach(effect=>effect());
+  for(const changed of [{...boundaryActor,id:2},{...boundaryActor,permissions:[]},{...boundaryActor,deniedPermissions:['admin.panel.access']},{...boundaryActor,scopes:[]}]){
+    const result=renderAdminBoundary({...context,user:changed});
+    assert.equal(result.type,'redirect','No child can reopen the previous access context during the transition');
+    assert.equal(result.props.replace,true);
+    const destination=new URL(result.props.to,'https://qa.example.test');
+    assert.equal(destination.pathname,'/admin');
+    assert.deepEqual(Object.fromEntries(destination.searchParams),{section:'organizations',org_q:query.org_q,org_status:'paused',org_page:'2'});
+    assert.deepEqual(result.props.state,{returnTo:'organizations'});
+    assert.equal(locationState.organizationDeletionReceipt,'old-actor-proof','Router history state is copied, not mutated');
+  }
 });

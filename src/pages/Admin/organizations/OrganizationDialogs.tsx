@@ -1,29 +1,92 @@
-import {useEffect,useId,useRef,useState,type ReactNode,type KeyboardEvent} from 'react';
+import {useEffect,useId,useLayoutEffect,useRef,useState,type ReactNode,type KeyboardEvent} from 'react';
 import {createPortal} from 'react-dom';
 import {MaonoSelect} from '../../../components/selection/MaonoSelect';
 import {StaticLoadingText} from '../../../components/loading/Skeleton';
+import {UniversalLoader} from '../../../components/loading/UniversalLoader';
 import {api,dateLabel,errorText,denied,storageLabel} from './organizations-api';
 import {PLAN_LABELS,type Detail,type EventRow,type FileRow,type LimitRequest,type Operation,type OperationInput,type Person,type Plan} from './organizations-types';
 
-export function Dialog({title,children,onClose,dirty=false,busy=false,wide=false,loadingOnly=false}:{title:string;children:ReactNode;onClose:()=>void;dirty?:boolean;busy?:boolean;wide?:boolean;loadingOnly?:boolean}){
-  const ref=useRef<HTMLDialogElement>(null),heading=useId();
-  useEffect(()=>{const before=document.activeElement as HTMLElement|null,dialog=ref.current;dialog?.showModal();return()=>{dialog?.close();if(before?.isConnected)before.focus();};},[]);
-  useEffect(()=>{if(loadingOnly)ref.current?.focus();},[loadingOnly]);
+type DialogProps={
+  title:string;children:ReactNode;onClose:()=>void;dirty?:boolean;busy?:boolean;wide?:boolean;
+  loadingOnly?:boolean;loading?:boolean;loadingLabel?:string;notifications?:ReactNode;viewKey?:string;
+};
+
+/** Loading changes interactivity, never the mounted form or its layout. */
+export function Dialog({title,children,onClose,dirty=false,busy=false,wide=false,loadingOnly=false,loading=false,loadingLabel='Atualizando organização',notifications,viewKey}:DialogProps){
+  const ref=useRef<HTMLDialogElement>(null),body=useRef<HTMLDivElement>(null),contentFrame=useRef<HTMLDivElement>(null),titleRef=useRef<HTMLHeadingElement>(null),heading=useId();
+  const previous=useRef({loading:false,viewKey}),lastIdleHeight=useRef<number|null>(null),returnFocus=useRef<HTMLElement|null>(null),lastBodyFocus=useRef<HTMLElement|null>(null);
+  useLayoutEffect(()=>{
+    const before=document.activeElement as HTMLElement|null,dialog=ref.current;
+    dialog?.showModal();
+    return()=>{dialog?.close();if(before?.isConnected)before.focus({preventScroll:true});};
+  },[]);
+  useLayoutEffect(()=>{
+    const dialog=ref.current,content=body.current;if(!dialog||!content)return;
+    const prior=previous.current,changedView=prior.viewKey!==viewKey;
+    const focusTitle=()=>{(loadingOnly?contentFrame.current:titleRef.current)?.focus({preventScroll:true});};
+    if(loading&&!prior.loading){
+      const active=document.activeElement;
+      returnFocus.current=active instanceof HTMLElement&&content.contains(active)?active:lastBodyFocus.current?.isConnected&&content.contains(lastBodyFocus.current)?lastBodyFocus.current:null;
+      // Use the last rendered origin, before asynchronous data can affect its height.
+      if(lastIdleHeight.current!==null)dialog.style.height=`${lastIdleHeight.current}px`;
+    }
+    if(loading){
+      content.setAttribute('inert','');
+      if(!prior.loading||changedView)focusTitle();
+    }else{
+      content.removeAttribute('inert');
+      dialog.style.removeProperty('height');
+      if(changedView){content.scrollTop=0;lastBodyFocus.current=null;focusTitle();}
+      else if(prior.loading){
+        const target=returnFocus.current;
+        if(target?.isConnected&&!target.matches(':disabled')&&target.getClientRects().length>0)target.focus({preventScroll:true});
+        else focusTitle();
+      }
+      returnFocus.current=null;
+    }
+    if(loadingOnly)contentFrame.current?.focus({preventScroll:true});
+    previous.current={loading,viewKey};
+  },[loading,loadingOnly,viewKey]);
+  useLayoutEffect(()=>{
+    if(!loading&&ref.current?.open)lastIdleHeight.current=ref.current.getBoundingClientRect().height;
+  });
+  useLayoutEffect(()=>{
+    const dialog=ref.current;if(loading||!dialog||typeof ResizeObserver==='undefined')return;
+    const observer=new ResizeObserver(()=>{lastIdleHeight.current=dialog.getBoundingClientRect().height;});
+    observer.observe(dialog);return()=>observer.disconnect();
+  },[loading]);
+  useEffect(()=>{
+    if(!loading)return;
+    const resize=()=>{
+      const dialog=ref.current;if(!dialog)return;
+      // A changed viewport may reflow the origin; its inner scroll area must still fit.
+      dialog.style.removeProperty('height');
+      dialog.style.height=`${dialog.getBoundingClientRect().height}px`;
+    };
+    window.addEventListener('resize',resize);
+    window.visualViewport?.addEventListener('resize',resize);
+    return()=>{window.removeEventListener('resize',resize);window.visualViewport?.removeEventListener('resize',resize);};
+  },[loading]);
   function close(){if(busy)return;if(dirty&&!window.confirm('Descartar as alterações não salvas?'))return;onClose();}
   function keepFocus(event:KeyboardEvent<HTMLDialogElement>){
     if(event.key!=='Tab'||event.defaultPrevented)return;
     const dialog=ref.current;if(!dialog)return;
     const controls=[...dialog.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]')].filter(element=>element.tabIndex>=0&&!element.matches(':disabled')&&!element.closest('[inert]')&&element.getClientRects().length>0&&getComputedStyle(element).visibility!=='hidden');
     const first=controls[0],last=controls[controls.length-1],active=document.activeElement;
+    const atTitle=active===titleRef.current||active===contentFrame.current||!dialog.contains(active);
     // Native modal tab order can briefly focus BODY/chrome at its boundary.
-    if(!first){event.preventDefault();dialog.focus();}
-    else if(event.shiftKey&&(active===first||active===dialog)){event.preventDefault();last.focus();}
-    else if(!event.shiftKey&&(active===last||active===dialog)){event.preventDefault();first.focus();}
+    if(!first){event.preventDefault();(loadingOnly?contentFrame.current:titleRef.current)?.focus({preventScroll:true});}
+    else if(event.shiftKey&&(active===first||atTitle)){event.preventDefault();last.focus();}
+    else if(!event.shiftKey&&(active===last||atTitle)){event.preventDefault();first.focus();}
   }
 
-  return createPortal(<dialog ref={ref} tabIndex={-1} onKeyDown={keepFocus} className={`admin-organizations-dialog${wide?' is-wide':''}${loadingOnly?' is-processing':''}`} aria-labelledby={heading} onCancel={e=>{e.preventDefault();close();}}>
-    <header hidden={loadingOnly}><div><small>ADMINISTRAÇÃO MAÕNO</small><h2 id={heading}>{title}</h2></div><button type="button" onClick={close} disabled={busy} aria-label="Fechar painel">×</button></header>
-    <div className="aog-dialog-body">{children}</div>
+  return createPortal(<dialog ref={ref} onKeyDown={keepFocus} data-loading={loading||undefined} className={`admin-organizations-dialog${wide?' is-wide':''}${loadingOnly?' is-processing':''}`} aria-labelledby={heading} onCancel={e=>{e.preventDefault();close();}}>
+    <header hidden={loadingOnly}><div><small>ADMINISTRAÇÃO MAÕNO</small><h2 ref={titleRef} tabIndex={-1} id={heading}>{title}</h2></div><button type="button" onClick={close} disabled={busy} aria-label="Fechar painel">×</button></header>
+    <div ref={contentFrame} tabIndex={-1} className="aog-dialog-content-frame">
+      <div ref={body} className="aog-dialog-body" aria-busy={loading} onFocusCapture={event=>{lastBodyFocus.current=event.target;}}>{children}</div>
+      {loading&&<div className="aog-dialog-loading-overlay"><UniversalLoader size="page" accessibleLabel={loadingLabel}/></div>}
+    </div>
+    <div className="aog-dialog-notifications">{notifications}</div>
   </dialog>,document.body);
 }
 export function Notice({message}:{message:string}){return message?<p className="aog-error" role="alert">{message}</p>:null;}
@@ -34,10 +97,27 @@ export function OperationStatus({operation,onContinue,onRetry,busy,error}:{opera
     <footer>{operation.kind==='import'?<p>Importação descontinuada. O histórico é preservado; nenhum item será retomado.</p>:<>{operation.items.some(i=>i.state==='pending'||i.state==='running')&&<button type="button" disabled={busy} onClick={onContinue}><StaticLoadingText pending={busy}>Continuar pendências</StaticLoadingText></button>}{operation.items.some(i=>i.retryable)&&<button type="button" disabled={busy} onClick={onRetry}>Retomar próximo item recuperável</button>}</>}</footer>
   </section>;
 }
-export function OrganizationEditor({detail,tab,onTab,onSubmit,onPeople,onDocuments,busy,onDenied}:{detail:Detail;tab:string;onTab:(v:string)=>void;onSubmit:(input:OperationInput)=>void;onPeople:()=>void;onDocuments:()=>void;busy:boolean;onDenied:()=>void}){
+export function OrganizationEditor({detail,tab,onTab,onSubmit,onPeople,onDocuments,busy,onDenied,onError}:{detail:Detail;tab:string;onTab:(v:string)=>void;onSubmit:(input:OperationInput)=>void;onPeople:()=>void;onDocuments:()=>void;busy:boolean;onDenied:()=>void;onError?:(message:string)=>void}){
   const org=detail.organization;
   const [name,setName]=useState(org.name),[description,setDescription]=useState(org.description),[reason,setReason]=useState(''),[plan,setPlan]=useState(org.plan),[limit,setLimit]=useState(String(detail.policy.projects)),[customLimit,setCustomLimit]=useState(detail.policy.projectOverride!==null),[owner,setOwner]=useState(String(org.owner?.id||''));
   const [people,setPeople]=useState<Person[]>([]),[files,setFiles]=useState<FileRow[]>([]),[events,setEvents]=useState<EventRow[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false),[docPage,setDocPage]=useState(1),[more,setMore]=useState(false),[cursor,setCursor]=useState<number|null>(null);
+  const serverDraft=useRef({id:org.id,name:org.name,description:org.description,plan:org.plan,limit:String(detail.policy.projects),customLimit:detail.policy.projectOverride!==null,owner:String(org.owner?.id||'')});
+  const errorCallback=useRef(onError);errorCallback.current=onError;
+  useLayoutEffect(()=>{
+    const before=serverDraft.current,next={id:org.id,name:org.name,description:org.description,plan:org.plan,limit:String(detail.policy.projects),customLimit:detail.policy.projectOverride!==null,owner:String(org.owner?.id||'')};
+    const changedOrganization=before.id!==next.id;
+    // Refresh untouched fields without throwing away a draft after pause, conflict or retry.
+    setName(value=>changedOrganization||value===before.name?next.name:value);
+    setDescription(value=>changedOrganization||value===before.description?next.description:value);
+    setPlan(value=>changedOrganization||value===before.plan?next.plan:value);
+    setLimit(value=>changedOrganization||value===before.limit?next.limit:value);
+    setCustomLimit(value=>changedOrganization||value===before.customLimit?next.customLimit:value);
+    setOwner(value=>changedOrganization||value===before.owner?next.owner:value);
+    if(changedOrganization)setReason('');
+    serverDraft.current=next;
+  },[org.id,org.name,org.description,org.plan,org.owner?.id,detail.policy.projects,detail.policy.projectOverride]);
+  useEffect(()=>{errorCallback.current?.(error);},[error]);
+  useEffect(()=>()=>{errorCallback.current?.('');},[]);
   const seq=useRef(0),moreController=useRef<AbortController|null>(null);
   useEffect(()=>{moreController.current?.abort();const n=++seq.current,controller=new AbortController();setError('');setLoading(false);if(!['people','documents','activity'].includes(tab))return()=>controller.abort();setLoading(true);setPeople([]);setFiles([]);setEvents([]);setDocPage(1);setCursor(null);
     const path=tab==='people'?'people':tab==='documents'?'documents':'activity';
@@ -61,7 +141,7 @@ export function OrganizationEditor({detail,tab,onTab,onSubmit,onPeople,onDocumen
   const quotaSource={organization:'Override da organização',legacy:'Configuração legada',environment:'Configuração do ambiente',plan:'Padrão do plano'}[detail.policy.projectSource||'plan'];
   function change(payload:Record<string,unknown>){onSubmit({kind:'change',items:[{id:org.id,version:org.version,reason,...payload}]});}
   return <><nav className="aog-tabs" aria-label="Gestão da organização">{[['general','Dados gerais'],['people','Pessoas'],['policy','Plano e limites'],['documents','Documentos'],['activity','Histórico']].map(([key,label])=><button type="button" key={key} className={tab===key?'is-active':''} aria-current={tab===key?'page':undefined} disabled={busy} onClick={()=>onTab(key)}>{label}</button>)}</nav>
-    <p><strong>{org.name}</strong> · {org.active?'Ativa':'Pausada'} · Armazenamento: {storageLabel(org.storageStatus)}</p><Notice message={error}/>{loading&&<p role="status">Carregando dados da organização…</p>}
+    <p><strong>{org.name}</strong> · {org.active?'Ativa':'Pausada'} · Armazenamento: {storageLabel(org.storageStatus)}</p><Notice message={onError?'':error}/>{loading&&<p role="status">Carregando dados da organização…</p>}
     {tab==='general'&&<form className="aog-form" onSubmit={e=>{e.preventDefault();change({name,description});}}><label>Nome<input required maxLength={160} value={name} disabled={busy} onChange={e=>setName(e.target.value)}/></label><label>Identificador<input readOnly value={org.slug}/></label><label>Descrição<textarea value={description} maxLength={3000} disabled={busy} onChange={e=>setDescription(e.target.value)}/></label><label>Justificativa<input required minLength={5} maxLength={500} value={reason} disabled={busy} onChange={e=>setReason(e.target.value)}/></label><small>Renomear não move arquivos. Versão de edição: {org.version}.</small><button type="submit" className="aog-primary" disabled={busy}>Salvar dados</button></form>}
     {tab==='people'&&<><p>O responsável deve ser um proprietário ativo desta organização.</p><ul className="aog-records">{people.map(p=><li key={p.id}><strong>{p.name||p.email}</strong><span>{p.email} · {p.accessLevel} · {p.active?'Ativo':'Inativo'}</span></li>)}</ul><form className="aog-form" onSubmit={e=>{e.preventDefault();change({ownerId:Number(owner)});}}><label>Responsável principal<MaonoSelect value={owner} onChange={e=>setOwner(e.target.value)} disabled={busy||loading}><option value="">Selecione um proprietário</option>{people.filter(p=>p.active&&p.accessLevel==='owner').map(p=><option key={p.id} value={p.id}>{p.name||p.email}</option>)}</MaonoSelect></label><label>Justificativa<input required minLength={5} maxLength={500} value={reason} onChange={e=>setReason(e.target.value)} disabled={busy}/></label><button type="submit" disabled={busy||!owner}>Designar responsável</button></form><button type="button" onClick={onPeople} disabled={busy}>Gerenciar vínculos e permissões</button></>}
     {tab==='policy'&&<form className="aog-form" onSubmit={e=>{e.preventDefault();change({...(plan!==org.plan?{plan}:{}),...(quotaChanged?{projectLimit:customLimit?Number(limit):null}:{})});}}><div className="aog-policy-summary"><span>Projetos em uso <strong>{detail.policy.used}</strong></span><span>Reservas ativas <strong>{detail.policy.reserved}</strong></span><span>Restantes <strong>{detail.policy.remaining}</strong></span></div>

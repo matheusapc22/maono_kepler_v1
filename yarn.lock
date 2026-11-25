@@ -2247,7 +2247,7 @@
     supercluster "^7.1.0"
     viewport-mercator-project "^6.0.0"
 
-"@kepler.gl/duckdb@^3.1.0":
+"@kepler.gl/duckdb@3.2.0":
   version "3.2.0"
   resolved "https://registry.yarnpkg.com/@kepler.gl/duckdb/-/duckdb-3.2.0.tgz#ec1cdee962bdd4e7205dde791990cc3405e788a0"
   integrity sha512-LcCVuFgOlaG1tvC32iOYGGK0RScLxjgu25Y7MRKNg6qKhqDwoTCMuE3r66GbNtIVZusxl6Bm2mWLwZwqQKk9bQ==

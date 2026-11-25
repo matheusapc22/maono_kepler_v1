@@ -79,7 +79,7 @@
     "@kepler.gl/cloud-providers": "^3.1.0",
     "@kepler.gl/components": "^3.1.0",
     "@kepler.gl/constants": "^3.1.0",
-    "@kepler.gl/duckdb": "^3.1.0",
+    "@kepler.gl/duckdb": "3.2.0",
     "@kepler.gl/localization": "3.2.0",
     "@kepler.gl/processors": "^3.1.0",
     "@kepler.gl/reducers": "^3.1.0",
