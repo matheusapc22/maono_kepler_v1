@@ -1,0 +1,62 @@
+name: Organization Functional Evidence
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/**'
+      - 'functions/**'
+      - 'scripts/acceptance/**'
+      - 'scripts/install-ci-browsers.mjs'
+      - 'tests/ci-browser-installation.test.mjs'
+      - 'tests/organization-functional-*.test.mjs'
+      - 'tests/production-acceptance-operator-organization-readiness.test.mjs'
+      - 'tests/helpers/organization-functional-evidence-fixture.mjs'
+      - 'tests/acceptance-browser/**'
+      - 'playwright.organization-evidence.config.ts'
+      - '.github/workflows/organization-functional-evidence.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tsconfig*.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  organization-functional-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install repository dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Offline evidence, transport and CLI contracts
+        run: node --experimental-strip-types --test tests/organization-functional-*.test.mjs tests/production-acceptance-operator-organization-readiness.test.mjs
+      - name: Product lint and types
+        run: |
+          npm run lint
+          npx tsc -b --pretty false
+      - name: Build actual UI with audit enabled for synthetic browser fixtures
+        env:
+          VITE_ADMIN_AUDIT_OPERATIONS_V1: 'true'
+          VITE_ORGANIZATION_MANAGEMENT_V1: 'true'
+          VITE_MAONO_MAP_SHELL_V1: 'true'
+          VITE_MAONO_LAYER_MANAGER_V1: 'true'
+          VITE_MAONO_MAP_OVERLAY_V1: 'true'
+        run: npm run build
+      - name: Install Chromium
+        run: node scripts/install-ci-browsers.mjs chromium
+      - name: Observe compiled UI with synthetic HTTP and no Production credentials
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/organization-functional-evidence/results.json
+        run: npx playwright test --config=playwright.organization-evidence.config.ts --reporter=list,json
+      - name: Preserve local-fixture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: organization-functional-evidence-${{ github.sha }}
+          path: test-results/organization-functional-evidence/
+          retention-days: 14
+          if-no-files-found: warn

@@ -10,6 +10,7 @@ import {
   buildProfiles,
   fail,
   initialReport,
+  ORGANIZATION_READINESS_SUITE,
   parseArgs,
   parseCredentials,
   readProduction,
@@ -96,6 +97,18 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
       report.writesPerformed = false;
       report.configurationRestored = true;
       report.cleanupComplete = true;
+      // Identify a fresh, read-only Organization preflight without granting any
+      // functional capability. Older/local reports with no valid runner context
+      // remain unbound; never infer a workflow identity from caller arguments.
+      if (manifest.id === ORGANIZATION_READINESS_SUITE) {
+        const runId = env.GITHUB_RUN_ID;
+        const attempt = env.GITHUB_RUN_ATTEMPT;
+        if (typeof runId === "string" && /^[1-9][0-9]{0,19}$/.exec(runId)?.[0] === runId &&
+            typeof attempt === "string" && /^[1-9][0-9]{0,5}$/.exec(attempt)?.[0] === attempt) {
+          report.workflowRunId = runId;
+          report.workflowRunAttempt = Number(attempt);
+        }
+      }
       return 0;
     }
 
