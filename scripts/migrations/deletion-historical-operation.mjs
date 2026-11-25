@@ -33,7 +33,7 @@ export function evaluateHistoricalOperation(evidence,context,phase='pre'){
  if(context.expectedPreMetadataDigest) requireMatch(preDigest===context.expectedPreMetadataDigest,'HISTORICAL_POST_PRESTATE_DRIFT');
  const result=evaluateHistoricalDeletionPrestate(pre,{...context,ledger,snapshotDigests:[preDigest,preDigest]});
  requireMatch(result.status==='matched-prestate',result.reason||'HISTORICAL_PRESTATE_UNPROVEN');
- const binding={profile:'historical-deletion-operation-v1',phase,migration:HISTORICAL_DELETION_MIGRATION,candidateSha256:result.candidate.sha256,contractSha256:result.contractSha256,sourceDigest:result.sourceDigest,metadataDigest:actual.metadataDigest,ledgerDigest:hash(context.ledger),gitSha:context.gitSha,pendingDigest:context.pendingDigest};
+ const binding={profile:'historical-deletion-operation-v2',phase,migration:HISTORICAL_DELETION_MIGRATION,candidateSha256:result.candidate.sha256,contractSha256:result.contractSha256,sourceDigest:result.sourceDigest,metadataDigest:actual.metadataDigest,ledgerDigest:hash(context.ledger),gitSha:context.gitSha,pendingDigest:context.pendingDigest};
  return {...binding,preMetadataDigest:preDigest,compatible:true,digest:hash(binding),writesPerformed:false,guards:phase==='pre'?'planned-not-installed':'verified-installed'};
 }
 export async function readHistoricalOperation(configPath,context,phase='pre',injected={}){

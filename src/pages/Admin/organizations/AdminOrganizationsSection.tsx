@@ -7,10 +7,11 @@ import AdminIcon from '../components/AdminIcon';
 import {api,denied,download,errorText,dateLabel,safeCell,storageLabel} from './organizations-api';
 import {useDeletionReadiness,readinessBlocker} from './useDeletionReadiness';
 import {OrganizationDeletionPanel} from './OrganizationDeletionPanel';
-import {isDeletionPreview,type DeletionPreview} from './organization-deletion-contract';
+import {isDeletionPreview,type DeletionPreview,type DeletionBlockerAction} from './organization-deletion-contract';
+import {OrganizationBlockerResolver} from './OrganizationBlockerResolver';
 import {CreateForm} from './CreateOrganizationForm';
 import {UniversalLoader} from '../../../components/loading/UniversalLoader';
-import {Dialog,Notice,OperationStatus,OrganizationEditor,RequestList} from './OrganizationDialogs';
+import {Dialog,Notice,OperationStatus,OperationRecoveryControls,OrganizationEditor,RequestList} from './OrganizationDialogs';
 import {PLAN_LABELS,type Detail,type Operation,type OperationInput,type Organization,type Query,type Workspace} from './organizations-types';
 import './admin-organizations.css';
 
@@ -27,6 +28,8 @@ export default function AdminOrganizationsSection(){
   const [confirmed,setConfirmed]=useState(false);
   const [operation,setOperation]=useState<Operation|null>(null),[operationError,setOperationError]=useState(''),[busy,setBusy]=useState(false),[history,setHistory]=useState<{id:string;kind:string;createdAt:string}[]>([]);
   const [bulkKind,setBulkKind]=useState<'pause'|'resume'>('pause'),[reason,setReason]=useState('');
+  const [bulkSelection,setBulkSelection]=useState<Organization[]>([]);
+  const auditEnabled=import.meta.env.VITE_ADMIN_AUDIT_OPERATIONS_V1==='true'&&workspace?.capabilities.auditOperations===true;
   const [detailRevision,setDetailRevision]=useState(0);
   const [activity,setActivity]=useState<FlowActivity>('idle'),[pendingDetail,setPendingDetail]=useState<Detail|null>(null);
   const [requiresDetailRefresh,setRequiresDetailRefresh]=useState(false),[preparedPreview,setPreparedPreview]=useState<DeletionPreview|undefined>();
@@ -60,17 +63,18 @@ export default function AdminOrganizationsSection(){
     completedDeletionReceipt=null;keys.current.clear();action.current?.abort();
   },[]);
   const operationNeedsRecovery=Boolean(operation?.id===operationId&&(!operation.done||operation.items.some(item=>item.state!=='succeeded')));
+  const resolverOpen=auditEnabled&&params.get('org_resolver')==='1'&&Boolean(id);
   const readinessDetail=pendingDetail||detail;
-  const readinessEnabled=Boolean(id&&mode!=='delete'&&mode!=='operation'&&mode!=='operations'&&user?.role==='super_admin'&&workspace?.capabilities.permanentDelete===true&&!operationNeedsRecovery&&readinessDetail?.organization.id===Number(id)&&!readinessDetail.organization.active);
-  const readiness=useDeletionReadiness(readinessEnabled?Number(id):null,readinessDetail?.organization.version,invalidate);
+  const readinessEnabled=Boolean(id&&mode!=='delete'&&mode!=='operation'&&mode!=='operations'&&user?.role==='super_admin'&&workspace?.capabilities.permanentDelete===true&&(auditEnabled||!operationNeedsRecovery)&&readinessDetail?.organization.id===Number(id)&&(auditEnabled||!readinessDetail.organization.active));
+  const readiness=useDeletionReadiness(readinessEnabled?Number(id):null,readinessDetail?.organization.version,invalidate,auditEnabled);
   const pauseReadiness=readinessEnabled&&readiness.checking;
-  const compactLifecycle=lifecyclePending&&busy&&!id;
-  const dialogLoading=Boolean(activity!=='idle'||deletionLoading.active||(id&&mode!=='delete'&&detailLoading)||pauseReadiness);
+  const compactLifecycle=!auditEnabled&&lifecyclePending&&busy&&!id;
+  const dialogLoading=Boolean(activity!=='idle'||deletionLoading.active||(id&&mode!=='delete'&&detailLoading)||pauseReadiness||(auditEnabled&&busy));
   const loadingLabel=activity==='completing-deletion'?'Atualizando gestão de organizações':activity==='preparing-deletion'?'Preparando confirmação de exclusão':pauseReadiness?'Aguardando liberação para exclusão':deletionLoading.active?deletionLoading.label:'Atualizando organização';
   const auxiliaryView=useRef({readinessEnabled,preview:readiness.preview,readinessError:readiness.error,detailError,operation:operation as Operation|null});
   if(!dialogLoading)auxiliaryView.current={readinessEnabled,preview:readiness.preview,readinessError:readiness.error,detailError,operation:operation&&(!id||operationNeedsRecovery)?operation:null};
   const shown=auxiliaryView.current;
-  const flowError=[...new Set([id||mode==='continue'?operationError:'',detailError,readiness.error,panelError,editorError,deletionSessionError].filter(Boolean))].join(' ');
+  const flowError=[...new Set([id||mode==='continue'||auditEnabled?operationError:'',auditEnabled?error:'',detailError,readiness.error,panelError,editorError,deletionSessionError].filter(Boolean))].join(' ');
   useEffect(()=>{setDismissedFlowError('');if(!flowError)return;const timer=setTimeout(()=>setDismissedFlowError(flowError),10000);return()=>clearTimeout(timer);},[flowError]);
   useEffect(()=>{
     if(activity!=='waiting-readiness'||!pendingDetail||readiness.checking)return;
@@ -109,7 +113,7 @@ export default function AdminOrganizationsSection(){
   function close(){
     createAttempt.current=null;setCreationPending(false);detailSequence.current++;detailReload.current?.abort();action.current?.abort();
     setPendingDetail(null);setPreparedPreview(undefined);setActivity('idle');setDeletionLoading({active:false,label:''});setPanelError('');setEditorError('');setDetailError('');setRequiresDetailRefresh(false);completing.current=false;
-    url({org_id:null,org_tab:null,org_mode:null,org_operation:null,org_deletion:null,org_delete_key:null});setOperation(null);setOperationError('');setReason('');setConfirmed(false);
+    url({org_id:null,org_tab:null,org_mode:null,org_operation:null,org_deletion:null,org_delete_key:null,org_resolver:null});setOperation(null);setOperationError('');setReason('');setConfirmed(false);
   }
   async function execute(op:Operation,retry=false,signal?:AbortSignal){if(op.kind==='import')return op;let result=op;for(let i=0;i<100;i++){
     if(!mounted.current||signal?.aborted)break;
@@ -129,8 +133,11 @@ export default function AdminOrganizationsSection(){
     if(!result.creationConfirmed||result.creationOperationId!==op.id||!org.active||!org.owner||!['READY','ACTIVE','CONFIGURED'].includes(org.storageStatus)){
       setOperationError('Organização cadastrada, mas a preparação ainda não foi concluída. Tente retomar.');return;
     }
-    close();setSuccess('Organização criada com sucesso.');setRevision(v=>v+1);setSelected(new Set());
-    setTimeout(()=>createButton.current?.focus(),0);
+    if(auditEnabled){
+      preparedDetail.current=result;setDetail(result);setCreationPending(false);createAttempt.current=null;setOperation(null);
+      url({org_id:String(org.id),org_tab:'general',org_mode:null,org_operation:null},true);setLifecycleToast('Organização criada com sucesso.');
+    }else{close();setSuccess('Organização criada com sucesso.');setTimeout(()=>createButton.current?.focus(),0);}
+    setRevision(v=>v+1);setSelected(new Set());
   }
   async function runCreation(op:Operation,signal?:AbortSignal){
     let latest=op;
@@ -160,7 +167,7 @@ export default function AdminOrganizationsSection(){
     }
     const plural=result.items.length>1;
     setLifecycleToast(result.kind==='pause'?(plural?'Organizações pausadas':'Organização pausada'):result.kind==='resume'?(plural?'Organizações reativadas':'Organização reativada'):'Dados da organização atualizados');
-    if(!id||result.items.length!==1){if(result.kind!=='change')close();return;}
+    if(!id||result.items.length!==1){if(!auditEnabled&&result.kind!=='change')close();return;}
     const n=++detailSequence.current;setActivity('refreshing-detail');setRequiresDetailRefresh(true);setDetailError('');
     try{
       const updated=await api<Detail>(`/organizations/${encodeURIComponent(id)}`,{signal,timeoutMs:15000});
@@ -187,28 +194,58 @@ export default function AdminOrganizationsSection(){
       const op=await api<Operation>('/operations',{body:input,key,signal:controller.signal,...(input.kind==='create'?{timeoutMs:20000}:{})});
       if(!mounted.current)return;setOperation(op);url({org_operation:op.id},true);
       if(input.kind==='create')await runCreation(op,controller.signal);
-      else {const result=await execute(op,false,controller.signal);if(mounted.current&&!controller.signal.aborted){setRevision(v=>v+1);setSelected(new Set());await finishLifecycle(result,controller.signal);}}
+      else {const result=await execute(op,false,controller.signal);if(mounted.current&&!controller.signal.aborted){setRevision(v=>v+1);if(!auditEnabled||mode!=='bulk')setSelected(new Set());await finishLifecycle(result,controller.signal);}}
     }catch(e){if(!controller.signal.aborted&&mounted.current){if(denied(e))invalidate();setOperationError(input.kind==='create'?'Não foi possível confirmar a conclusão. Tente retomar para consultar a mesma criação.':errorText(e));}}
-    finally{submitting.current=false;if(mounted.current){setBusy(false);setLifecyclePending(false);setActivity(previous=>previous==='submitting'?'idle':previous);}}
+    finally{submitting.current=false;if(mounted.current){setBusy(false);setLifecyclePending(false);setActivity(previous=>previous==='submitting'?'idle':previous);if(auditEnabled&&id&&mode!=='delete')readiness.refresh();}}
   }
   async function continueOperation(retry=false){
     if(busy||submitting.current||activity!=='idle')return;submitting.current=true;
     const c=new AbortController();action.current?.abort();action.current=c;setBusy(true);setOperationError('');setLifecyclePending(operation?.kind==='pause'||operation?.kind==='resume');setLifecycleToast('');if(id)setActivity('submitting');
     try{
       if(mode==='create'){await recoverCreation(c.signal);}
-      else if(operation){const result=await execute(operation,retry,c.signal);if(mounted.current&&!c.signal.aborted){setRevision(v=>v+1);setSelected(new Set());await finishLifecycle(result,c.signal);}}
+      else if(operation){const result=await execute(operation,retry,c.signal);if(mounted.current&&!c.signal.aborted){setRevision(v=>v+1);if(!auditEnabled||mode!=='bulk')setSelected(new Set());await finishLifecycle(result,c.signal);}}
     }catch(e){if(!c.signal.aborted&&mounted.current){if(denied(e))invalidate();setOperationError(mode==='create'?'A conclusão ainda não foi confirmada. Aguarde e tente retomar.':errorText(e));}}
-    finally{submitting.current=false;if(mounted.current){setBusy(false);setLifecyclePending(false);setActivity(previous=>previous==='submitting'?'idle':previous);}}
+    finally{submitting.current=false;if(mounted.current){setBusy(false);setLifecyclePending(false);setActivity(previous=>previous==='submitting'?'idle':previous);if(auditEnabled&&id&&mode!=='delete')readiness.refresh();}}
   }
   function reviseCreation(){
     if(operation?.items[0]?.state!=='failed'||operation.items[0].result?.id)return;
     if(createAttempt.current)keys.current.delete(JSON.stringify(createAttempt.current.input));
     createAttempt.current=null;setCreationPending(false);setOperation(null);setOperationError('');url({org_operation:null},true);
   }
-  const rows=workspace?.organizations||[],selectedRows=rows.filter(r=>selected.has(r.id));
+  const rows=workspace?.organizations||[],selectedRows=auditEnabled&&mode==='bulk'?bulkSelection:rows.filter(r=>selected.has(r.id));
   function exportSelected(){download('organizacoes-selecionadas.csv','\uFEFF'+[['id','nome','slug','plano','status','projetos','usuarios','arquivos'],...selectedRows.map(r=>[r.id,r.name,r.slug,PLAN_LABELS[r.plan],r.active?'Ativa':'Pausada',r.projectCount,r.userCount,r.fileCount])].map(row=>row.map(safeCell).join(',')).join('\r\n'));}
   function peopleLink(){if(!detail)return;const next=new URLSearchParams(params);next.set('section','users');next.set('organization',String(detail.organization.id));next.set('org_return','organizations');next.delete('org_operation');navigate(`/admin?${next}`);}
   async function projectDocuments(){if(!detail||!window.confirm(`Alterar a organização ativa para ${detail.organization.name} e abrir Projetos? Em seguida, use Arquivos e Documentos.`))return;setBusy(true);try{await switchOrganization(detail.organization.id);navigate('/projects');}catch(e){if(mounted.current)setOperationError(errorText(e));}finally{if(mounted.current)setBusy(false);}}
+  function openAudit(reference?:string,eventId?:string,deletion=false){
+    const next=new URLSearchParams({section:'audit'});
+    if(id)next.set('audit_org',id);
+    if(deletion)next.set('audit_deletion','1');
+    if(eventId)next.set('audit_event',eventId);else if(reference)next.set('audit_operation',reference);
+    navigate(`/admin?${next}`);
+  }
+  async function consultOperation(openAfter=false,reference=operation?.id,itemIndex?:number){
+    if(!reference||busy||submitting.current)return;
+    const c=new AbortController();action.current?.abort();action.current=c;setBusy(true);setOperationError('');
+    try{
+      const result=await api<{operation:Operation;auditEventId?:string}>(`/operations/${encodeURIComponent(reference)}/consult`,{body:itemIndex===undefined?{}:{itemIndex},signal:c.signal,timeoutMs:20000});
+      if(c.signal.aborted||!mounted.current)return;
+      if(result.operation?.id!==reference)throw new Error('Consulta não confirmada.');
+      setOperation(result.operation);setLifecycleToast('Consulta atualizada.');readiness.refresh();
+      if(openAfter)openAudit(reference,result.auditEventId);
+    }catch(e){if(!c.signal.aborted&&mounted.current){if(denied(e))invalidate();setOperationError(errorText(e));}}
+    finally{if(mounted.current&&!c.signal.aborted)setBusy(false);}
+  }
+  function handleBlockerAction(selectedAction:DeletionBlockerAction){
+    if(!selectedAction.enabled||busy||selectedAction.organizationId!==Number(id))return;
+    if(mode==='delete'&&selectedAction.kind==='pause'){url({org_mode:null,org_resolver:'1',org_deletion:null,org_delete_key:null});return;}
+    if(selectedAction.kind==='pause'&&detail){
+      if(window.confirm(`Pausar ${detail.organization.name}? Pessoas, arquivos e projetos serão preservados.`))void submit({kind:'pause',items:[{id:detail.organization.id,version:detail.organization.version,reason:'Pausa confirmada no resolvedor de impedimentos'}]});
+    }else if(selectedAction.deletionId){
+      url({org_resolver:null,org_mode:'delete',org_deletion:selectedAction.deletionId,org_delete_key:null,org_operation:null});
+    }else if(selectedAction.operationId){
+      void consultOperation(true,selectedAction.operationId,selectedAction.itemIndex);
+    }else if(selectedAction.kind==='query'||selectedAction.kind==='follow')readiness.refresh();
+  }
   function reloadDetail(){
     if(!id||dialogLoading)return;
     // A read refreshes server fields while the editor retains the user's draft.
@@ -297,8 +334,8 @@ export default function AdminOrganizationsSection(){
       {label:'Arquivos',value:summary?.files,icon:'file' as const,help:'Arquivos ativos; exclui lixeira e expurgados.'},
     ].map(item=><article key={item.label} className="aog-metric" title={item.help}><span className="aog-metric-icon"><AdminIcon name={item.icon}/></span><div><span>{item.label}</span><strong>{item.value??'—'}</strong><small>{item.help}</small></div></article>)}</div>
     <form className="aog-filters" onSubmit={e=>{e.preventDefault();apply({...draft,page:1});}}><label>Buscar<input value={draft.q} maxLength={160} placeholder="Nome ou identificador…" onChange={e=>setDraft(v=>({...v,q:e.target.value}))}/></label><label>Status<MaonoSelect value={draft.status} onChange={e=>setDraft(v=>({...v,status:e.target.value}))}><option value="all">Todos os status</option><option value="active">Ativas</option><option value="paused">Pausadas</option></MaonoSelect></label><label>Plano<MaonoSelect value={draft.plan} onChange={e=>setDraft(v=>({...v,plan:e.target.value}))}><option value="all">Todos os planos</option>{Object.entries(PLAN_LABELS).map(([key,label])=><option key={key} value={key}>{label}</option>)}</MaonoSelect></label><label>Ordenar por<MaonoSelect value={draft.sort} onChange={e=>setDraft(v=>({...v,sort:e.target.value}))}><option value="newest">Mais recentes</option><option value="name">Nome A–Z</option><option value="updated">Cadastro atualizado</option></MaonoSelect></label><button type="submit" className="aog-primary">Aplicar</button><button type="button" onClick={()=>apply({q:'',status:'all',plan:'all',sort:'newest',page:1,size:10})}>Limpar filtros</button></form>
-    {!dialogOpen&&createPortal(notices,document.body)}<p role="status" className="aog-status">{success}</p><Notice message={error}/>{error&&<button type="button" onClick={()=>setRevision(v=>v+1)}>Tentar novamente</button>}{loading&&<p className="aog-status" role="status">{workspace?'Consultando organizações…':'Carregando organizações…'}</p>}
-    <div className="aog-table-card"><div className="aog-selection"><label className="aog-check"><input type="checkbox" aria-label="Selecionar a página atual" disabled={loading} checked={rows.length>0&&rows.every(r=>selected.has(r.id))} onChange={e=>setSelected(e.target.checked?new Set(rows.map(r=>r.id)):new Set())}/>{selected.size} selecionados nesta página</label><button type="button" disabled={!selected.size||loading} onClick={()=>{setBulkKind('pause');setConfirmed(false);setOperation(null);setOperationError('');url({org_mode:'bulk',org_operation:null});}}>Ações em lote</button><button type="button" disabled={!selected.size||loading} onClick={exportSelected}>Exportar seleção</button><button type="button" onClick={()=>openMode('operations')}>Minhas operações</button></div>
+    {!dialogOpen&&createPortal(notices,document.body)}{!auditEnabled&&<p role="status" className="aog-status">{success}</p>}<Notice message={auditEnabled?'':error}/>{error&&<button type="button" onClick={()=>setRevision(v=>v+1)}>Tentar novamente</button>}{loading&&<p className="aog-status" role="status">{workspace?'Consultando organizações…':'Carregando organizações…'}</p>}
+    <div className="aog-table-card"><div className="aog-selection"><label className="aog-check"><input type="checkbox" aria-label="Selecionar a página atual" disabled={loading} checked={rows.length>0&&rows.every(r=>selected.has(r.id))} onChange={e=>setSelected(e.target.checked?new Set(rows.map(r=>r.id)):new Set())}/>{selected.size} selecionados nesta página</label><button type="button" disabled={!selected.size||loading} onClick={()=>{setBulkSelection(rows.filter(row=>selected.has(row.id)));setBulkKind('pause');setConfirmed(false);setOperation(null);setOperationError('');url({org_mode:'bulk',org_operation:null});}}>Ações em lote</button><button type="button" disabled={!selected.size||loading} onClick={exportSelected}>Exportar seleção</button><button type="button" onClick={()=>openMode('operations')}>Minhas operações</button></div>
       <div className="aog-table-scroll"><table aria-busy={loading}><caption className="aog-sr-only">Organizações filtradas. Os indicadores acima são globais.</caption><thead><tr><th aria-label="Selecionar"/><th>Organização</th><th>Plano</th><th>Responsável principal</th><th>Projetos</th><th>Usuários</th><th>Arquivos</th><th>Status</th><th>Última atividade</th><th>Ações</th></tr></thead><tbody>
       {!workspace&&loading?Array.from({length:5},(_,i)=><tr key={i} aria-hidden="true"><td colSpan={10}><span className="aog-skeleton"/></td></tr>):!rows.length?<tr><td colSpan={10}>{workspace?'Nenhuma organização encontrada.':'Dados indisponíveis.'}</td></tr>:rows.map(row=><tr key={row.id}>
         <td><input type="checkbox" aria-label={`Selecionar ${row.name}`} disabled={loading} checked={selected.has(row.id)} onChange={e=>setSelected(previous=>{const next=new Set(previous);if(e.target.checked)next.add(row.id);else next.delete(row.id);return next;})}/></td>
@@ -308,31 +345,32 @@ export default function AdminOrganizationsSection(){
     {dialogOpen&&<Dialog
       title={mode==='continue'?'Continuar gestão':mode==='delete'?'Excluir permanentemente organização':id?(detail?.organization.id===Number(id)?detail.organization.name:'Organização'):(dialogTitles[mode]||'Operação')}
       onClose={close} busy={busy||['preparing-deletion','completing-deletion','opening-organization'].includes(activity)}
-      loading={dialogLoading} loadingLabel={loadingLabel} notifications={notices} viewKey={`${id||''}:${mode}:${tab}`}
-      loadingOnly={(mode==='create'&&busy)||compactLifecycle}
+      loading={dialogLoading} loadingLabel={loadingLabel} notifications={resolverOpen?undefined:notices} viewKey={`${id||''}:${mode}:${tab}`}
+      loadingOnly={(!auditEnabled&&mode==='create'&&busy)||compactLifecycle}
       dirty={!pauseReadiness&&(mode==='create'||Boolean(id&&mode!=='delete'&&['general','people','policy'].includes(tab)))} wide={mode==='requests'}>
       {compactLifecycle&&<div className="aog-deletion-progress"><UniversalLoader size="page" accessibleLabel="Atualizando organização"/></div>}
       <div hidden={compactLifecycle}>
-      {!id&&mode!=='continue'&&<Notice message={mode==='create'&&busy?'':operationError}/>}
+      {!auditEnabled&&!id&&mode!=='continue'&&<Notice message={mode==='create'&&busy?'':operationError}/>}
       {shown.detailError&&id&&mode!=='delete'&&<button type="button" onClick={reloadDetail}>Consultar organização</button>}
-      {shown.readinessEnabled&&id&&mode!=='delete'&&<>
+      {!auditEnabled&&shown.readinessEnabled&&id&&mode!=='delete'&&<>
         {shown.readinessError?<button type="button" onClick={readiness.refresh}>Consultar liberação para exclusão</button>:shown.preview&&!shown.preview.eligible&&<><p role="status">Organização pausada. A exclusão ainda está indisponível:</p><ul>{shown.preview.blockers.map((blocker,index)=><li key={`${blocker.code}:${index}`}>{readinessBlocker(blocker.code)}{blocker.count>1?` (${blocker.count})`:''}</li>)}</ul><button type="button" onClick={readiness.refresh}>Consultar liberação para exclusão</button></>}
       </>}
       {id&&detail?.organization.id===Number(id)&&mode!=='delete'&&<>
-        <OrganizationEditor key={detail.organization.id} detail={detail} tab={tab} onTab={value=>{setEditorError('');url({org_tab:value});}} onSubmit={input=>void submit(input)} onPeople={peopleLink} onDocuments={()=>void projectDocuments()} busy={busy||requiresDetailRefresh} onDenied={invalidate} onError={setEditorError}/>
+        <OrganizationEditor key={detail.organization.id} detail={detail} tab={tab} onTab={value=>{setEditorError('');url({org_tab:value});}} onSubmit={input=>void submit(input)} onPeople={peopleLink} onDocuments={()=>void projectDocuments()} busy={busy||requiresDetailRefresh} onDenied={invalidate} onError={setEditorError} cleanReports={auditEnabled} onAudit={()=>openAudit()}/>
         <div className="aog-danger-zone">
           <button type="button" disabled={busy||requiresDetailRefresh} onClick={()=>{if(window.confirm(`${detail.organization.active?'Pausar':'Reativar'} ${detail.organization.name}? Pausar preserva pessoas, arquivos e projetos. Reativar verifica o armazenamento.`))void submit({kind:detail.organization.active?'pause':'resume',items:[{id:detail.organization.id,version:detail.organization.version,reason:detail.organization.active?'Pausa confirmada no painel':'Reativação confirmada no painel'}]});}}>{detail.organization.active?'Pausar organização':'Reativar / verificar armazenamento'}</button>
           {detail.organization.active&&!['READY','ACTIVE','CONFIGURED'].includes(detail.organization.storageStatus)&&<button type="button" disabled={busy||requiresDetailRefresh} onClick={()=>{if(window.confirm('Verificar o armazenamento desta organização?'))void submit({kind:'resume',items:[{id:detail.organization.id,version:detail.organization.version,reason:'Verificação de armazenamento confirmada'}]});}}>Verificar armazenamento</button>}
-          <button type="button" disabled={busy} onClick={reloadDetail}>Consultar versão atual</button>
+          <button type="button" disabled={busy} onClick={reloadDetail}>{auditEnabled?'Atualizar dados':'Consultar versão atual'}</button>
+          {auditEnabled&&workspace?.capabilities.permanentDelete===true&&<button type="button" disabled={busy||dialogLoading} onClick={()=>url({org_resolver:'1'},true)}>Resolver impedimentos ({shown.preview?.blockers.length||0})</button>}
           {user?.role==='super_admin'&&workspace?.capabilities.permanentDelete===true&&<button type="button" className="aog-destructive" disabled={busy||requiresDetailRefresh||!readinessEnabled||readiness.checking||Boolean(readiness.error)||readiness.preview?.eligible!==true} onClick={()=>void prepareDeletion()}>Excluir permanentemente organização</button>}
         </div>
       </>}
       {id&&mode==='delete'&&(user?.role==='super_admin'&&workspace?.capabilities.permanentDelete===true?
-        <OrganizationDeletionPanel key={id} organizationId={Number(id)} initialPreview={preparedPreview} onCancel={close} onBusy={setBusy} onLoading={onDeletionLoading} onError={setPanelError} onDenied={invalidate} onComplete={()=>void completeDeletion()}/>
+        <OrganizationDeletionPanel key={id} organizationId={Number(id)} initialPreview={preparedPreview} cleanReports={auditEnabled} onAudit={value=>openAudit(value,undefined,true)} onResolverAction={handleBlockerAction} onCancel={close} onBusy={setBusy} onLoading={onDeletionLoading} onError={setPanelError} onDenied={invalidate} onComplete={()=>void completeDeletion()}/>
         :<p role="status">Exclusão permanente indisponível neste contexto.</p>)}
       {mode==='continue'&&<section className="aog-form" aria-label="Continuar gestão de organizações">
         <p>Selecione outra organização para administrar ou volte à lista.</p>
-        {deletionSessionError&&<p role="status">Sessão desatualizada. Recarregue a página antes de continuar.</p>}
+        {!auditEnabled&&deletionSessionError&&<p role="status">Sessão desatualizada. Recarregue a página antes de continuar.</p>}
         <label>Selecionar organização<MaonoSelect value={nextOrganization} onChange={event=>setNextOrganization(event.target.value)} disabled={Boolean(deletionSessionError)}>
           <option value="">Selecione uma organização</option>{rows.filter(row=>row.id!==deletedOrganizationId).map(row=><option key={row.id} value={row.id}>{row.name}</option>)}
         </MaonoSelect></label>
@@ -340,16 +378,17 @@ export default function AdminOrganizationsSection(){
         <div className="aog-inline"><button type="button" className="aog-primary" disabled={!nextOrganization||Boolean(deletionSessionError)} onClick={()=>void openNextOrganization()}>Abrir organização</button><button type="button" onClick={()=>void retryContinuation()}>Consultar organizações</button><button type="button" onClick={close}>Voltar à lista</button></div>
       </section>}
       {mode==='create'&&<>
-        <div hidden={busy}><CreateForm onSubmit={input=>void submit({kind:'create',items:[input]})} busy={busy||creationPending||Boolean(operationId)}/></div>
-        {busy&&<div className="aog-create-loading"><UniversalLoader accessibleLabel="Criando e validando organização"/></div>}
+        <div hidden={busy&&!auditEnabled}><CreateForm onSubmit={input=>void submit({kind:'create',items:[input]})} busy={busy||creationPending||Boolean(operationId)}/></div>
+        {busy&&!auditEnabled&&<div className="aog-create-loading"><UniversalLoader accessibleLabel="Criando e validando organização"/></div>}
         {!busy&&(creationPending||operationId)&&<button type="button" onClick={()=>void continueOperation(true)}>Retomar criação</button>}
         {!busy&&operation?.items[0]?.state==='failed'&&!operation.items[0].result?.id&&<button type="button" onClick={reviseCreation}>Revisar dados</button>}
       </>}
-      {mode==='bulk'&&<><p>A ação afeta somente os {selectedRows.length} registros selecionados nesta página. Não exclui dados.</p><ul className="aog-records">{selectedRows.map(r=><li key={r.id}>{r.name} · #{r.id}</li>)}</ul><div className="aog-form"><label>Ação<MaonoSelect value={bulkKind} onChange={e=>setBulkKind(e.target.value as 'pause'|'resume')} disabled={busy}><option value="pause">Pausar</option><option value="resume">Reativar</option></MaonoSelect></label><label>Justificativa<input value={reason} minLength={5} maxLength={500} onChange={e=>setReason(e.target.value)} disabled={busy}/></label><label className="aog-check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Confirmo a ação sobre as organizações listadas.</label><button type="button" className="aog-primary" disabled={busy||!selectedRows.length||reason.trim().length<5||!confirmed} onClick={()=>void submit({kind:bulkKind,items:selectedRows.map(r=>({id:r.id,version:r.version,reason}))})}>Executar lote</button></div></>}
+      {mode==='bulk'&&<><p>A ação afeta somente os {selectedRows.length} registros selecionados nesta página. Não exclui dados.</p><ul className="aog-records">{selectedRows.map(r=><li key={r.id}>{r.name}{!auditEnabled&&` · #${r.id}`}</li>)}</ul><div className="aog-form"><label>Ação<MaonoSelect value={bulkKind} onChange={e=>setBulkKind(e.target.value as 'pause'|'resume')} disabled={busy}><option value="pause">Pausar</option><option value="resume">Reativar</option></MaonoSelect></label><label>Justificativa<input value={reason} minLength={5} maxLength={500} onChange={e=>setReason(e.target.value)} disabled={busy}/></label><label className="aog-check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Confirmo a ação sobre as organizações listadas.</label><button type="button" className="aog-primary" disabled={busy||!selectedRows.length||reason.trim().length<5||!confirmed||Boolean(auditEnabled&&operation?.done&&operation.items.every(item=>item.state==='succeeded'))} onClick={()=>void submit({kind:bulkKind,items:selectedRows.map(r=>({id:r.id,version:r.version,reason}))})}>Executar lote</button></div></>}
       {mode==='requests'&&<RequestList onSubmit={input=>void submit(input)} busy={busy} onDenied={invalidate}/>}
-      {mode==='operations'&&<><p>As últimas 20 operações da sua conta. Importações anteriores permanecem disponíveis somente para consulta.</p><ul className="aog-records">{history.map(op=><li key={op.id}><button type="button" onClick={()=>{setOperation(null);url({org_mode:'operation',org_operation:op.id});}}>{op.kind} · {dateLabel(op.createdAt)}</button></li>)}</ul>{!history.length&&<p>Nenhuma operação encontrada.</p>}</>}
-      {shown.operation&&mode!=='create'&&mode!=='delete'&&mode!=='continue'&&<OperationStatus operation={shown.operation} onContinue={()=>void continueOperation()} onRetry={()=>void continueOperation(true)} busy={busy&&!dialogLoading} error=""/>}
+      {mode==='operations'&&<><p>As últimas 20 operações da sua conta. Importações anteriores permanecem disponíveis somente para consulta.</p><ul className="aog-records">{history.map(op=><li key={op.id}><button type="button" onClick={()=>{setOperation(null);url({org_mode:'operation',org_operation:op.id});}}>{auditEnabled?({create:'Criação',change:'Alteração',pause:'Pausa',resume:'Reativação',review:'Revisão',import:'Importação descontinuada'} as Record<string,string>)[op.kind]||'Operação registrada':op.kind} · {dateLabel(op.createdAt)}</button></li>)}</ul>{!history.length&&<p>Nenhuma operação encontrada.</p>}</>}
+      {shown.operation&&mode!=='create'&&mode!=='delete'&&mode!=='continue'&&(auditEnabled&&shown.operation.kind!=='review'?<OperationRecoveryControls operation={shown.operation} busy={busy||dialogLoading} onConsult={()=>void consultOperation()} onAudit={()=>void consultOperation(true)} onContinue={()=>void continueOperation()} onRetry={()=>void continueOperation(true)}/>:<OperationStatus operation={shown.operation} onContinue={()=>void continueOperation()} onRetry={()=>void continueOperation(true)} busy={busy&&!dialogLoading} error=""/>)}
       </div>
     </Dialog>}
+    {resolverOpen&&detail&&<OrganizationBlockerResolver preview={shown.preview} name={detail.organization.name} busy={busy||dialogLoading} onClose={()=>url({org_resolver:null},true)} onRefresh={readiness.refresh} onAction={handleBlockerAction} onPrepareDeletion={()=>{url({org_resolver:null},true);void prepareDeletion();}} notifications={notices}/>}
   </section>;
 }

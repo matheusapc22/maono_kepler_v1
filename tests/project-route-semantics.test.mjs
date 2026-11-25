@@ -175,8 +175,9 @@ test("novo mapa reconcilia storage organizacional bloqueado uma única vez", () 
   );
   assert.match(
     sources.newMapContext,
-    /ensureOrganizationStorage\(env, organization\)/,
+    /ensureOrganizationStorage\(env, organization, \{ auditContext \}\)/,
   );
+  assert.match(sources.newMapContext, /reconcileBlockedOrganizationStorage\(runtimeEnv, context, auditRequestContext\(request, user\)\)/);
   assert.match(
     sources.newMapContext,
     /context = await resolveNewMapCreateContext\(runtimeEnv, request, \{ user \}\)/,

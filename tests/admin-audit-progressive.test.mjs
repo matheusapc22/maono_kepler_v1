@@ -121,7 +121,7 @@ test('audit extraction retains exact historical gates and aborts scoped reads', 
   const weakened = source.replace('<AdminAudit sessionAvailable={!error}', '<AdminAudit sessionAvailable={true}');
   assert.notEqual(weakened, source);
   assert.throws(() => restoreApprovedAdminWorkspace('src/pages/Admin.tsx', weakened));
-  const component = read('src/pages/Admin/components/AdminAudit.tsx');
+  const component = read('src/pages/Admin/components/AdminAuditLegacy.tsx');
   assert.match(component, /controller.signal.aborted/); assert.match(component, /return \(\) => controller.abort\(\)/);
   assert.match(component, /\[401, 403, 404\].includes\(status\)/);
   assert.doesNotMatch(component, /localStorage|sessionStorage|setInterval|dangerouslySetInnerHTML/);

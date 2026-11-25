@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { gateError, sha256Text } from './production-migration-lib.mjs';
+import { ORGANIZATION_SCHEMA_SNAPSHOT } from './organization-schema-snapshot.mjs';
 
 // Public, versioned sources only. Never derive a reference from remote metadata.
 export const ORGANIZATION_SCHEMA_SOURCES = Object.freeze({
-  'schema.sql': '7016dbc64d6502af557bc9fd5cab9cc2be71770a1d56ff74d5c88219d61026fc',
+  [ORGANIZATION_SCHEMA_SNAPSHOT.path]: ORGANIZATION_SCHEMA_SNAPSHOT.sha256,
   'migrations/0002_organizations_files.sql': '4fd20c1d27a6e7030e28ffa84188b3fd5193ffe57b33dee3063467e68d26bd4d',
   'migrations/0007_create_organization_limit_requests.sql': 'b1f3c6c598fd54bcd8e6a52f05b27b1131a117ffbafad90b0383579b34319ebb',
   'migrations/0009_organization_storage_invariant.sql': '1dd135c0e516598025ae79d6de0c7a1dfedbcee24cf1d73682584dfb2ddb82fb',
@@ -64,15 +65,15 @@ function buildReferences(queries, readSource, identity) {
     return [path, sql];
   }));
   const descriptors = [
-    { id: ORGANIZATION_SCHEMA_PROFILES[0], paths: ['schema.sql', MIGRATION], requiredMigrations: COMMON_LEDGER },
-    { id: ORGANIZATION_SCHEMA_PROFILES[1], paths: Object.keys(sources).filter(path => path !== 'schema.sql'),
+    { id: ORGANIZATION_SCHEMA_PROFILES[0], paths: [ORGANIZATION_SCHEMA_SNAPSHOT.path, MIGRATION], requiredMigrations: COMMON_LEDGER },
+    { id: ORGANIZATION_SCHEMA_PROFILES[1], paths: Object.keys(sources).filter(path => path !== ORGANIZATION_SCHEMA_SNAPSHOT.path),
       requiredMigrations: Object.keys(sources).filter(path => path.startsWith('migrations/')).map(path => path.slice(11)) },
   ];
   return descriptors.map(profile => {
     const db = new DatabaseSync(':memory:');
     try {
       if (profile.id === ORGANIZATION_SCHEMA_PROFILES[0]) {
-        const parts = sources['schema.sql'].split('-- Organization management (migration 0042)');
+        const parts = sources[ORGANIZATION_SCHEMA_SNAPSHOT.path].split('-- Organization management (migration 0042)');
         if (parts.length !== 2) throw sourceError();
         db.exec(parts[0]);
         db.exec(sources[MIGRATION]);

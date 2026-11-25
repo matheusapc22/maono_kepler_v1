@@ -4,6 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 import {DELETION_SCHEMA_QUERIES,evaluateDeletionSchema} from '../../scripts/migrations/organization-deletion-schema-0044.mjs';
 import {recognizeDefinition} from '../../scripts/migrations/deletion-semantic-diagnostics.mjs';
+import {organizationHistoricalSourcePath} from '../../scripts/migrations/organization-schema-snapshot.mjs';
 const root=new URL('../../',import.meta.url),dir=new URL('../fixtures/deletion-historical-safety/',import.meta.url);
 const read=p=>readFileSync(new URL(p,root),'utf8').replace(/\r\n/g,'\n');
 export const fixtureManifest=JSON.parse(readFileSync(new URL('manifest.json',dir),'utf8'));
@@ -15,7 +16,7 @@ export function fixtureSnapshot(db){return Object.fromEntries(Object.entries(DEL
 export function openHistoricalFixture(sql=fixtureSql){const db=new DatabaseSync(':memory:');try{db.exec(sql);return db;}catch(error){db.close();throw error;}}
 export function verifyFixtureProvenance(){
  assert.equal(hash(fixtureSql),fixtureManifest.fixtureSha256);
- const files=Object.fromEntries(Object.entries(fixtureManifest.sourcePins).map(([name,pin])=>{const text=read(pin.localPath);assert.equal(hash(text),pin.sha256,'Source drift: '+name);return [name,text];}));
+ const files=Object.fromEntries(Object.entries(fixtureManifest.sourcePins).map(([name,pin])=>{const text=read(organizationHistoricalSourcePath(pin.localPath));assert.equal(hash(text),pin.sha256,'Source drift: '+name);return [name,text];}));
  const canonical=new DatabaseSync(':memory:');canonical.exec(files['schema.sql'].split('-- Organization permanent deletion (migration 0044)')[0]);
  try{for(const object of fixtureManifest.objects){
   if(object.category==='canonical-source'){const row=canonical.prepare('SELECT sql FROM sqlite_schema WHERE name=?').get(object.name);assert.equal(row?.sql,object.sql,'Canonical source mismatch: '+object.name);}

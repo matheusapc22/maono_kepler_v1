@@ -1,0 +1,52 @@
+name: Operation Audit
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  operation-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install repository dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Audit contracts, real SQLite and domain recovery
+        run: >-
+          node --experimental-strip-types --test --test-concurrency=1
+          tests/admin-operation-audit*.test.mjs
+          tests/admin-audit-operations*.test.mjs
+          tests/admin-audit-progressive.test.mjs
+          tests/organization-operation-audit*.test.mjs
+          tests/organization-audit-ui-contract.test.mjs
+      - name: Product lint and types
+        run: |
+          npm run lint
+          npx tsc -b --pretty false
+      - name: Compile actual application with new audit and organization management
+        env:
+          VITE_ADMIN_AUDIT_OPERATIONS_V1: 'true'
+          VITE_ORGANIZATION_MANAGEMENT_V1: 'true'
+          VITE_MAONO_MAP_SHELL_V1: 'true'
+          VITE_MAONO_LAYER_MANAGER_V1: 'true'
+          VITE_MAONO_MAP_OVERLAY_V1: 'true'
+        run: npm run build
+      - name: Install Chromium
+        run: node scripts/install-ci-browsers.mjs chromium
+      - name: New audit and organization flow UI
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/operation-audit/results.json
+        run: npx playwright test --config=playwright.operation-audit.config.ts --reporter=list,json
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operation-audit-${{ github.sha }}
+          path: test-results/operation-audit/
+          retention-days: 14
+          if-no-files-found: warn

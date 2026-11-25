@@ -1,6 +1,7 @@
 import { requireSession } from '../../../_lib/auth.js';
 import { jsonResponse, errorResponse, methodNotAllowed } from '../../../_lib/http.js';
 import { auditCursor, readAdminAuditPage } from '../../../_lib/admin-audit-reader.js';
+import { operationAuditQuery, readOperationAuditPage } from '../../../_lib/admin-operation-audit-reader.js';
 
 export function createAdminAuditHandler(sessionReader = requireSession) {
   return async function handle({ request, env }) {
@@ -9,6 +10,15 @@ export function createAdminAuditHandler(sessionReader = requireSession) {
       const user = await sessionReader(env, request);
       if (String(user?.role || '').trim().toLowerCase() !== 'super_admin') {
         return errorResponse('Acesso restrito ao Super Admin.', 403, 'AUTH_PERMISSION_DENIED');
+      }
+      // Explicit protocol negotiation preserves the currently deployed client.
+      // The new reader requires both its feature gate and the validated schema.
+      if (request.headers.get('X-Maono-Audit') === 'operations-v1') {
+        let query;
+        try { query = operationAuditQuery(request.url); }
+        catch { return errorResponse('Consulta de auditoria inválida.', 400, 'VALIDATION_ERROR'); }
+        const page = await readOperationAuditPage(env, query);
+        return jsonResponse({ ok: true, ...page }, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie, X-Maono-Audit' } });
       }
       let before;
       try { before = auditCursor(request.url); }

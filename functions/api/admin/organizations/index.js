@@ -11,6 +11,7 @@ import {
 import { requirePermission } from "../../../_lib/permissions.js";
 import { logAudit } from "../../../_lib/projects.js";
 import { readOrganizationStorageIncident } from "../../../_lib/organization-storage-retry.js";
+import { auditRequestContext } from '../../../_lib/operation-audit.js';
 
 async function requireGlobalAdminPanelAccess(env, request, action) {
   return requirePermission(
@@ -115,6 +116,7 @@ export async function onRequest(context) {
       const body = await readJsonBody(request);
       const lifecycle = await createOrganizationLifecycle(env, body, {
         correlationId,
+        auditContext: auditRequestContext(request, user),
       });
       const organization = lifecycle.organization;
 

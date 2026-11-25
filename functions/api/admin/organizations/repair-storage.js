@@ -1,3 +1,4 @@
+import { auditRequestContext } from '../../../_lib/operation-audit.js';
 import {
   errorResponseFromError,
   jsonResponse,
@@ -81,6 +82,7 @@ export async function onRequest({ env, request }) {
       dryRun,
       fairOrder,
       errorBackoffMs: errorBackoffSeconds * 1000,
+      auditContext: auditRequestContext(request, actor),
     });
 
     await recordAuditLog(env, {

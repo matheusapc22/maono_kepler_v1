@@ -57,8 +57,12 @@ test('reviewed runtime pin revision invalidates previous evidence and approval t
  // Reconstruct the previous binding with identical DB/Git/candidate inputs:
  // changing only reviewed contract/runtime identity must invalidate authorization.
  const oldBinding=Object.fromEntries(['profile','phase','migration','candidateSha256','contractSha256','sourceDigest','metadataDigest','ledgerDigest','gitSha','pendingDigest'].map(k=>[k,current[k]]));
- oldBinding.contractSha256='6b4381bbcd2480d392dc513f4ba1ab0d0b21c4b3560f53bf3193d959cfbd9e04';
- oldBinding.sourceDigest='5a00c916b961ee4a8f44ff8349bc103b8850fedb5ca0df83515ca57d562daf95';
+ const oldContractText=read('scripts/migrations/references/deletion-historical-safety-v1.json');
+ oldBinding.profile='historical-deletion-operation-v1';
+ oldBinding.contractSha256=sha256Text(oldContractText);
+ oldBinding.sourceDigest=sha256Text(JSON.stringify(JSON.parse(oldContractText).sourcePins));
+ assert.equal(oldBinding.contractSha256,'47f143173c8a0610bcbb17de19f3ff4d67104ab3ddf0e03a09610912de1e0b72');
+ assert.equal(current.profile,'historical-deletion-operation-v2');
  const previousDigest=sha256Text(JSON.stringify(oldBinding));assert.notEqual(current.digest,previousDigest);
  const args={migration:name,migrationSha256:current.candidateSha256,gitSha:context.gitSha,pendingDigest:context.pendingDigest};
  const old=buildApproval({...args,evidenceDigest:previousDigest}),fresh=buildApproval({...args,evidenceDigest:current.digest});

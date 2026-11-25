@@ -194,3 +194,29 @@ test('organization deletion diagnostic hits are only the reviewed idempotency ke
   const baseline=JSON.parse(readFileSync(new URL('./user-error-sink-baseline.json',import.meta.url),'utf8'));
   assert.equal(baseline.byFile[file+'::diagnostic-id'],2);
 });
+
+test('audit stage ids are reviewed list keys and merge keys, never notification diagnostics', () => {
+  const reviewed = [
+    ['src/pages/Admin/components/AdminAuditDetail.tsx', 1],
+    ['src/pages/Admin/components/admin-audit-operations-model.ts', 2],
+  ];
+  const baseline=JSON.parse(readFileSync(new URL('./user-error-sink-baseline.json',import.meta.url),'utf8'));
+  for (const [file,count] of reviewed) {
+    const source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
+    const findings=scanText(source,file);
+    const diagnostics=findings.filter(finding=>finding.rule==='diagnostic-id');
+    assert.equal(diagnostics.length,count);
+    assert.equal(baseline.byFile[file+'::diagnostic-id'],count);
+    assert.equal(findings.some(finding=>['raw-error-message','raw-response-text'].includes(finding.rule)),false);
+    const lines=source.split(/\r?\n/);
+    for (const hit of diagnostics) assert.match(lines[hit.line-1],/\bstage\.id\b/);
+    if (file.endsWith('.tsx')) {
+      assert.match(source,/key=\{stage\.id\}/);
+      assert.doesNotMatch(source,/>\s*\{stage\.id\}/);
+      assert.doesNotMatch(source,/toast\([^)]*stage/);
+    } else {
+      assert.match(source,/id: text\(stage\.id, 160\)/);
+      assert.match(source,/\.map\(stage => \[stage\.id, stage\]\)/);
+    }
+  }
+});

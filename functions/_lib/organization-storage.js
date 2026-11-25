@@ -9,6 +9,8 @@ import {
 import { createCorrelationId } from "./maono-error.js";
 import { recordOrganizationStorageObservation } from "./organization-storage-telemetry.js";
 import { organizationStoragePathPolicy } from "./organization-storage-policy.js";
+import { auditedOrganizationMutation } from './organization-audited-mutation.js';
+import { operationAuditEnabled, requireOperationAuditReady } from './operation-audit.js';
 import {
   ORGANIZATION_STORAGE_MAX_ATTEMPTS,
   ORGANIZATION_STORAGE_RETRY_DELAY_MS,
@@ -239,11 +241,11 @@ async function getOrganizationStorageRow(env, organizationId) {
 
 async function persistDisabledState(
   env,
-  organizationId,
-  rootPath,
+  organization,
   checkedAt,
+  audit = {},
 ) {
-  return getDb(env)
+  const mutation = getDb(env)
     .prepare(
       `UPDATE organizations
        SET storage_status = 'DISABLED',
@@ -252,14 +254,20 @@ async function persistDisabledState(
            updated_at = ?
        WHERE id = ?
          AND (active = 0 OR active = '0' OR active = false)
+         AND storage_status IS ? AND storage_error IS ? AND updated_at IS ?
        RETURNING *`,
     )
-    .bind(checkedAt, checkedAt, organizationId)
-    .first();
+    .bind(checkedAt, checkedAt, organization.id, organization.storage_status ?? null,
+      organization.storage_error ?? null, organization.updated_at ?? null);
+  // The before-image is fenced in the same UPDATE. A refreshed observation time
+  // alone does not mean storage was disabled a second time.
+  const unchanged = organization.storage_status === 'DISABLED' && organization.storage_error == null;
+  return auditedOrganizationMutation(env, mutation, { ...audit, organizationId: organization.id, before: organization,
+    action: 'organization.storage_disable', outcome: unchanged ? 'no_change' : 'succeeded', storageOnly: true });
 }
 
-async function claimOrganizationStorage(env, { organization, claimAt, claimValue, staleBefore, revalidateReady }) {
-  return getDb(env).prepare(
+async function claimOrganizationStorage(env, { organization, claimAt, claimValue, staleBefore, revalidateReady, audit = {} }) {
+  const mutation = getDb(env).prepare(
     `UPDATE organizations
      SET storage_status = 'PENDING', storage_error = ?, storage_checked_at = ?, updated_at = ?
      WHERE id = ? AND active = 1
@@ -278,20 +286,24 @@ async function claimOrganizationStorage(env, { organization, claimAt, claimValue
   ).bind(claimValue, claimAt, claimAt, organization.id,
     organization.dropbox_root_path ?? null, organization.storage_status ?? null,
     organization.storage_error ?? null, organization.storage_checked_at ?? null,
-    revalidateReady ? 1 : 0, staleBefore).first();
+    revalidateReady ? 1 : 0, staleBefore);
+  return auditedOrganizationMutation(env, mutation, { ...audit, organizationId: organization.id, before: organization,
+    action: 'organization.storage_recovery', eventType: 'attempt_started', outcome: 'running', storageOnly: true });
 }
 
 async function completeOrganizationStorageClaim(env, {
-  organizationId, rootPath, claimAt, claimValue, completedAt, status, errorCode = null,
+  organizationId, rootPath, claimAt, claimValue, completedAt, status, errorCode = null, audit = {},
 }) {
-  return getDb(env).prepare(
+  const mutation = getDb(env).prepare(
     `UPDATE organizations
      SET storage_status = ?, storage_error = ?, storage_checked_at = ?, updated_at = ?
      WHERE id = ? AND active = 1 AND storage_status = 'PENDING'
        AND storage_checked_at = ? AND storage_error = ? AND dropbox_root_path = ?
      RETURNING *`,
   ).bind(status, errorCode, completedAt, completedAt, organizationId,
-    claimAt, claimValue, rootPath).first();
+    claimAt, claimValue, rootPath);
+  return auditedOrganizationMutation(env, mutation, { ...audit, organizationId, before: { storage_status: 'PENDING' },
+    action: 'organization.storage_recovery', eventType: 'attempt_finished', outcome: status === 'READY' ? 'succeeded' : 'unknown', storageOnly: true });
 }
 
 export async function ensureOrganizationStorage(env, organization, {
@@ -305,8 +317,12 @@ export async function ensureOrganizationStorage(env, organization, {
   telemetrySource = "lifecycle",
   resetRetryBudget = false,
   observe = recordOrganizationStorageObservation,
+  auditContext = null,
+  auditOperationId = null,
 } = {}) {
   const operationCorrelationId = correlationId || createCorrelationId();
+  if (operationAuditEnabled(env)) await requireOperationAuditReady(env);
+  const audit = { context: auditContext, operationId: auditOperationId || operationCorrelationId, attemptId: crypto.randomUUID() };
   if (!organization?.id) {
     throw storageError("Organização inválida para provisionamento de armazenamento.", 500,
       "ORGANIZATION_STORAGE_CONTEXT_INVALID", "organization.storage.context",
@@ -332,8 +348,9 @@ export async function ensureOrganizationStorage(env, organization, {
     repairedPath: false, correlationId: operationCorrelationId, incident: previous, ...extra,
   });
   if (!isActiveOrganization(organization)) {
-    const disabled = await persistDisabledState(env, organization.id, rootPath, claimAt);
-    return resultFor(disabled || organization);
+    const disabled = await persistDisabledState(env, organization, claimAt, audit);
+    if (!disabled) return resultFor(await getOrganizationStorageRow(env, organization.id) || organization, { superseded: true, reason: 'STATE_CHANGED' });
+    return resultFor(disabled);
   }
   if (!policy.valid || (unattended && policy.decisionRequired)) {
     throw storageError("O armazenamento desta organização precisa de verificação pela equipe responsável.",
@@ -364,7 +381,7 @@ export async function ensureOrganizationStorage(env, organization, {
   // A unique claim token also guards two claims made in the same millisecond.
   const claimValue = JSON.stringify({ ...incident, claimId: createCorrelationId() });
   const claimed = await claimOrganizationStorage(env, {
-    organization, claimAt, claimValue,
+    organization, claimAt, claimValue, audit,
     staleBefore: isoAt(startedAtMs - Math.max(1, Number(claimTtlMs) || 1)), revalidateReady,
   });
   if (!claimed) {
@@ -381,7 +398,7 @@ export async function ensureOrganizationStorage(env, organization, {
   await emit("attempt");
   const complete = (extra) => completeOrganizationStorageClaim(env, {
     organizationId: organization.id, rootPath: organization.dropbox_root_path,
-    claimAt, claimValue, ...extra,
+    claimAt, claimValue, audit, ...extra,
   });
   try {
     // READY means the complete required structure exists; root-only callers
@@ -645,6 +662,7 @@ export async function repairActiveOrganizationStorages(
     dryRun = false,
     ensureFolder = ensureDropboxFolder,
     telemetrySource = "operator",
+    auditContext = null,
   } = {},
 ) {
   const operationCorrelationId = correlationId || createCorrelationId();
@@ -713,6 +731,8 @@ export async function repairActiveOrganizationStorages(
         ensureFolder,
         unattended: true,
         telemetrySource,
+        auditContext,
+        auditOperationId: operationCorrelationId,
       });
 
       if (storage.ready && storage.claimed && !storage.superseded && storage.physicallyVerified) {

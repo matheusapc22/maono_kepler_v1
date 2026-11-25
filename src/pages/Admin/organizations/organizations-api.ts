@@ -6,7 +6,7 @@ const BASE='/api/admin/organization-management';
 export async function api<T>(path:string,options:{signal?:AbortSignal;body?:unknown;key?:string;timeoutMs?:number}={}):Promise<T>{
   const signal=options.timeoutMs?AbortSignal.any([...(options.signal?[options.signal]:[]),AbortSignal.timeout(options.timeoutMs)]):options.signal;
   const response=await fetchWithNetworkGuard(`${BASE}${path}`,{method:options.body===undefined?'GET':'POST',credentials:'include',signal,
-    headers:{Accept:'application/json',...(options.body===undefined?{}:{'Content-Type':'application/json','X-Maono-Management':'1'}),...(options.key?{'Idempotency-Key':options.key}:{})},
+    headers:{Accept:'application/json','X-Maono-UI-Route':'/admin',...(options.body===undefined?{}:{'Content-Type':'application/json','X-Maono-Management':'1'}),...(options.key?{'Idempotency-Key':options.key}:{})},
     body:options.body===undefined?undefined:JSON.stringify(options.body)});
   const parsed=await parseResponseJson(response);
   if(!response.ok) throw buildApiError(response,parsed.valid?parsed.data:null);

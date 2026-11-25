@@ -7,6 +7,7 @@ import { normalizeRole, requireSession } from "../../../_lib/auth.js";
 import { resolveNewMapCreateContext } from "../../../_lib/map-panel-service.js";
 import { withWorkspaceEditingParity } from "../../../_lib/project-map-workspace-capabilities.js";
 import { ensureOrganizationStorage } from "../../../_lib/organization-storage.js";
+import { auditRequestContext } from '../../../_lib/operation-audit.js';
 import {
   resolveIsochroneFeatureState,
   withMapAnalysisRuntimeDefaults,
@@ -15,7 +16,7 @@ import {
 const STORAGE_NOT_READY = "ORGANIZATION_STORAGE_NOT_CONFIGURED";
 const STORAGE_PROVISION_FAILED = "ORGANIZATION_STORAGE_PROVISION_FAILED";
 
-async function reconcileBlockedOrganizationStorage(env, context) {
+async function reconcileBlockedOrganizationStorage(env, context, auditContext) {
   if (
     context?.allowed ||
     context?.reason !== STORAGE_NOT_READY ||
@@ -38,7 +39,7 @@ async function reconcileBlockedOrganizationStorage(env, context) {
   if (!organization) return false;
 
   try {
-    const storage = await ensureOrganizationStorage(env, organization);
+    const storage = await ensureOrganizationStorage(env, organization, { auditContext });
     return storage?.ready === true;
   } catch (error) {
     console.warn("[Maono new-map storage] Falha ao reconciliar armazenamento", {
@@ -76,7 +77,7 @@ export async function onRequest({ request, env }) {
     let context = await resolveNewMapCreateContext(runtimeEnv, request, { user });
     context = withWorkspaceEditingParity(context);
 
-    if (await reconcileBlockedOrganizationStorage(runtimeEnv, context)) {
+    if (await reconcileBlockedOrganizationStorage(runtimeEnv, context, auditRequestContext(request, user))) {
       context = await resolveNewMapCreateContext(runtimeEnv, request, { user });
       context = withWorkspaceEditingParity(context);
     }

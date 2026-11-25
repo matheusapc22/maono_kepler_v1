@@ -14,5 +14,7 @@ database_id = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db"
 ORGANIZATION_MANAGEMENT_V1 = "true"
 ORGANIZATION_PERMANENT_DELETE_V1 = "false"
 ORGANIZATION_DELETE_AUTOMATIC_ENABLED = "false"
+ADMIN_AUDIT_OPERATIONS_V1 = "false"
+# AU requires migration 0045 and coordinated Pages/Worker validation before activation.
 # Provision Dropbox secrets using the same approved provider configuration as Pages.
 # Keep both Pages enrollment and worker execution disabled until verified deployment.

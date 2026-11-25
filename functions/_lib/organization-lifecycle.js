@@ -4,6 +4,8 @@ import { createCorrelationId } from "./maono-error.js";
 import { organizationStoragePathPolicy } from "./organization-storage-policy.js";
 import { readOrganizationStorageReadiness } from "./organization-storage-readiness.js";
 import { recordOrganizationStorageObservation } from "./organization-storage-telemetry.js";
+import { auditedOrganizationMutation } from './organization-audited-mutation.js';
+import { operationAuditEnabled, requireOperationAuditReady } from './operation-audit.js';
 import {
   ORGANIZATION_STORAGE_CLAIM_TTL_MS,
   ORGANIZATION_STORAGE_STATUS,
@@ -244,7 +246,7 @@ async function insertOrganization(env, payload, nowIso) {
   const management = payload.__management;
   const columns = management ? ', management_create_key, management_actor_id, management_request_id, management_reason' : '';
   const placeholders = management ? ', ?, ?, ?, ?' : '';
-  return env.DB.prepare(
+  const mutation = env.DB.prepare(
     `INSERT INTO organizations (name${protectedNames ? ', canonical_name' : ''}, slug, description, dropbox_root_path, active,
       storage_status, storage_error, storage_checked_at${columns})
      VALUES (?${protectedNames ? ', ?' : ''}, ?, ?, ?, ?, ?, NULL, ?${placeholders}) RETURNING *`,
@@ -252,7 +254,11 @@ async function insertOrganization(env, payload, nowIso) {
     payload.active, payload.active ? ORGANIZATION_STORAGE_STATUS.PENDING : ORGANIZATION_STORAGE_STATUS.DISABLED,
     payload.active ? null : nowIso,
     ...(management ? [management.creationKey, management.actorId, management.requestId, management.reason || null] : []),
-  ).first();
+  );
+  // Managed commands already have an attributed atomic M0042/M0045 trigger.
+  if (management) return mutation.first();
+  return auditedOrganizationMutation(env, mutation, { context: payload.__auditContext, slug: payload.slug,
+    operationId: payload.__auditOperationId, action: 'organization.create' });
 }
 
 async function persistOrganizationManagementFields(env, organizationId, payload, mode, nowIso, snapshot) {
@@ -263,7 +269,7 @@ async function persistOrganizationManagementFields(env, organizationId, payload,
     AND storage_error IS ? AND storage_checked_at IS ? AND updated_at IS ?`;
   const expected = [snapshot.active, snapshot.dropbox_root_path, snapshot.storage_status ?? null,
     snapshot.storage_error ?? null, snapshot.storage_checked_at ?? null, snapshot.updated_at ?? null];
-  if (management) { guard += ' AND management_version IS ?'; expected.push(snapshot.management_version); }
+  if (management || operationAuditEnabled(env)) { guard += ' AND management_version IS ?'; expected.push(snapshot.management_version); }
   let assignments = `name = ?${protectedNames ? ', canonical_name = ?' : ''}, slug = ?, description = ?, dropbox_root_path = ?, active = ?`;
   const values = [payload.name, ...(protectedNames ? [canonicalOrganizationName(payload.name)] : []), payload.slug, payload.description || null, payload.dropboxRootPath, mode === 'disabled' ? 0 : 1];
   if (mode === 'disabled') { assignments += ", storage_status = 'DISABLED', storage_error = NULL, storage_checked_at = ?"; values.push(nowIso); }
@@ -273,8 +279,15 @@ async function persistOrganizationManagementFields(env, organizationId, payload,
     assignments += ', management_version = management_version + 1, management_actor_id = ?, management_request_id = ?, management_action = ?, management_reason = ?';
     values.push(management.actorId, management.requestId, management.action || 'organization.updated', management.reason || null);
   }
-  return env.DB.prepare(`UPDATE organizations SET ${assignments} WHERE id = ? ${guard} RETURNING *`)
-    .bind(...values, organizationId, ...expected).first();
+  const mutation = env.DB.prepare(`UPDATE organizations SET ${assignments} WHERE id = ? ${guard} RETURNING *`)
+    .bind(...values, organizationId, ...expected);
+  if (management) return mutation.first();
+  const changes = payload.name !== snapshot.name || payload.slug !== snapshot.slug || (payload.description || null) !== snapshot.description ||
+    payload.dropboxRootPath !== snapshot.dropbox_root_path || (mode === 'disabled' ? 0 : 1) !== snapshot.active ||
+    (mode === 'disabled' && snapshot.storage_status !== 'DISABLED') || (mode === 'reset-pending' && snapshot.storage_status !== 'PENDING');
+  return auditedOrganizationMutation(env, mutation, { context: payload.__auditContext, organizationId,
+    operationId: payload.__auditOperationId, action: mode === 'disabled' ? 'organization.pause' : snapshot.active === 0 ? 'organization.resume' : 'organization.update',
+    before: snapshot, outcome: changes ? 'succeeded' : 'no_change' });
 }
 
 async function persistOrganizationFields(
@@ -425,6 +438,8 @@ async function ensureLifecycleStorageReady(
     claimTtlMs,
     ensureStorage,
     telemetrySource,
+    auditContext,
+    auditOperationId,
   },
 ) {
   const storage = await ensureStorage(env, organization, {
@@ -432,6 +447,8 @@ async function ensureLifecycleStorageReady(
     nowFn,
     claimTtlMs,
     telemetrySource,
+    auditContext,
+    auditOperationId,
   });
 
   if (storage.ready) {
@@ -493,6 +510,7 @@ export async function createOrganizationLifecycle(
     claimTtlMs = ORGANIZATION_STORAGE_CLAIM_TTL_MS,
     ensureStorage = ensureOrganizationStorage,
     management = null,
+    auditContext = null,
     observe = recordOrganizationStorageObservation,
   } = {},
 ) {
@@ -505,6 +523,9 @@ export async function createOrganizationLifecycle(
     correlationId,
   );
   payload.__management = management;
+  if (operationAuditEnabled(env)) await requireOperationAuditReady(env);
+  payload.__auditContext = auditContext;
+  payload.__auditOperationId = management?.requestId?.split(':')[0] || correlationId;
 
   let matches = await getIdentityMatches(
     env,
@@ -520,7 +541,7 @@ export async function createOrganizationLifecycle(
       const existing = matches.exact;
       if (!isActive(existing) || readOrganizationStorageReadiness(existing).ready) return lifecycleResult(existing, { resumed: true });
       const recovered = await ensureLifecycleStorageReady(env, existing, {
-        correlationId, nowFn, claimTtlMs, ensureStorage, telemetrySource: 'operator',
+        correlationId, nowFn, claimTtlMs, ensureStorage, telemetrySource: 'operator', auditContext, auditOperationId: payload.__auditOperationId,
       });
       return lifecycleResult(recovered.organization, { resumed: true, storage: recovered.storage });
     } else if (management && (matches.bySlug || matches.byPath)) {
@@ -564,7 +585,7 @@ export async function createOrganizationLifecycle(
       const existing = matches.exact;
       if (!isActive(existing) || readOrganizationStorageReadiness(existing).ready) return lifecycleResult(existing, { resumed: true });
       const recovered = await ensureLifecycleStorageReady(env, existing, {
-        correlationId, nowFn, claimTtlMs, ensureStorage, telemetrySource: 'operator',
+        correlationId, nowFn, claimTtlMs, ensureStorage, telemetrySource: 'operator', auditContext, auditOperationId: payload.__auditOperationId,
       });
       return lifecycleResult(recovered.organization, { resumed: true, storage: recovered.storage });
     } else if (management && (matches.bySlug || matches.byPath)) {
@@ -613,6 +634,7 @@ export async function createOrganizationLifecycle(
     claimTtlMs,
     ensureStorage,
     telemetrySource: resumed ? "operator" : "lifecycle",
+    auditContext, auditOperationId: payload.__auditOperationId,
   });
 
   return lifecycleResult(ready.organization, {
@@ -632,6 +654,7 @@ export async function updateOrganizationLifecycle(
     claimTtlMs = ORGANIZATION_STORAGE_CLAIM_TTL_MS,
     ensureStorage = ensureOrganizationStorage,
     management = null,
+    auditContext = null,
   } = {},
 ) {
   const current = await getOrganizationLifecycleById(env, organizationId);
@@ -658,6 +681,9 @@ export async function updateOrganizationLifecycle(
     current,
   );
   payload.__management = management;
+  if (operationAuditEnabled(env)) await requireOperationAuditReady(env);
+  payload.__auditContext = auditContext;
+  payload.__auditOperationId = management?.requestId?.split(':')[0] || correlationId;
 
   const matches = await getIdentityMatches(
     env,
@@ -742,6 +768,7 @@ export async function updateOrganizationLifecycle(
     claimTtlMs,
     ensureStorage,
     telemetrySource: "operator",
+    auditContext, auditOperationId: payload.__auditOperationId,
   });
 
   return lifecycleResult(ready.organization, {
