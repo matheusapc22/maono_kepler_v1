@@ -110,10 +110,12 @@ test('failure projection keeps fixed stage/code but never raw messages, rows or 
  assert.deepEqual(transport.categories,['CLOUDFLARE_AUTH']);assert.equal(transport.stage,'D1_INFO');
  assert.equal(diagnosticFailure(new Error('secret'),'PRIVATE_STAGE').stage,'unknown');
 });
-test('collector progress labels identify reads without adding requests or changing results',async t=>{
+test('collector progress labels identify reads without exposing query details',async t=>{
  const db=fixture(t),stages=[];
  const report=await collectDeletionDiagnostic('fake',remote(db),migration,{...runner(db,[]),onStage:s=>stages.push(s)});
- assert.deepEqual(stages,['identity-before','integrity','target-first','target-second','identity-after']);
+ assert.deepEqual(stages.filter(s=>!s.endsWith('dependency-count')),['identity-before','integrity',
+  ...['first','second'].flatMap(p=>['protected-metadata','target','dependencies','foreign-keys'].map(s=>`${p}-${s}`)), 'identity-after']);
+ for(const stage of stages)assert.equal(diagnosticFailure(new Error('private'),stage).stage,stage);
  assert.equal(report.writesPerformed,false);
 });
 test('real CLI writes minimized failure artifact before any remote access on invalid input',t=>{
@@ -124,4 +126,57 @@ test('real CLI writes minimized failure artifact before any remote access on inv
  const report=JSON.parse(readFileSync(join(cwd,'.tmp/production-migrations/organization-deletion-diagnostic-failure.json'),'utf8'));
  assert.equal(report.stage,'arguments');assert.equal(report.code,'ARGUMENT_INVALID');assert.equal(report.status,'blocked');
  assert.equal(report.writesPerformed,false);assert.equal(report.deletionEligibilityVerified,false);
+});
+
+const protectedDDL=`CREATE TABLE _cf_METADATA (key INTEGER PRIMARY KEY, value BLOB);
+CREATE TABLE _cf_KV (key TEXT PRIMARY KEY, value BLOB) WITHOUT ROWID;`;
+test('known Cloudflare metadata is validated but never passed to protected PRAGMAs',async t=>{
+ const db=fixture(t);db.exec(protectedDDL);
+ const calls=[],valid=runner(db,calls);
+ // Instrument the PRAGMA arguments to reject protected names at execution time.
+ const inspected=[];
+ db.function('assert_public_table',name=>{
+  assert.ok(!name.toLowerCase().startsWith('_cf_'));
+  inspected.push(name);
+  return name;
+ });
+ for(const sql of [DIAGNOSTIC_QUERIES.dependencies,DIAGNOSTIC_QUERIES.foreignKeys]){
+  db.prepare(sql.replace(/(pragma_table_info|pragma_foreign_key_list)\(m.name\)/g,'$1(assert_public_table(m.name))')).all();
+ }
+ assert.ok(inspected.includes('organizations'));
+ for(const sql of [DIAGNOSTIC_QUERIES.dependencies,DIAGNOSTIC_QUERIES.foreignKeys]){
+  assert.ok(sql.includes("m.name NOT IN ('_cf_METADATA','_cf_KV')"));
+ }
+ const report=await collectDeletionDiagnostic('fake',remote(db),migration,valid);
+ assert.equal(report.writesPerformed,false);
+ assert.ok(!JSON.stringify(report).includes('_cf_'));
+ assert.ok(!report.observed.dependencies.some(row=>row.count!==0 && row.kind==='business'));
+ assert.equal(calls.filter(s=>s===DIAGNOSTIC_QUERIES.protectedObjects).length,2);
+});
+test('unknown, altered, or associated protected objects block before target and dependency reads',async t=>{
+ for(const ddl of [
+  'CREATE TABLE _cf_NEW (organization_id INTEGER);',
+  'CREATE TABLE _cf_METADATA (organization_id INTEGER);',
+  protectedDDL+'CREATE INDEX unexpected ON _cf_METADATA(value);',
+  'CREATE TABLE _cf_metadata (key INTEGER PRIMARY KEY, value BLOB);',
+ ]){
+  const db=fixture(t);db.exec(ddl);const calls=[];
+  await assert.rejects(collectDeletionDiagnostic('fake',remote(db),migration,runner(db,calls)),{code:'DELETION_DIAGNOSTIC_BLOCKED'});
+  assert.ok(!calls.includes(DIAGNOSTIC_QUERIES.target));
+  assert.ok(!calls.includes(DIAGNOSTIC_QUERIES.dependencies));
+ }
+});
+test('each failing diagnostic query produces a precise safe stage',async t=>{
+ for(const [key,label] of [['protectedObjects','protected-metadata'],['target','target'],['dependencies','dependencies'],['foreignKeys','foreign-keys']]){
+  const db=fixture(t),valid=runner(db,[]);let stage;
+  try{
+   await collectDeletionDiagnostic('fake',remote(db),migration,{onStage:s=>{stage=s;},runProcess:async(cmd,args,opts)=>
+    args.includes(DIAGNOSTIC_QUERIES[key])?{code:1,stdout:'PRIVATE not authorized: SQLITE_AUTH',stderr:''}:valid.runProcess(cmd,args,opts)});
+   assert.fail('must reject');
+  }catch(error){
+   const report=diagnosticFailure(error,stage);
+   assert.equal(report.stage,`first-${label}`);assert.deepEqual(report.transport.categories,['SQLITE_AUTH']);
+   assert.ok(!JSON.stringify(report).includes('PRIVATE'));
+  }
+ }
 });
