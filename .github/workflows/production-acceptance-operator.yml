@@ -71,6 +71,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
@@ -87,6 +89,23 @@ jobs:
         run: node --test tests/production-acceptance-operator*.test.mjs
       - name: Verify organization artifact transport using offline fixtures
         run: python3 -m unittest discover -s tests -p test_organization_artifact_provenance.py
+
+      - name: Produce sanitized synthetic artifact
+        id: synthetic-evidence
+        if: github.run_attempt == 1
+        run: |
+          evidence_dir="$(mktemp -d)"
+          evidence_file="$(python3 scripts/acceptance/produce-organization-artifact.py \
+            --run "$GITHUB_RUN_ID" --sha "$GITHUB_SHA" --directory "$evidence_dir")"
+          echo "path=$evidence_file" >> "$GITHUB_OUTPUT"
+      - name: Upload synthetic fixture
+        if: github.run_attempt == 1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: synthetic-organization-transport-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.synthetic-evidence.outputs.path }}
+          if-no-files-found: error
+          retention-days: 3
 
   browser-setup-smoke:
     if: github.event_name == 'pull_request'

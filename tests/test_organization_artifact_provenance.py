@@ -3,6 +3,8 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -58,6 +60,29 @@ class ProvenanceTests(unittest.TestCase):
         self.assertTrue(result["transportVerified"])
         self.assertFalse(result["functionalAcceptanceVerified"])
         self.assertEqual(result["evidenceSha256"], v.sha256(json.dumps(self.content).encode()))
+
+    def test_producer_cli_to_zip_to_transport_verifier(self):
+        case = "synthetic-organization-update"
+        producer = SCRIPT.with_name("produce-organization-artifact.py")
+        with tempfile.TemporaryDirectory() as directory:
+            argv = [sys.executable, str(producer), "--directory", directory,
+                    "--run", str(self.RUN), "--sha", self.SHA]
+            subprocess.run(argv, check=True, capture_output=True)
+            self.assertNotEqual(subprocess.run(argv, capture_output=True).returncode, 0)
+            with self.assertRaises(subprocess.CalledProcessError):
+                subprocess.run(argv + ["--session", "synthetic-secret"], check=True, capture_output=True)
+            raw = (Path(directory) / v.NAME).read_bytes()
+        self.assertEqual(json.loads(raw), {
+            **self.content, "caseId": case, "version": 1,
+            "kind": "organization-synthetic-transport-fixture",
+        })
+        self.archive = self.bundle(raw)
+        self.pin()
+        self.artifact["name"] = f"organization-evidence-{self.RUN}-1-{case}"
+        receipt = v.verify(self.archive, self.RUN, self.ARTIFACT, self.SHA, case, get=self.get)
+        self.assertEqual(receipt["evidenceSha256"], v.sha256(raw))
+        self.assertTrue(receipt["transportVerified"])
+        self.assertFalse(receipt["functionalAcceptanceVerified"])
 
     def test_wrong_attempt_ref_sha_workflow_event_conclusion_or_repository_refused(self):
         for field, mismatch in {

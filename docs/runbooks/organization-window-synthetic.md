@@ -96,3 +96,48 @@ Uma nova tentativa relê os três e não repete a restauração de um executor q
 já voltou ao baseline. Isso não valida operações Cloudflare; ainda é preciso
 vincular os três alvos, configurações e acessos de um ambiente de teste
 autorizado.
+
+### Ensaio de ponta a ponta do transporte
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p test_organization_artifact_provenance.py
+```
+
+O teste invoca o produtor por CLI, empacota a saída original e passa o ZIP
+pelo verificador com metadados de GitHub simulados. O produtor só emite
+identidade da execução e caso sintético fixo. Não recebe payload de sessão,
+HTTP, DOM ou D1. A validação exige que o digest do arquivo observado seja o
+mesmo do produtor e conserva o aceite funcional como falso.
+
+O job de contratos da PR publica o JSON como
+`synthetic-organization-transport-<run>-<attempt>` na primeira tentativa.
+Esse artefato usa o SHA do checkout sintético e fica separado da convenção
+protegida de produção. O verificador de produção continua exigindo o mesmo
+workflow, a branch de produto e o nome protegido. O E2E offline não demonstra
+a publicação do ZIP protegido. A publicação pelo job sintético, o vínculo
+do ZIP verificado, a autoria da sessão e o efeito real de negócio são
+evidências distintas.
+
+### Requisitos mínimos do ensaio Cloudflare
+
+O adaptador de teste atual usa um transporte injetado, exercitado em memória.
+Antes de conectar Cloudflare, registrar uma conta de teste separada e
+autorizar o trio exato de alvos: um projeto Pages e dois Workers descartáveis
+(exclusão e recuperação), com nomes no padrão `maono-ac01-test-*`.
+Para cada alvo, registrar os identificadores de dois deploys/versões terminais
+com configuração equivalente, o fingerprint da configuração efetiva e as
+permissões do operador. Confirmar isolamento dos domínios públicos, do D1
+`maono_maps` e de bindings, recursos e rotas de produção. As credenciais
+devem permanecer num ambiente GitHub protegido de teste, com escopo suficiente
+para leitura e reversão dos três alvos. Executar com exclusividade comprovada,
+ou usar uma operação do provedor que recuse mudanças concorrentes de estado.
+
+O primeiro ensaio exercita apenas reversão de deployment com configuração
+equivalente. Para Pages, confirmar a elegibilidade do deployment anterior
+para rollback do projeto de teste. Para Workers, comprovar a distribuição
+efetiva de tráfego e a versão alvo de cada Worker, além da compatibilidade
+de recursos e bindings. Ler cada estado antes e depois. Divergência, leitura
+ausente ou deploy não terminal bloqueiam a conclusão. O ensaio exige
+autorização específica para alternar os deployments nos três alvos e não
+inclui alteração de configuração. Restauração de configuração divergente
+continua como capacidade separada.
