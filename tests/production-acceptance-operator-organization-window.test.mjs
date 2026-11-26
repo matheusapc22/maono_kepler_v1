@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { spawn, spawnSync } from 'node:child_process';
+import { appendFile, chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -132,4 +132,115 @@ test('restores remaining executors when one adapter fails and requires matching 
   await window.restore({ read, restore: async (executor, value) => { current[executor] = value; } });
   assert.deepEqual(current, baseline);
   assert.equal(window.report().protocolComplete, true);
+});
+
+async function checkpointFixture(t, alterScenario = () => {}) {
+  const { clock, baseline, manifest, evidence, cleanup } = fixture();
+  const dir = await mkdtemp(join(tmpdir(), 'organization-checkpoint-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const checkpoint = join(dir, 'journal');
+  await mkdir(checkpoint, { mode: 0o700 });
+  const scenarioPath = join(dir, 'scenario.json');
+  const evidencePath = join(dir, 'evidence.json');
+  const alternateEvidence = join(dir, 'alternate-evidence.json');
+  const scenario = { clock, manifest, cleanup, beforeRestore: structuredClone(baseline) };
+  scenario.beforeRestore[EXECUTORS[2]].deployment = 'synthetic-window';
+  alterScenario(scenario);
+  await writeFile(scenarioPath, encode(scenario));
+  await writeFile(evidencePath, encode(evidence));
+  await writeFile(alternateEvidence, encode({ ...evidence, operation: 'synthetic-other-operation' }));
+  const args = (phase, input = evidencePath) =>
+    ['scripts/acceptance/operator.mjs', 'organization-window-synthetic', scenarioPath, input, checkpoint, phase];
+  const run = (...params) => spawnSync(process.execPath, args(...params), { encoding: 'utf8' });
+  return { run, args, scenarioPath, checkpoint, alternateEvidence };
+}
+
+const posix = { skip: process.platform === 'win32' };
+
+test('synthetic checkpoint resumes and deduplicates between CLI processes', posix, async (t) => {
+  const { run, checkpoint, scenarioPath, alternateEvidence } = await checkpointFixture(t);
+  const premature = run('finish');
+  assert.equal(premature.status, 1);
+  assert.match(premature.stderr, /CHECKPOINT_NOT_ACCEPTED/);
+  // An interrupted writer may leave an unpublished temporary file.
+  await writeFile(join(checkpoint, '.pending-stale'), 'incomplete', { mode: 0o600 });
+  const accepted = run('accept');
+  assert.equal(accepted.status, 0, accepted.stderr);
+  assert.equal(JSON.parse(accepted.stdout).state, 'cleanup');
+  assert.deepEqual(run('accept').stdout, accepted.stdout);
+  const different = run('finish', alternateEvidence);
+  assert.equal(different.status, 1);
+  assert.match(different.stderr, /CHECKPOINT_CONFLICT/);
+  const finished = run('finish');
+  assert.equal(finished.status, 0, finished.stderr);
+  const report = JSON.parse(finished.stdout);
+  assert.equal(report.state, 'closed');
+  assert.equal(report.executors[EXECUTORS[2]], 'restored');
+  assert.equal(report.complete, false);
+  assert.equal(report.acceptanceExecuted, false);
+  assert.equal(run('finish').stdout, finished.stdout);
+  await appendFile(scenarioPath, '\n');
+  const changedScenario = run('finish');
+  assert.equal(changedScenario.status, 1);
+  assert.match(changedScenario.stderr, /CHECKPOINT_CONFLICT/);
+  assert.equal((await readdir(checkpoint)).filter((name) => name.endsWith('.json')).length, 2);
+});
+
+function runAsync(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
+    child.once('error', reject);
+    child.once('close', (status) => resolve({ status, stdout, stderr }));
+  });
+}
+
+test('concurrent CLI writers cannot replace accepted evidence', posix, async (t) => {
+  const { run, args, checkpoint, alternateEvidence } = await checkpointFixture(t);
+  const inputs = [undefined, alternateEvidence];
+  const accepted = await Promise.all(inputs.map((input) => runAsync(args('accept', input))));
+  assert.deepEqual(accepted.map((result) => result.status).sort(), [0, 1]);
+  assert.match(accepted.find((result) => result.status === 1).stderr, /CHECKPOINT_CONFLICT/);
+  const winner = inputs[accepted.findIndex((result) => result.status === 0)];
+  const finished = await Promise.all([runAsync(args('finish', winner)), runAsync(args('finish', winner))]);
+  for (const result of finished) assert.equal(result.status, 0, result.stderr);
+  assert.equal(finished[0].stdout, finished[1].stdout);
+  assert.equal(run('finish', winner).stdout, finished[0].stdout);
+  assert.equal((await readdir(checkpoint)).length, 2);
+});
+
+test('invalid or corrupt storage fails closed without replacing the journal', posix, async (t) => {
+  const { run, checkpoint } = await checkpointFixture(t);
+  await chmod(checkpoint, 0o755);
+  const exposed = run('accept');
+  assert.equal(exposed.status, 1);
+  assert.match(exposed.stderr, /CHECKPOINT_DIRECTORY/);
+  assert.deepEqual(await readdir(checkpoint), []);
+  await chmod(checkpoint, 0o700);
+  const accepted = run('accept');
+  assert.equal(accepted.status, 0, accepted.stderr);
+  const [record] = await readdir(checkpoint);
+  await writeFile(join(checkpoint, record), 'corrupt');
+  const corrupt = run('finish');
+  assert.equal(corrupt.status, 1);
+  assert.match(corrupt.stderr, /CHECKPOINT_RECORD/);
+  assert.deepEqual(await readdir(checkpoint), [record]);
+});
+
+test('an incomplete synthetic cleanup preserves the acceptance record but cannot close', posix, async (t) => {
+  const { run, checkpoint } = await checkpointFixture(t, (scenario) => {
+    scenario.cleanup.remaining.push('synthetic-org');
+  });
+  const accepted = run('accept');
+  assert.equal(accepted.status, 0, accepted.stderr);
+  const incomplete = run('finish');
+  assert.equal(incomplete.status, 1);
+  assert.match(incomplete.stderr, /CLEANUP_INCOMPLETE/);
+  assert.equal(run('accept').stdout, accepted.stdout);
+  const records = await readdir(checkpoint);
+  assert.equal(records.length, 1);
+  assert.match(records[0], /\.accepted\.json$/);
 });

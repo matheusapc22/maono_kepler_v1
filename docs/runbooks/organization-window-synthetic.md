@@ -21,10 +21,37 @@ Worker de exclusão e Worker de recuperação, e o protocolo compara o readback
 de cada um ao baseline. A falha parcial impede o fechamento e permite repetir
 a restauração na mesma instância. O relatório conserva o caráter sintético.
 
-O ensaio ainda usa um caso por instância e estado em memória. Ainda falta
-persistir a janela e deduplicar submissões entre processos, estabelecer
-procedência do canal autenticado e vincular deploy, binding, autoria, HTTP,
+O ensaio ainda usa um caso e adaptadores em memória. O diário abaixo retoma
+as etapas sintéticas. Ainda falta estabelecer a procedência do canal
+autenticado e vincular deploy, binding, autoria, HTTP,
 UI e histórico a observações independentes. O adaptador remoto precisa usar
 baseline por executor, configuração efetiva e confirmação pós-restauração.
 O recorte operacional e tokens permanecem no ambiente protegido existente.
 A suíte de readiness conserva seu contrato read-only.
+
+### Retomada em outro processo
+
+Em um sistema de arquivos POSIX local que suporte hard links e sincronização
+de diretórios, use uma pasta privada nova, sem componentes substituíveis por
+terceiros. As duas entradas devem ser idênticas byte a byte nas duas etapas:
+
+```sh
+journal=$(mktemp -d)
+node scripts/acceptance/operator.mjs organization-window-synthetic scenario.json evidence.json "$journal" accept
+node scripts/acceptance/operator.mjs organization-window-synthetic scenario.json evidence.json "$journal" finish
+```
+
+`accept` valida a evidência e grava um registro imutável antes de devolver
+o estado `cleanup`. `finish` exige esse registro, simula a limpeza e a
+restauração e só grava o fechamento após o readback de todos os executores.
+Repetir uma etapa concluída devolve o registro, sem executar a etapa de novo.
+Uma entrada diferente para a mesma execução, tentativa e caso é recusada.
+Uma falha antes da publicação do registro não impede nova tentativa; arquivos
+temporários abandonados não são válidos como registros. A publicação é
+exclusiva, inclusive entre processos; processos concorrentes ainda podem
+calcular a mesma transição em memória antes da publicação.
+
+O diário não autentica autoria e não substitui um armazenamento protegido.
+Contém hashes dos arquivos e o relatório sintético, não as entradas originais.
+Conserve os dois arquivos e a pasta até verificar o resultado. Nunca use
+credenciais, dados de produção ou adaptadores reais neste comando.

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { fail } from './production-acceptance-lib.mjs';
+import { digest, openSyntheticCheckpoint } from './organization-window-checkpoint.mjs';
 
 export const EXECUTORS = Object.freeze([
   'pages:maono-kepler-v1',
@@ -169,18 +170,38 @@ async function readBounded(path) {
 }
 
 export async function runOrganizationWindow(args) {
-  requireCondition(args.length === 2, 'EXPECTED_MANIFEST_AND_EVIDENCE');
-  const [manifestPath, evidencePath] = args;
-  const scenario = JSON.parse(await readBounded(manifestPath));
+  const [manifestPath, evidencePath, checkpointDirectory, phase] = args;
+  requireCondition(args.length === 2 || (args.length === 4 &&
+    ['accept', 'finish'].includes(phase)), 'EXPECTED_MANIFEST_AND_EVIDENCE');
+  const scenarioBytes = await readBounded(manifestPath);
+  const scenario = JSON.parse(scenarioBytes);
   exact(scenario, ['clock', 'manifest', 'cleanup', 'beforeRestore'], 'SCENARIO_FIELDS');
   requireCondition(Number.isSafeInteger(scenario.clock) && scenario.clock > 0, 'SCENARIO_CLOCK');
   const window = createOrganizationWindow(scenario.manifest, { now: () => scenario.clock });
-  window.ingest(await readBounded(evidencePath));
+  const evidence = await readBounded(evidencePath);
+  let checkpoint;
+  if (phase) {
+    const { run, attempt, caseId } = scenario.manifest;
+    checkpoint = await openSyntheticCheckpoint(checkpointDirectory, {
+      key: digest(JSON.stringify([run, attempt, caseId])),
+      scenario: digest(scenarioBytes), evidence: digest(evidence),
+    });
+    const accepted = await checkpoint.read('accepted');
+    if (phase === 'accept' && accepted) return accepted;
+    if (phase === 'finish') {
+      requireCondition(accepted, 'CHECKPOINT_NOT_ACCEPTED');
+      const closed = await checkpoint.read('closed');
+      if (closed) return closed;
+    }
+  }
+  window.ingest(evidence);
+  if (phase === 'accept') return checkpoint.commit('accepted', window.report());
   window.verifyCleanup(scenario.cleanup);
   const syntheticState = snapshot(scenario.beforeRestore);
   await window.restore({
     read: async (executor) => syntheticState[executor],
     restore: async (executor, baseline) => { syntheticState[executor] = baseline; },
   });
-  return window.report();
+  const report = window.report();
+  return checkpoint ? checkpoint.commit('closed', report) : report;
 }
