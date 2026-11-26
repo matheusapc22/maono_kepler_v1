@@ -1,4 +1,5 @@
 import { parseManualBundle, createManualAdministration, manualFunctionalCases, validateBeforeEvidence } from "./manual-evidence.mjs";
+import { runOrganizationWindow } from "./organization-window.mjs";
 import { createExecutionBudget } from "./execution-budget.mjs";
 import { validateCc03Window } from './cc03-window.mjs';
 import {runCc07Operator} from './cc07-operator.mjs';
@@ -42,6 +43,11 @@ function publicProject(project) {
 async function main(argv = process.argv.slice(2), env = process.env, runtime = {}) {
   let options;
   try {
+    if (argv[0] === "organization-window-synthetic") {
+      const report = await runOrganizationWindow(argv.slice(1));
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+      return 0;
+    }
     options = parseArgs(argv);
     if (options.mode === "describe") {
       process.stdout.write(`${JSON.stringify(publicManifest(options.suite), null, 2)}\n`);
