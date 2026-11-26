@@ -55,3 +55,44 @@ O diário não autentica autoria e não substitui um armazenamento protegido.
 Contém hashes dos arquivos e o relatório sintético, não as entradas originais.
 Conserve os dois arquivos e a pasta até verificar o resultado. Nunca use
 credenciais, dados de produção ou adaptadores reais neste comando.
+
+### Transporte de evidências pelo GitHub
+
+A prova de transporte é separada do diário sintético. A partir de um plano
+revisado, fixe o identificador da execução, o SHA, o caso e o identificador
+do artefato esperado. O formato proposto para o produtor é
+`organization-evidence-<run>-1-<caso>`, com um único
+`organization-evidence.json` contendo `run`, `attempt`, `sha` e `caseId`.
+A rotina abaixo recebe o ZIP original do GitHub, não uma cópia recompactada.
+O produtor protegido **ainda não publica esse formato**; não dispare uma
+janela em produção para testar o verificador.
+
+```sh
+python3 scripts/acceptance/verify-organization-artifact.py \
+  --run "$RUN_ID" --artifact "$ARTIFACT_ID" --sha "$PRODUCT_SHA" \
+  --case "$CASE_ID" --archive "$ORIGINAL_ZIP"
+python3 -m unittest discover -s tests -p test_organization_artifact_provenance.py
+```
+
+Configure `MAONO_EVIDENCE_GITHUB_TOKEN` como segredo de ambiente, só com
+Actions: read no repositório. Não passe o token na linha de comando. O
+verificador consulta apenas metadados do GitHub por GET, sem seguir
+redirecionamentos. Exige a primeira tentativa bem-sucedida do workflow
+esperado, no repositório e na branch de produto esperados. Compara o hash do
+ZIP com o digest do provedor, o nome do artefato com o caso esperado e a
+identidade do JSON com o run/SHA/caso. Não extrai arquivos no disco e não
+imprime o JSON original. Um resultado aprovado prova o transporte e o
+vínculo, não comprova interação do usuário, autoria da sessão, efeito no D1
+ou aceite funcional. Os testes usam metadados e ZIPs de teste.
+
+### Verificação em duas leituras
+
+Na restauração sintética, a primeira leitura precisa obter deployment e
+configuração dos três executores, separadamente. Se qualquer leitura estiver
+ausente ou inválida, nenhuma escrita é simulada. Depois de restaurar, cada
+executor é lido de novo. Uma leitura ausente fica marcada como não verificada
+e impede o encerramento, mesmo quando os dois outros coincidem com o baseline.
+Uma nova tentativa relê os três e não repete a restauração de um executor que
+já voltou ao baseline. Isso não valida operações Cloudflare; ainda é preciso
+vincular os três alvos, configurações e acessos de um ambiente de teste
+autorizado.

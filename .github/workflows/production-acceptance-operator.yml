@@ -7,6 +7,7 @@ on:
       - '.github/scripts/acceptance-browser/**'
       - 'scripts/acceptance/**'
       - 'tests/production-acceptance-operator*.test.mjs'
+      - 'tests/test_organization_artifact_provenance.py'
       - 'docs/runbooks/production-acceptance-operator.md'
       - 'AGENTS.md'
       - 'package.json'
@@ -84,6 +85,8 @@ jobs:
           node --check .github/scripts/acceptance-browser/smoke.mjs
       - name: Validate acceptance operator contracts
         run: node --test tests/production-acceptance-operator*.test.mjs
+      - name: Verify organization artifact transport using offline fixtures
+        run: python3 -m unittest discover -s tests -p test_organization_artifact_provenance.py
 
   browser-setup-smoke:
     if: github.event_name == 'pull_request'

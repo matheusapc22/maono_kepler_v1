@@ -29,14 +29,16 @@ function match(value, pattern) {
   return typeof value === 'string' && pattern.test(value);
 }
 
+function executorSnapshot(value) {
+  exact(value, ['deployment', 'configuration'], 'EXECUTOR_FIELDS');
+  requireCondition(match(value.deployment, /^[a-zA-Z0-9-]{1,80}$/) &&
+    match(value.configuration, /^[a-f0-9]{64}$/), 'EXECUTOR_SNAPSHOT');
+  return structuredClone(value);
+}
+
 function snapshot(value) {
   exact(value, EXECUTORS, 'EXECUTOR_INVENTORY');
-  for (const executor of EXECUTORS) {
-    exact(value[executor], ['deployment', 'configuration'], 'EXECUTOR_FIELDS');
-    requireCondition(match(value[executor].deployment, /^[a-zA-Z0-9-]{1,80}$/) &&
-      match(value[executor].configuration, /^[a-f0-9]{64}$/), 'EXECUTOR_SNAPSHOT');
-  }
-  return structuredClone(value);
+  return Object.fromEntries(EXECUTORS.map((executor) => [executor, executorSnapshot(value[executor])]));
 }
 
 function unchanged(left, right) {
@@ -118,32 +120,57 @@ export function createOrganizationWindow(manifest, { now = Date.now } = {}) {
     transition('closed');
   }
 
+  let restoring = false;
+  let restorationErrors = [];
+  let restorationReadErrors = { before: [], after: [] };
   async function restore(adapter) {
-    requireCondition(state() === 'restoration', 'RESTORATION_STATE');
-    const readAll = async () => snapshot(Object.fromEntries(await Promise.all(
-      EXECUTORS.map(async (executor) => [executor, await adapter.read(executor)]))));
-    const before = await readAll();
-    const attempts = await Promise.allSettled(EXECUTORS.map(async (executor) => {
-      if (!unchanged(baseline[executor], before[executor])) {
-        await adapter.restore(executor, structuredClone(baseline[executor]));
-      }
-    }));
-    const after = await readAll();
-    // Readback is decisive even when the adapter reports a lost response.
+    requireCondition(state() === 'restoration' && !restoring, 'RESTORATION_STATE');
+    restoring = true;
+    restorationErrors = [];
+    restorationReadErrors = { before: [], after: [] };
+    const readAll = async (phase) => {
+      const reads = await Promise.allSettled(EXECUTORS.map(async (executor) => {
+        return executorSnapshot(await adapter.read(executor));
+      }));
+      restorationReadErrors[phase] = EXECUTORS.filter((_, index) => reads[index].status === 'rejected');
+      return Object.fromEntries(EXECUTORS.map((executor, index) => [executor,
+        reads[index].status === 'fulfilled' ? reads[index].value : null]));
+    };
     try {
+      const before = await readAll('before');
+      if (restorationReadErrors.before.length) {
+        results = Object.fromEntries(EXECUTORS.map((executor) => [executor, !before[executor] ? 'unverified'
+          : unchanged(baseline[executor], before[executor]) ? 'unchanged' : 'pending']));
+        requireCondition(false, 'RESTORATION_BASELINE_UNVERIFIED');
+      }
+      const attempts = await Promise.allSettled(EXECUTORS.map(async (executor) => {
+        if (!unchanged(baseline[executor], before[executor])) {
+          await adapter.restore(executor, structuredClone(baseline[executor]));
+        }
+      }));
+      restorationErrors = EXECUTORS.filter((_, index) => attempts[index].status === 'rejected');
+      const after = await readAll('after');
+      if (restorationReadErrors.after.length) {
+        results = Object.fromEntries(EXECUTORS.map((executor) => {
+          if (!after[executor]) return [executor, 'unverified'];
+          if (!unchanged(baseline[executor], after[executor])) return [executor, 'mismatch'];
+          return [executor, unchanged(baseline[executor], before[executor]) ? 'unchanged' : 'restored'];
+        }));
+        requireCondition(false, 'RESTORATION_INCOMPLETE');
+      }
+      // Readback is decisive even when the adapter reports a lost response.
       verifyRestoration(before, after);
     } finally {
-      restorationErrors = attempts.flatMap((attempt, index) =>
-        attempt.status === 'rejected' ? [EXECUTORS[index]] : []);
+      restoring = false;
     }
   }
 
-  let restorationErrors = [];
   return {
     ingest, interrupt, verifyCleanup, verifyRestoration, restore,
     report: () => ({
       version: 1, kind: 'synthetic', state: state(), history: [...history], disposition,
       evidenceDigest, executors: results && { ...results }, restorationErrors: [...restorationErrors],
+      restorationReadErrors: { before: [...restorationReadErrors.before], after: [...restorationReadErrors.after] },
       protocolComplete: state() === 'closed' && disposition === 'synthetic-case-verified',
       acceptanceExecuted: false, complete: false,
     }),

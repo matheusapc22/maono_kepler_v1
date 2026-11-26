@@ -244,3 +244,59 @@ test('an incomplete synthetic cleanup preserves the acceptance record but cannot
   assert.equal(records.length, 1);
   assert.match(records[0], /\.accepted\.json$/);
 });
+
+test('an unverified executor before restoration prevents all writes', async () => {
+  const { clock, baseline, manifest, evidence, cleanup } = fixture();
+  const window = createOrganizationWindow(manifest, { now: () => clock });
+  window.ingest(encode(evidence));
+  window.verifyCleanup(cleanup);
+  const reads = [];
+  let writes = 0;
+  const [pages, deletion, recovery] = EXECUTORS;
+  await assert.rejects(window.restore({
+    read: async (executor) => {
+      reads.push(executor);
+      if (executor === recovery) return null;
+      if (executor === deletion) return { ...baseline[executor], configuration: 'c'.repeat(64) };
+      return baseline[executor];
+    },
+    restore: async () => { writes++; },
+  }), /RESTORATION_BASELINE_UNVERIFIED/);
+  assert.deepEqual(reads, EXECUTORS);
+  assert.equal(writes, 0);
+  assert.deepEqual(window.report().executors, { [pages]: 'unchanged', [deletion]: 'pending', [recovery]: 'unverified' });
+  assert.deepEqual(window.report().restorationReadErrors, { before: [recovery], after: [] });
+  assert.equal(window.report().state, 'restoration');
+});
+
+test('a missing readback blocks closure until fresh observations match without repeating a write', async () => {
+  const { clock, baseline, manifest, evidence, cleanup } = fixture();
+  const window = createOrganizationWindow(manifest, { now: () => clock });
+  window.ingest(encode(evidence));
+  window.verifyCleanup(cleanup);
+  const [pages, deletion, recovery] = EXECUTORS;
+  const current = structuredClone(baseline);
+  current[recovery].configuration = 'c'.repeat(64);
+  let failAfter = true;
+  let writes = 0;
+  const adapter = {
+    read: async (executor) => {
+      if (executor === recovery && failAfter && writes > 0) throw new Error('fixture unavailable');
+      return current[executor];
+    },
+    restore: async (executor, value) => {
+      assert.equal(executor, recovery);
+      current[executor] = value;
+      writes++;
+    },
+  };
+  await assert.rejects(window.restore(adapter), /RESTORATION_INCOMPLETE/);
+  assert.deepEqual(window.report().restorationReadErrors, { before: [], after: [recovery] });
+  assert.deepEqual(window.report().executors, { [pages]: 'unchanged', [deletion]: 'unchanged', [recovery]: 'unverified' });
+  assert.equal(window.report().protocolComplete, false);
+  failAfter = false;
+  await window.restore(adapter);
+  assert.equal(writes, 1);
+  assert.equal(window.report().protocolComplete, true);
+  assert.equal(window.report().acceptanceExecuted, false);
+});
