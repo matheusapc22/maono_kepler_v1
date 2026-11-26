@@ -121,7 +121,7 @@ export function OperationRecoveryControls({operation,busy,onConsult,onAudit,onCo
     </>}
   </div>;
 }
-export function OrganizationEditor({detail,tab,onTab,onSubmit,onPeople,onDocuments,busy,onDenied,onError,cleanReports=false,onAudit,onDirtyChange,confirmedChange}:{detail:Detail;tab:string;onTab:(v:string)=>void;onSubmit:(input:OperationInput)=>void;onPeople:()=>void;onDocuments:()=>void;busy:boolean;onDenied:()=>void;onError?:(message:string)=>void;cleanReports?:boolean;onAudit?:()=>void;onDirtyChange?:(dirty:boolean)=>void;confirmedChange?:OrganizationDraftConfirmation}){
+export function OrganizationEditor({detail,tab,onTab,onSubmit,onPeople,onDocuments,busy,onDenied,onError,cleanReports=false,onAudit,onDirtyChange,confirmedChange,dialogLoading=false}:{detail:Detail;tab:string;onTab:(v:string)=>void;onSubmit:(input:OperationInput)=>void;onPeople:()=>void;onDocuments:()=>void;busy:boolean;onDenied:()=>void;onError?:(message:string)=>void;cleanReports?:boolean;onAudit?:()=>void;onDirtyChange?:(dirty:boolean)=>void;confirmedChange?:OrganizationDraftConfirmation;dialogLoading?:boolean}){
   const org=detail.organization;
   const descriptionLabel=useId();
   const [draft,setDraft]=useState(()=>createOrganizationDraft(detail));
@@ -133,8 +133,11 @@ export function OrganizationEditor({detail,tab,onTab,onSubmit,onPeople,onDocumen
   const [people,setPeople]=useState<Person[]>([]),[files,setFiles]=useState<FileRow[]>([]),[events,setEvents]=useState<EventRow[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false),[docPage,setDocPage]=useState(1),[more,setMore]=useState(false),[cursor,setCursor]=useState<number|null>(null);
   const errorCallback=useRef(onError);errorCallback.current=onError;
   useLayoutEffect(()=>{
+    // Keep the visible origin intact until all loading phases, including the
+    // final readiness observation, finish. Then reconcile the confirmed result.
+    if(dialogLoading)return;
     setDraft(previous=>reconcileOrganizationDraft(previous,detail,confirmedChange));
-  },[detail,confirmedChange]);
+  },[detail,confirmedChange,dialogLoading]);
   useLayoutEffect(()=>{onDirtyChange?.(dirty);},[dirty,onDirtyChange]);
   useEffect(()=>{errorCallback.current?.(error);},[error]);
   useEffect(()=>()=>{errorCallback.current?.('');},[]);

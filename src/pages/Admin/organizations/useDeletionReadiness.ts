@@ -21,8 +21,10 @@ export function readinessBlocker(code:string){return blockerLabels[code]||'Há u
 
 /** Read-only readiness, including reload recovery. A local timer never grants eligibility. */
 export function useDeletionReadiness(organizationId:number|null,version:number|undefined,onDenied:()=>void,resolverEnabled=false){
-  const key=organizationId===null?'':`${organizationId}:${version??''}`;
   const [attempt,setAttempt]=useState(0),[state,setState]=useState<Readiness>({key:'',checking:false,preview:null,error:''});
+  // A refresh is pending in the same render that requests it. The previous
+  // observation cannot briefly release the loader or satisfy the new attempt.
+  const key=organizationId===null?'':`${organizationId}:${version??''}:${attempt}`;
   useEffect(()=>{
     if(organizationId===null){setState({key:'',checking:false,preview:null,error:''});return;}
     const c=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
