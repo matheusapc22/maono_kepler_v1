@@ -26,7 +26,7 @@ on:
         required: true
         type: string
       organization_id:
-        description: "Dedicated QA organization id"
+        description: "Dedicated QA organization id (B1 sandbox only: sandbox)"
         required: true
         type: string
       qa_user_ids:
@@ -49,6 +49,10 @@ on:
         required: false
         default: ""
         type: string
+      b1_baseline:
+        description: "B1 sandbox only: SHA-256 from the preflight on this commit"
+        required: false
+        type: string
       confirmation:
         description: "preflight=PREPARE_PRODUCTION_ACCEPTANCE | run=RUN_PRODUCTION_ACCEPTANCE | closure=RESTORE_PRODUCTION_ACCEPTANCE_SAFE_STATE"
         required: true
@@ -58,13 +62,79 @@ permissions:
   contents: read
 
 concurrency:
-  group: maono-production-acceptance
+  group: maono-production-acceptance${{ inputs.suite == 'organization-b1-cloudflare-test' && '-b1-sandbox' || '' }}
   cancel-in-progress: false
 
 env:
   PRODUCT_BRANCH: mano_kepler_v1
 
 jobs:
+  b1-validate:
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'organization-b1-cloudflare-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Bind explicit sandbox request to owner, branch and SHA
+        env:
+          MODE: ${{ inputs.mode }}
+          BASELINE: ${{ inputs.b1_baseline }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          SCOPE: ${{ inputs.organization_id }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "matheusapc22/maono_kepler_v1"
+          test "$GITHUB_ACTOR" = "matheusapc22"
+          test "$GITHUB_REF" = "refs/heads/au-ac01-b1-capacidade"
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$SCOPE" = sandbox
+          test "$CONFIRMATION" = "B1-$MODE-$GITHUB_SHA"
+          case "$MODE" in
+            preflight) test -z "$BASELINE" ;;
+            run|closure) [[ "$BASELINE" =~ ^[a-f0-9]{64}$ ]] ;;
+            *) exit 2 ;;
+          esac
+
+  b1-cloudflare:
+    needs: b1-validate
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: maono-b1-ensaios
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Verify reviewed PR is still open at the dispatched commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/pulls/306" --jq 'select(.state == "open" and .head.ref == "au-ac01-b1-capacidade" and .head.repo.full_name == "matheusapc22/maono_kepler_v1") | .head.sha')"
+          test "$actual" = "$GITHUB_SHA"
+      - name: Observe or restore the three B1 sandbox fixtures
+        env:
+          B1_CF_TOKEN: ${{ secrets.MAONO_B1_CF_TOKEN }}
+          B1_MODE: ${{ inputs.mode }}
+          B1_BASELINE: ${{ inputs.b1_baseline }}
+          B1_REPORT: ${{ runner.temp }}/b1-cloudflare.json
+        run: node scripts/acceptance/organization-cloudflare-sandbox.mjs
+      - name: Preserve sanitized observations even on partial failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: b1-cloudflare-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/b1-cloudflare.json
+          if-no-files-found: error
+          retention-days: 7
+
   contracts:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -128,7 +198,7 @@ jobs:
           test -z "$(git status --porcelain --untracked-files=no)"
 
   validate:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.suite != 'organization-b1-cloudflare-test'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     outputs:
@@ -200,7 +270,7 @@ jobs:
           node --test tests/production-acceptance-operator*.test.mjs
 
   protected:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.suite != 'organization-b1-cloudflare-test'
     needs: validate
     runs-on: ubuntu-24.04
     # Bounded steps: setup11 + operator192 + summary/artifacts3 =206 minutes.

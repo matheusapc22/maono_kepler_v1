@@ -120,7 +120,7 @@ evidências distintas.
 
 ### Requisitos mínimos do ensaio Cloudflare
 
-O adaptador de teste atual usa um transporte injetado, exercitado em memória.
+O adaptador de teste aceita um transporte injetado. Os testes de contrato o exercitam em memória.
 Antes de conectar Cloudflare, registrar uma conta de teste separada e
 autorizar o trio exato de alvos: um projeto Pages e dois Workers descartáveis
 (exclusão e recuperação), com nomes no padrão `maono-ac01-test-*`.
@@ -141,3 +141,44 @@ ausente ou deploy não terminal bloqueiam a conclusão. O ensaio exige
 autorização específica para alternar os deployments nos três alvos e não
 inclui alteração de configuração. Restauração de configuração divergente
 continua como capacidade separada.
+
+### Executor da conta Maõno — Ensaios
+
+A PR 306 acrescenta a suíte manual `organization-b1-cloudflare-test` ao
+workflow já registrado `production-acceptance-operator.yml`. A suíte usa o
+GitHub Environment `maono-b1-ensaios`, restrito à branch
+`au-ac01-b1-capacidade`, e exige revisão humana. O passo Cloudflare recebe
+somente o secret de ambiente `MAONO_B1_CF_TOKEN`. Configure o token com
+Pages Write e Workers Scripts Write apenas na conta
+`1988481e4c75c760516161104b7e1e50` e Zone Read para as zonas dessa conta.
+Se houver uma zona, o inventário de rotas também precisa de Workers Routes
+Read nessa zona. O operador recusa rotas associadas aos Workers do ensaio,
+domínios personalizados, cron, bindings e tráfego dividido.
+
+Em Actions, abra **Production Acceptance Operator**, selecione **Run workflow**
+e escolha **au-ac01-b1-capacidade**. Use a suíte acima e `sandbox` em
+`organization_id`. Para cada dispatch, copie o HEAD completo da PR e forme
+a confirmação com `B1-`, o modo e outro hífen antes do SHA. O job confronta
+o SHA com a PR aberta depois da aprovação do Environment.
+
+1. Escolha `preflight`, deixe `b1_baseline` vazio e revise o artefato
+   `b1-cloudflare-RUN-TENTATIVA`. Leia os seis IDs e os três fingerprints.
+   O digest reúne esses valores, a conta e o SHA. Confira que as URLs
+   públicas servem A e que todos os estados iniciais foram verificados.
+2. Para `run`, informe em `b1_baseline` o digest do preflight aprovado.
+   Antes de aprovar, o responsável reserva a janela de escrita exclusiva
+   nos três alvos (incluindo painel, outros tokens e automações). O grupo de
+   concorrência serializa as execuções desse workflow. A API de reversão de
+   Pages não fornece uma troca condicional atômica. Sem a reserva externa,
+   encerre no preflight. O executor muda apenas os três IDs fixados, observa
+   as três respostas B e restaura A. Confira a fase `final` e os três estados.
+3. Se houver interrupção, preserve o artefato e os intentos de escrita. Para
+   retomar a recuperação use `closure`, com o mesmo SHA e digest, após
+   conferir que as operações pendentes na Cloudflare terminaram. A recuperação
+   relê os três componentes, restaura só quem está em B e exige leitura final
+   do provedor e do endpoint público de cada um. Alterações desconhecidas
+   interrompem a operação.
+
+A prova externa só vale com o run protegido e seu relatório. Um teste offline
+ou o CI de contratos prova o caminho simulado. Autoria de uma sessão Admin,
+efeito de negócio e B2/T16/G16 seguem seus gates próprios.
