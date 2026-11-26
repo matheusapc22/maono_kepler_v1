@@ -23,6 +23,7 @@ jobs:
           tests/admin-audit-operations*.test.mjs
           tests/admin-audit-progressive.test.mjs
           tests/organization-operation-audit*.test.mjs
+          tests/organization-drafts.test.mjs
           tests/organization-audit-ui-contract.test.mjs
       - name: Product lint and types
         run: |

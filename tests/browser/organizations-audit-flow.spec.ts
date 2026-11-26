@@ -1,4 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { organizationDraftCases } from './organization-draft-cases';
+
+organizationDraftCases(true);
 
 const opId = '22222222-2222-4222-8222-222222222222';
 const errors = new WeakMap<Page, string[]>(), unexpected = new WeakMap<Page, string[]>();
@@ -120,6 +123,10 @@ test('legacy operation consultation creates an observation before opening Audit,
   let dialog = page.getByRole('dialog', { name: 'Organização sintética', exact: true });
   await dialog.getByLabel('Justificativa', { exact: true }).fill('Consulta autorizada para teste');
   await dialog.getByRole('button', { name: 'Salvar dados', exact: true }).click();
+  page.once('dialog', async confirmation => {
+    expect(confirmation.message()).toBe('Descartar as alterações não salvas?');
+    await confirmation.accept();
+  });
   await dialog.getByRole('button', { name: 'Ver detalhes na Auditoria', exact: true }).click();
   await expect(page).toHaveURL(/section=audit/); await expect(page).toHaveURL(/audit_event=frame%3A9/);
   dialog = page.getByRole('dialog', { name: 'Detalhes da operação' });

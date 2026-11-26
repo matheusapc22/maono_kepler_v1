@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Link,useLocation,useNavigate,useSearchParams} from 'react-router';
 import {useSession} from '../../../auth/session.ts';
@@ -13,6 +13,7 @@ import {CreateForm} from './CreateOrganizationForm';
 import {UniversalLoader} from '../../../components/loading/UniversalLoader';
 import {Dialog,Notice,OperationStatus,OperationRecoveryControls,OrganizationEditor,RequestList} from './OrganizationDialogs';
 import {PLAN_LABELS,type Detail,type Operation,type OperationInput,type Organization,type Query,type Workspace} from './organizations-types';
+import {isOrganizationDraftDetail,organizationChangeMatchesDetail,type OrganizationDraftConfirmation} from './organization-drafts';
 import './admin-organizations.css';
 
 // Ephemeral, single-use proof; editable history state alone cannot fabricate success.
@@ -55,13 +56,32 @@ export default function AdminOrganizationsSection(){
   const createAttempt=useRef<{input:OperationInput;key:string}|null>(null),submitting=useRef(false),createButton=useRef<HTMLButtonElement|null>(null);
   const mounted=useRef(true),sequence=useRef(0),detailSequence=useRef(0),action=useRef<AbortController|null>(null),detailReload=useRef<AbortController|null>(null),keys=useRef(new Map<string,string>());
   const id=params.get('org_id'),tab=params.get('org_tab')||'general',mode=params.get('org_mode')==='import'?'':params.get('org_mode')||'',operationId=params.get('org_operation');
+  const actorKey=authenticated&&user?`${user.id}:${user.role}`:'';
+  const editorDraftKey=`${actorKey}:organization:${id||''}`,creationDraftKey=`${actorKey}:create`;
+  const [dirtyForms,setDirtyForms]=useState<Record<string,boolean>>({});
+  const [confirmedChange,setConfirmedChange]=useState<OrganizationDraftConfirmation|undefined>();
+  const changeAttempt=useRef<{actorKey:string;item:Record<string,unknown>;operationId:string|null;confirmed:boolean}|null>(null),changeReceipt=useRef(0);
+  const onEditorDirty=useCallback((dirty:boolean)=>setDirtyForms(previous=>previous[editorDraftKey]===dirty?previous:{...previous,[editorDraftKey]:dirty}),[editorDraftKey]);
+  const onCreationDirty=useCallback((dirty:boolean)=>setDirtyForms(previous=>previous[creationDraftKey]===dirty?previous:{...previous,[creationDraftKey]:dirty}),[creationDraftKey]);
+  const hasUnsavedDraft=mode==='create'?Boolean(dirtyForms[creationDraftKey]):Boolean(id&&mode!=='delete'&&mode!=='continue'&&dirtyForms[editorDraftKey]);
+  const resetDraftTracking=useCallback(()=>{changeAttempt.current=null;setConfirmedChange(undefined);setDirtyForms({});},[]);
+  const acknowledgeChange=useCallback((updated:Detail)=>{
+    const attempt=changeAttempt.current,session=currentSession.current;
+    if(!attempt?.confirmed||!session.authenticated||!session.user||attempt.actorKey!==`${session.user.id}:${session.user.role}`||!organizationChangeMatchesDetail(attempt.item,updated))return;
+    setConfirmedChange({receipt:++changeReceipt.current,item:attempt.item});changeAttempt.current=null;
+  },[]);
   useEffect(()=>{mounted.current=true;setHeader(document.getElementById('admin-organizations-actions'));return()=>{mounted.current=false;action.current?.abort();detailReload.current?.abort();};},[]);
   const invalidate=useCallback(()=>{
     sequence.current++;detailSequence.current++;setLoading(false);setDetailLoading(false);detailReload.current?.abort();
     setBlocked(true);setWorkspace(null);setDetail(null);setPendingDetail(null);setPreparedPreview(undefined);setOperation(null);setHistory([]);setSelected(new Set());
     setActivity('idle');setDeletionLoading({active:false,label:''});setPanelError('');setEditorError('');setDeletionToast(false);
-    completedDeletionReceipt=null;keys.current.clear();action.current?.abort();
-  },[]);
+    completedDeletionReceipt=null;keys.current.clear();action.current?.abort();resetDraftTracking();
+  },[resetDraftTracking]);
+  const previousActor=useRef(actorKey);
+  useLayoutEffect(()=>{
+    if(previousActor.current&&previousActor.current!==actorKey)invalidate();
+    previousActor.current=actorKey;
+  },[actorKey,invalidate]);
   const operationNeedsRecovery=Boolean(operation?.id===operationId&&(!operation.done||operation.items.some(item=>item.state!=='succeeded')));
   const resolverOpen=auditEnabled&&params.get('org_resolver')==='1'&&Boolean(id);
   const readinessDetail=pendingDetail||detail;
@@ -96,21 +116,23 @@ export default function AdminOrganizationsSection(){
     }
     setDetail(previous=>previous?.organization.id===Number(id)?previous:null);setDetailLoading(true);
     api<Detail>(`/organizations/${encodeURIComponent(id)}`,{signal:c.signal,timeoutMs:15000})
-      .then(d=>{if(!c.signal.aborted&&n===detailSequence.current){if(d.organization.id!==Number(id))throw new Error('A organização retornada não corresponde à consulta.');setDetail(d);setRequiresDetailRefresh(false);}})
+      .then(d=>{if(!c.signal.aborted&&n===detailSequence.current){if(!isOrganizationDraftDetail(d,Number(id)))throw new Error('A organização retornada não corresponde à consulta ou contém dados incompletos.');setDetail(d);acknowledgeChange(d);setRequiresDetailRefresh(false);}})
       .catch(e=>{if(!c.signal.aborted&&n===detailSequence.current){if(denied(e))invalidate();setDetailError(errorText(e));}})
       .finally(()=>{if(!c.signal.aborted&&n===detailSequence.current)setDetailLoading(false);});
     return()=>c.abort();
-  },[id,mode,detailRevision,invalidate]);
+  },[id,mode,detailRevision,invalidate,acknowledgeChange]);
   useEffect(()=>{if(!operationId||operation?.id===operationId)return;const c=new AbortController();api<Operation>(`/operations/${encodeURIComponent(operationId)}`,{signal:c.signal}).then(value=>{if(!c.signal.aborted&&mounted.current)setOperation(value);}).catch(e=>{if(!c.signal.aborted){if(denied(e))invalidate();setOperationError(errorText(e));}});return()=>c.abort();},[operationId,operation?.id,invalidate]);
   useEffect(()=>{if(mode!=='operations')return;const c=new AbortController();setHistory([]);api<{operations:{id:string;kind:string;createdAt:string}[]}>('/operations',{signal:c.signal}).then(r=>{if(!c.signal.aborted&&mounted.current)setHistory(r.operations);}).catch(e=>{if(!c.signal.aborted){if(denied(e))invalidate();setOperationError(errorText(e));}});return()=>c.abort();},[mode,invalidate]);
   function url(changes:Record<string,string|null>,replace=false){setParams(previous=>{const next=new URLSearchParams(previous);for(const [key,value]of Object.entries(changes)){if(value===null)next.delete(key);else next.set(key,value);}return next;},{replace});}
   function apply(q:Query){url(Object.fromEntries(Object.entries(q).map(([k,v])=>[`org_${k}`,String(v)])));}
-  function openMode(next:string){createAttempt.current=null;setCreationPending(false);setSuccess('');setOperation(null);setOperationError('');setConfirmed(false);url({org_mode:next,org_id:null,org_tab:null,org_operation:null});}
+  function openMode(next:string){resetDraftTracking();createAttempt.current=null;setCreationPending(false);setSuccess('');setOperation(null);setOperationError('');setConfirmed(false);url({org_mode:next,org_id:null,org_tab:null,org_operation:null});}
   function openOrg(row:Organization,next='general'){
+    resetDraftTracking();
     setOperation(null);setOperationError('');setEditorError('');setPanelError('');setPreparedPreview(undefined);setPendingDetail(null);setRequiresDetailRefresh(false);setActivity('idle');completing.current=false;
     url({org_id:String(row.id),org_tab:next,org_mode:null,org_operation:null,org_deletion:null,org_delete_key:null});
   }
   function close(){
+    resetDraftTracking();
     createAttempt.current=null;setCreationPending(false);detailSequence.current++;detailReload.current?.abort();action.current?.abort();
     setPendingDetail(null);setPreparedPreview(undefined);setActivity('idle');setDeletionLoading({active:false,label:''});setPanelError('');setEditorError('');setDetailError('');setRequiresDetailRefresh(false);completing.current=false;
     url({org_id:null,org_tab:null,org_mode:null,org_operation:null,org_deletion:null,org_delete_key:null,org_resolver:null});setOperation(null);setOperationError('');setReason('');setConfirmed(false);
@@ -129,11 +151,13 @@ export default function AdminOrganizationsSection(){
       return;
     }
     const result=await api<Detail>(`/organizations/${item.result?.id}`,{signal,timeoutMs:15000});
+    if(!isOrganizationDraftDetail(result,Number(item.result?.id)))throw new Error('Não foi possível confirmar os dados da organização criada.');
     const org=result.organization;
     if(!result.creationConfirmed||result.creationOperationId!==op.id||!org.active||!org.owner||!['READY','ACTIVE','CONFIGURED'].includes(org.storageStatus)){
       setOperationError('Organização cadastrada, mas a preparação ainda não foi concluída. Tente retomar.');return;
     }
     if(auditEnabled){
+      resetDraftTracking();
       preparedDetail.current=result;setDetail(result);setCreationPending(false);createAttempt.current=null;setOperation(null);
       url({org_id:String(org.id),org_tab:'general',org_mode:null,org_operation:null},true);setLifecycleToast('Organização criada com sucesso.');
     }else{close();setSuccess('Organização criada com sucesso.');setTimeout(()=>createButton.current?.focus(),0);}
@@ -166,13 +190,16 @@ export default function AdminOrganizationsSection(){
       return;
     }
     const plural=result.items.length>1;
+    const attempt=changeAttempt.current;
+    if(result.kind==='change'&&attempt?.operationId===result.id&&result.items.length===1&&result.items[0].result?.id===attempt.item.id)attempt.confirmed=true;
     setLifecycleToast(result.kind==='pause'?(plural?'Organizações pausadas':'Organização pausada'):result.kind==='resume'?(plural?'Organizações reativadas':'Organização reativada'):'Dados da organização atualizados');
     if(!id||result.items.length!==1){if(!auditEnabled&&result.kind!=='change')close();return;}
     const n=++detailSequence.current;setActivity('refreshing-detail');setRequiresDetailRefresh(true);setDetailError('');
     try{
       const updated=await api<Detail>(`/organizations/${encodeURIComponent(id)}`,{signal,timeoutMs:15000});
       if(!mounted.current||signal?.aborted||n!==detailSequence.current)return;
-      if(updated.organization.id!==Number(id))throw new Error('A organização retornada não corresponde à consulta.');
+      if(!isOrganizationDraftDetail(updated,Number(id)))throw new Error('A organização retornada não corresponde à consulta ou contém dados incompletos.');
+      if(result.kind==='change')acknowledgeChange(updated);
       if(result.kind==='pause'&&workspace?.capabilities.permanentDelete===true&&!updated.organization.active){
         setPendingDetail(updated);setActivity('waiting-readiness');
       }else{
@@ -187,12 +214,15 @@ export default function AdminOrganizationsSection(){
   async function submit(input:OperationInput){
     if(submitting.current||busy||activity!=='idle'||(id&&requiresDetailRefresh)||(input.kind==='create'&&(creationPending||operationId)))return;
     submitting.current=true;const controller=new AbortController();action.current?.abort();action.current=controller;setBusy(true);setOperationError('');
+    if(input.kind==='change'&&input.items.length===1&&input.items[0].id===Number(id))changeAttempt.current={actorKey,item:{...input.items[0]},operationId:null,confirmed:false};
     const hash=JSON.stringify(input);let key=keys.current.get(hash);if(!key){key=crypto.randomUUID();keys.current.set(hash,key);}
     setLifecyclePending(input.kind==='pause'||input.kind==='resume');setLifecycleToast('');if(id)setActivity('submitting');
     if(input.kind==='create'){createAttempt.current={input,key};setCreationPending(true);}
     try{
       const op=await api<Operation>('/operations',{body:input,key,signal:controller.signal,...(input.kind==='create'?{timeoutMs:20000}:{})});
-      if(!mounted.current)return;setOperation(op);url({org_operation:op.id},true);
+      if(!mounted.current||controller.signal.aborted)return;
+      if(input.kind==='change'&&op.kind==='change'&&typeof op.id==='string'&&changeAttempt.current?.actorKey===actorKey)changeAttempt.current.operationId=op.id;
+      setOperation(op);url({org_operation:op.id},true);
       if(input.kind==='create')await runCreation(op,controller.signal);
       else {const result=await execute(op,false,controller.signal);if(mounted.current&&!controller.signal.aborted){setRevision(v=>v+1);if(!auditEnabled||mode!=='bulk')setSelected(new Set());await finishLifecycle(result,controller.signal);}}
     }catch(e){if(!controller.signal.aborted&&mounted.current){if(denied(e))invalidate();setOperationError(input.kind==='create'?'Não foi possível confirmar a conclusão. Tente retomar para consultar a mesma criação.':errorText(e));}}
@@ -214,24 +244,33 @@ export default function AdminOrganizationsSection(){
   }
   const rows=workspace?.organizations||[],selectedRows=auditEnabled&&mode==='bulk'?bulkSelection:rows.filter(r=>selected.has(r.id));
   function exportSelected(){download('organizacoes-selecionadas.csv','\uFEFF'+[['id','nome','slug','plano','status','projetos','usuarios','arquivos'],...selectedRows.map(r=>[r.id,r.name,r.slug,PLAN_LABELS[r.plan],r.active?'Ativa':'Pausada',r.projectCount,r.userCount,r.fileCount])].map(row=>row.map(safeCell).join(',')).join('\r\n'));}
-  function peopleLink(){if(!detail)return;const next=new URLSearchParams(params);next.set('section','users');next.set('organization',String(detail.organization.id));next.set('org_return','organizations');next.delete('org_operation');navigate(`/admin?${next}`);}
-  async function projectDocuments(){if(!detail||!window.confirm(`Alterar a organização ativa para ${detail.organization.name} e abrir Projetos? Em seguida, use Arquivos e Documentos.`))return;setBusy(true);try{await switchOrganization(detail.organization.id);navigate('/projects');}catch(e){if(mounted.current)setOperationError(errorText(e));}finally{if(mounted.current)setBusy(false);}}
-  function openAudit(reference?:string,eventId?:string,deletion=false){
+  function confirmDiscardDraft(){return !hasUnsavedDraft||window.confirm('Descartar as alterações não salvas?');}
+  function peopleLink(){if(!detail||!confirmDiscardDraft())return;const next=new URLSearchParams(params);next.set('section','users');next.set('organization',String(detail.organization.id));next.set('org_return','organizations');next.delete('org_operation');resetDraftTracking();navigate(`/admin?${next}`);}
+  async function projectDocuments(){if(!detail||!window.confirm(`${hasUnsavedDraft?'As alterações não salvas serão descartadas. ':''}Alterar a organização ativa para ${detail.organization.name} e abrir Projetos? Em seguida, use Arquivos e Documentos.`))return;setBusy(true);try{await switchOrganization(detail.organization.id);resetDraftTracking();navigate('/projects');}catch(e){if(mounted.current)setOperationError(errorText(e));}finally{if(mounted.current)setBusy(false);}}
+  function navigateAudit(reference?:string,eventId?:string,deletion=false){
     const next=new URLSearchParams({section:'audit'});
     if(id)next.set('audit_org',id);
     if(deletion)next.set('audit_deletion','1');
     if(eventId)next.set('audit_event',eventId);else if(reference)next.set('audit_operation',reference);
-    navigate(`/admin?${next}`);
+    resetDraftTracking();navigate(`/admin?${next}`);
+  }
+  function openAudit(reference?:string,eventId?:string,deletion=false){
+    if(confirmDiscardDraft())navigateAudit(reference,eventId,deletion);
   }
   async function consultOperation(openAfter=false,reference=operation?.id,itemIndex?:number){
-    if(!reference||busy||submitting.current)return;
+    if(!reference||busy||submitting.current||(openAfter&&!confirmDiscardDraft()))return;
     const c=new AbortController();action.current?.abort();action.current=c;setBusy(true);setOperationError('');
     try{
       const result=await api<{operation:Operation;auditEventId?:string}>(`/operations/${encodeURIComponent(reference)}/consult`,{body:itemIndex===undefined?{}:{itemIndex},signal:c.signal,timeoutMs:20000});
       if(c.signal.aborted||!mounted.current)return;
       if(result.operation?.id!==reference)throw new Error('Consulta não confirmada.');
       setOperation(result.operation);setLifecycleToast('Consulta atualizada.');readiness.refresh();
-      if(openAfter)openAudit(reference,result.auditEventId);
+      // A lost step response can be recovered by observing the same completed operation.
+      // Reuse its finalizer so only a verified result plus matching detail acknowledges the draft.
+      if(result.operation.kind==='change'&&changeAttempt.current?.operationId===reference&&changeAttempt.current.item.id===Number(id))await finishLifecycle(result.operation,c.signal);
+      if(c.signal.aborted||!mounted.current)return;
+      // The navigation's discard decision happened before loading, while the draft was editable.
+      if(openAfter)navigateAudit(reference,result.auditEventId);
     }catch(e){if(!c.signal.aborted&&mounted.current){if(denied(e))invalidate();setOperationError(errorText(e));}}
     finally{if(mounted.current&&!c.signal.aborted)setBusy(false);}
   }
@@ -241,6 +280,8 @@ export default function AdminOrganizationsSection(){
     if(selectedAction.kind==='pause'&&detail){
       if(window.confirm(`Pausar ${detail.organization.name}? Pessoas, arquivos e projetos serão preservados.`))void submit({kind:'pause',items:[{id:detail.organization.id,version:detail.organization.version,reason:'Pausa confirmada no resolvedor de impedimentos'}]});
     }else if(selectedAction.deletionId){
+      if(!confirmDiscardDraft())return;
+      resetDraftTracking();
       url({org_resolver:null,org_mode:'delete',org_deletion:selectedAction.deletionId,org_delete_key:null,org_operation:null});
     }else if(selectedAction.operationId){
       void consultOperation(true,selectedAction.operationId,selectedAction.itemIndex);
@@ -252,7 +293,7 @@ export default function AdminOrganizationsSection(){
     setDetailRevision(value=>value+1);
   }
   async function prepareDeletion(){
-    if(!id||busy||dialogLoading||requiresDetailRefresh||readiness.preview?.eligible!==true)return;
+    if(!id||busy||dialogLoading||requiresDetailRefresh||readiness.preview?.eligible!==true||!confirmDiscardDraft())return;
     const c=new AbortController(),n=++detailSequence.current;detailReload.current?.abort();detailReload.current=c;
     setActivity('preparing-deletion');setOperationError('');setPanelError('');
     try{
@@ -261,6 +302,7 @@ export default function AdminOrganizationsSection(){
       if(!isDeletionPreview(preview,Number(id)))throw new Error('Prévia de exclusão inválida.');
       if(!preview.eligible){setOperationError('A exclusão ainda está indisponível. Consulte as condições atuais antes de continuar.');readiness.refresh();return;}
       setPreparedPreview(preview);setOperation(null);setEditorError('');setActivity('idle');
+      resetDraftTracking();
       url({org_mode:'delete',org_operation:null,org_deletion:null,org_delete_key:null});
     }catch(e){if(!c.signal.aborted&&mounted.current&&n===detailSequence.current){if(denied(e))invalidate();setOperationError(errorText(e));}}
     finally{if(mounted.current&&n===detailSequence.current)setActivity(previous=>previous==='preparing-deletion'?'idle':previous);}
@@ -301,7 +343,7 @@ export default function AdminOrganizationsSection(){
     try{
       const next=await api<Detail>(`/organizations/${row.id}`,{signal:c.signal,timeoutMs:15000});
       if(!mounted.current||c.signal.aborted||n!==detailSequence.current)return;
-      if(next.organization.id!==row.id)throw new Error('A organização retornada não corresponde à consulta.');
+      if(!isOrganizationDraftDetail(next,row.id))throw new Error('A organização retornada não corresponde à consulta ou contém dados incompletos.');
       preparedDetail.current=next;setDetail(next);openOrg(row);
     }catch(e){if(!c.signal.aborted&&mounted.current&&n===detailSequence.current){if(denied(e))invalidate();setOperationError(errorText(e));}}
     finally{if(mounted.current&&n===detailSequence.current)setActivity(previous=>previous==='opening-organization'?'idle':previous);}
@@ -347,7 +389,7 @@ export default function AdminOrganizationsSection(){
       onClose={close} busy={busy||['preparing-deletion','completing-deletion','opening-organization'].includes(activity)}
       loading={dialogLoading} loadingLabel={loadingLabel} notifications={resolverOpen?undefined:notices} viewKey={`${id||''}:${mode}:${tab}`}
       loadingOnly={(!auditEnabled&&mode==='create'&&busy)||compactLifecycle}
-      dirty={!pauseReadiness&&(mode==='create'||Boolean(id&&mode!=='delete'&&['general','people','policy'].includes(tab)))} wide={mode==='requests'}>
+      dirty={hasUnsavedDraft} wide={mode==='requests'}>
       {compactLifecycle&&<div className="aog-deletion-progress"><UniversalLoader size="page" accessibleLabel="Atualizando organização"/></div>}
       <div hidden={compactLifecycle}>
       {!auditEnabled&&!id&&mode!=='continue'&&<Notice message={mode==='create'&&busy?'':operationError}/>}
@@ -356,7 +398,7 @@ export default function AdminOrganizationsSection(){
         {shown.readinessError?<button type="button" onClick={readiness.refresh}>Consultar liberação para exclusão</button>:shown.preview&&!shown.preview.eligible&&<><p role="status">Organização pausada. A exclusão ainda está indisponível:</p><ul>{shown.preview.blockers.map((blocker,index)=><li key={`${blocker.code}:${index}`}>{readinessBlocker(blocker.code)}{blocker.count>1?` (${blocker.count})`:''}</li>)}</ul><button type="button" onClick={readiness.refresh}>Consultar liberação para exclusão</button></>}
       </>}
       {id&&detail?.organization.id===Number(id)&&mode!=='delete'&&<>
-        <OrganizationEditor key={detail.organization.id} detail={detail} tab={tab} onTab={value=>{setEditorError('');url({org_tab:value});}} onSubmit={input=>void submit(input)} onPeople={peopleLink} onDocuments={()=>void projectDocuments()} busy={busy||requiresDetailRefresh} onDenied={invalidate} onError={setEditorError} cleanReports={auditEnabled} onAudit={()=>openAudit()}/>
+        <OrganizationEditor key={editorDraftKey} detail={detail} tab={tab} onTab={value=>{setEditorError('');url({org_tab:value});}} onSubmit={input=>void submit(input)} onPeople={peopleLink} onDocuments={()=>void projectDocuments()} busy={busy||requiresDetailRefresh} onDenied={invalidate} onError={setEditorError} cleanReports={auditEnabled} onAudit={()=>openAudit()} onDirtyChange={onEditorDirty} confirmedChange={confirmedChange} dialogLoading={dialogLoading}/>
         <div className="aog-danger-zone">
           <button type="button" disabled={busy||requiresDetailRefresh} onClick={()=>{if(window.confirm(`${detail.organization.active?'Pausar':'Reativar'} ${detail.organization.name}? Pausar preserva pessoas, arquivos e projetos. Reativar verifica o armazenamento.`))void submit({kind:detail.organization.active?'pause':'resume',items:[{id:detail.organization.id,version:detail.organization.version,reason:detail.organization.active?'Pausa confirmada no painel':'Reativação confirmada no painel'}]});}}>{detail.organization.active?'Pausar organização':'Reativar / verificar armazenamento'}</button>
           {detail.organization.active&&!['READY','ACTIVE','CONFIGURED'].includes(detail.organization.storageStatus)&&<button type="button" disabled={busy||requiresDetailRefresh} onClick={()=>{if(window.confirm('Verificar o armazenamento desta organização?'))void submit({kind:'resume',items:[{id:detail.organization.id,version:detail.organization.version,reason:'Verificação de armazenamento confirmada'}]});}}>Verificar armazenamento</button>}
@@ -378,7 +420,7 @@ export default function AdminOrganizationsSection(){
         <div className="aog-inline"><button type="button" className="aog-primary" disabled={!nextOrganization||Boolean(deletionSessionError)} onClick={()=>void openNextOrganization()}>Abrir organização</button><button type="button" onClick={()=>void retryContinuation()}>Consultar organizações</button><button type="button" onClick={close}>Voltar à lista</button></div>
       </section>}
       {mode==='create'&&<>
-        <div hidden={busy&&!auditEnabled}><CreateForm onSubmit={input=>void submit({kind:'create',items:[input]})} busy={busy||creationPending||Boolean(operationId)}/></div>
+        <div hidden={busy&&!auditEnabled}><CreateForm key={creationDraftKey} onSubmit={input=>void submit({kind:'create',items:[input]})} busy={busy||creationPending||Boolean(operationId)} onDirtyChange={onCreationDirty}/></div>
         {busy&&!auditEnabled&&<div className="aog-create-loading"><UniversalLoader accessibleLabel="Criando e validando organização"/></div>}
         {!busy&&(creationPending||operationId)&&<button type="button" onClick={()=>void continueOperation(true)}>Retomar criação</button>}
         {!busy&&operation?.items[0]?.state==='failed'&&!operation.items[0].result?.id&&<button type="button" onClick={reviseCreation}>Revisar dados</button>}

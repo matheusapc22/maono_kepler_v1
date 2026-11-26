@@ -63,6 +63,7 @@ jobs:
           tests/organization-deletion-review.test.mjs
           tests/organization-management-integration.test.mjs
           tests/organization-management.test.mjs
+          tests/organization-drafts.test.mjs
           tests/organization-creation-identity.test.mjs
           tests/organization-storage-chaos.test.mjs
           tests/organization-storage-drift-wiring.test.mjs
