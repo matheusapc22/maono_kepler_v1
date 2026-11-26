@@ -1,4 +1,7 @@
 import { expect, test, type Page, type Locator } from '@playwright/test';
+import { organizationDraftCases } from './organization-draft-cases';
+
+organizationDraftCases(false);
 
 async function setup(page: Page, role = 'super_admin') {
   const writes: string[] = [], reads: string[] = [], errors: string[] = [];
@@ -95,8 +98,10 @@ test('dialog mantém foco pelo teclado e o devolve ao acionador',async({page})=>
     await page.keyboard.press(i%2?'Tab':'Shift+Tab');
     expect(await dialog.evaluate(element=>element.contains(document.activeElement))).toBe(true);
   }
-  page.once('dialog',async confirmation=>confirmation.accept());
+  const confirmations:string[]=[];
+  page.on('dialog',async confirmation=>{confirmations.push(confirmation.message());await confirmation.dismiss();});
   await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);
+  expect(confirmations).toEqual([]);
   await expect(trigger).toBeFocused();
 });
 
@@ -117,12 +122,11 @@ test.describe('interação por toque',()=>{
     await setup(page);
     await page.getByRole('button',{name:'Organização Sintética Alfa',exact:true}).tap();
     await expect(page.getByRole('dialog')).toBeVisible();
-    page.once('dialog',async confirmation=>{
-      expect(confirmation.message()).toBe('Descartar as alterações não salvas?');
-      await confirmation.accept();
-    });
+    const confirmations:string[]=[];
+    page.on('dialog',async confirmation=>{confirmations.push(confirmation.message());await confirmation.dismiss();});
     await page.getByRole('button',{name:'Fechar painel'}).tap();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(confirmations).toEqual([]);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   });
 });
@@ -888,6 +892,7 @@ test('prévia lenta mantém editor e rascunho até a troca única para confirma�
     entered();await pending;
     await route.fulfill({json:{ok:true,organizationId:1,name:'Organização Sintética Alfa',version:3,eligible:true,blockers:[],confirmation:'EXCLUIR PERMANENTEMENTE'}});
   });
+  page.once('dialog',async confirmation=>{expect(confirmation.message()).toBe('Descartar as alterações não salvas?');await confirmation.accept();});
   await trigger.click();await started;
   await expect(dialog.locator('.mm-universal-loader')).toBeVisible();
   await expect(name).toBeVisible();await expect(name).toHaveValue('Rascunho local ainda não salvo');
@@ -904,6 +909,8 @@ test('prévia lenta mantém editor e rascunho até a troca única para confirma�
 
 test('falha na prévia mantém rascunho e erro utilizável no topo do modal aberto',async({page})=>{
   const state=await deletionSetup(page);
+  const confirmations:string[]=[];
+  page.on('dialog',async confirmation=>{confirmations.push(confirmation.message());expect(confirmation.message()).toBe('Descartar as alterações não salvas?');await confirmation.accept();});
   const trigger=page.getByRole('button',{name:'Excluir permanentemente organização',exact:true});
   await expect(trigger).toBeEnabled();
   const name=page.getByLabel('Nome',{exact:true});await name.fill('Rascunho preservado na falha');
@@ -919,6 +926,7 @@ test('falha na prévia mantém rascunho e erro utilizável no topo do modal aber
   await expect(name).toHaveValue('Rascunho preservado na falha');await expect(dialog).toBeVisible();
   await page.unroute('**/api/admin/organization-management/organizations/1/deletion-preview');
   await trigger.click();await expect(page.getByLabel('Digite EXCLUIR PERMANENTEMENTE')).toBeVisible();
+  expect(confirmations).toEqual(['Descartar as alterações não salvas?','Descartar as alterações não salvas?']);
   expect(state.mutations).toEqual([]);expect(state.errors).toEqual([]);
 });
 
@@ -1029,6 +1037,10 @@ for(const invalid of ['identity','contradiction','confirmation','version'] as co
     await expect(trigger).toBeEnabled();
     await page.getByLabel('Nome',{exact:true}).fill('Rascunho não descartado');
     await page.route('**/api/admin/organization-management/organizations/1/deletion-preview',route=>route.fulfill({json:{ok:true,organizationId:invalid==='identity'?2:1,name:'Organização Sintética Alfa',version:invalid==='version'?-1:3,eligible:true,blockers:invalid==='contradiction'?[{code:'LINKED_DATA',count:1}]:[],confirmation:invalid==='confirmation'?'EXCLUIR':'EXCLUIR PERMANENTEMENTE'}}));
+    page.once('dialog',async confirmation=>{
+      expect(confirmation.message()).toBe('Descartar as alterações não salvas?');
+      await confirmation.accept();
+    });
     await trigger.click();
     await expect(page.locator('.aog-deletion-error-toast')).toBeVisible();
     await expect(page.getByLabel('Nome',{exact:true})).toHaveValue('Rascunho não descartado');

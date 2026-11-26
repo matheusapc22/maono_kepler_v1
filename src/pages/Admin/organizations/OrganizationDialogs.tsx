@@ -5,6 +5,7 @@ import {StaticLoadingText} from '../../../components/loading/Skeleton';
 import {UniversalLoader} from '../../../components/loading/UniversalLoader';
 import {api,dateLabel,errorText,denied,storageLabel} from './organizations-api';
 import {PLAN_LABELS,type Detail,type EventRow,type FileRow,type LimitRequest,type Operation,type OperationInput,type Person,type Plan} from './organizations-types';
+import {createOrganizationDraft,organizationDraftIsDirty,reconcileOrganizationDraft,type OrganizationDraftConfirmation,type OrganizationDraftSection,type OrganizationDraftValues} from './organization-drafts';
 
 type DialogProps={
   title:string;children:ReactNode;onClose:()=>void;dirty?:boolean;busy?:boolean;wide?:boolean;
@@ -67,8 +68,21 @@ export function Dialog({title,children,onClose,dirty=false,busy=false,wide=false
     window.visualViewport?.addEventListener('resize',resize);
     return()=>{window.removeEventListener('resize',resize);window.visualViewport?.removeEventListener('resize',resize);};
   },[loading]);
-  function close(){if(busy)return;if(dirty&&!window.confirm('Descartar as alterações não salvas?'))return;onClose();}
-  function keepFocus(event:KeyboardEvent<HTMLDialogElement>){
+  function close(){
+    if(busy)return;
+    if(dirty&&!window.confirm('Descartar as alterações não salvas?')){
+      const target=lastBodyFocus.current;
+      if(target?.isConnected&&!target.matches(':disabled')&&target.getClientRects().length>0)target.focus({preventScroll:true});
+      return;
+    }
+    onClose();
+  }
+  function handleKeyDown(event:KeyboardEvent<HTMLDialogElement>){
+    if(event.key==='Escape'&&!event.defaultPrevented){
+      // Repeated native close requests can become non-cancelable. Keep the discard
+      // decision in this dialog while allowing an open inner menu to consume Escape.
+      event.preventDefault();event.stopPropagation();if(!event.repeat)close();return;
+    }
     if(event.key!=='Tab'||event.defaultPrevented)return;
     const dialog=ref.current;if(!dialog)return;
     const controls=[...dialog.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]')].filter(element=>element.tabIndex>=0&&!element.matches(':disabled')&&!element.closest('[inert]')&&element.getClientRects().length>0&&getComputedStyle(element).visibility!=='hidden');
@@ -80,7 +94,7 @@ export function Dialog({title,children,onClose,dirty=false,busy=false,wide=false
     else if(!event.shiftKey&&(active===last||atTitle)){event.preventDefault();first.focus();}
   }
 
-  return createPortal(<dialog ref={ref} onKeyDown={keepFocus} data-loading={loading||undefined} className={`admin-organizations-dialog${wide?' is-wide':''}${loadingOnly?' is-processing':''}`} aria-labelledby={heading} onCancel={e=>{e.preventDefault();close();}}>
+  return createPortal(<dialog ref={ref} onKeyDown={handleKeyDown} data-loading={loading||undefined} className={`admin-organizations-dialog${wide?' is-wide':''}${loadingOnly?' is-processing':''}`} aria-labelledby={heading} onCancel={e=>{e.preventDefault();close();}}>
     <header hidden={loadingOnly}><div><small>ADMINISTRAÇÃO MAÕNO</small><h2 ref={titleRef} tabIndex={-1} id={heading}>{title}</h2></div><button type="button" onClick={close} disabled={busy} aria-label="Fechar painel">×</button></header>
     <div ref={contentFrame} tabIndex={-1} className="aog-dialog-content-frame">
       <div ref={body} className="aog-dialog-body" aria-busy={loading} onFocusCapture={event=>{lastBodyFocus.current=event.target;}}>{children}</div>
@@ -107,26 +121,21 @@ export function OperationRecoveryControls({operation,busy,onConsult,onAudit,onCo
     </>}
   </div>;
 }
-export function OrganizationEditor({detail,tab,onTab,onSubmit,onPeople,onDocuments,busy,onDenied,onError,cleanReports=false,onAudit}:{detail:Detail;tab:string;onTab:(v:string)=>void;onSubmit:(input:OperationInput)=>void;onPeople:()=>void;onDocuments:()=>void;busy:boolean;onDenied:()=>void;onError?:(message:string)=>void;cleanReports?:boolean;onAudit?:()=>void}){
+export function OrganizationEditor({detail,tab,onTab,onSubmit,onPeople,onDocuments,busy,onDenied,onError,cleanReports=false,onAudit,onDirtyChange,confirmedChange}:{detail:Detail;tab:string;onTab:(v:string)=>void;onSubmit:(input:OperationInput)=>void;onPeople:()=>void;onDocuments:()=>void;busy:boolean;onDenied:()=>void;onError?:(message:string)=>void;cleanReports?:boolean;onAudit?:()=>void;onDirtyChange?:(dirty:boolean)=>void;confirmedChange?:OrganizationDraftConfirmation}){
   const org=detail.organization;
   const descriptionLabel=useId();
-  const [name,setName]=useState(org.name),[description,setDescription]=useState(org.description),[reason,setReason]=useState(''),[plan,setPlan]=useState(org.plan),[limit,setLimit]=useState(String(detail.policy.projects)),[customLimit,setCustomLimit]=useState(detail.policy.projectOverride!==null),[owner,setOwner]=useState(String(org.owner?.id||''));
+  const [draft,setDraft]=useState(()=>createOrganizationDraft(detail));
+  const {name,description,plan,limit,customLimit,owner}=draft.values;
+  const section:OrganizationDraftSection=tab==='people'?'people':tab==='policy'?'policy':'general';
+  const reason=draft.reasons[section],dirty=organizationDraftIsDirty(draft);
+  function edit<K extends keyof OrganizationDraftValues>(key:K,value:OrganizationDraftValues[K]){setDraft(previous=>({...previous,values:{...previous.values,[key]:value}}));}
+  function setReason(value:string){setDraft(previous=>({...previous,reasons:{...previous.reasons,[section]:value}}));}
   const [people,setPeople]=useState<Person[]>([]),[files,setFiles]=useState<FileRow[]>([]),[events,setEvents]=useState<EventRow[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false),[docPage,setDocPage]=useState(1),[more,setMore]=useState(false),[cursor,setCursor]=useState<number|null>(null);
-  const serverDraft=useRef({id:org.id,name:org.name,description:org.description,plan:org.plan,limit:String(detail.policy.projects),customLimit:detail.policy.projectOverride!==null,owner:String(org.owner?.id||'')});
   const errorCallback=useRef(onError);errorCallback.current=onError;
   useLayoutEffect(()=>{
-    const before=serverDraft.current,next={id:org.id,name:org.name,description:org.description,plan:org.plan,limit:String(detail.policy.projects),customLimit:detail.policy.projectOverride!==null,owner:String(org.owner?.id||'')};
-    const changedOrganization=before.id!==next.id;
-    // Refresh untouched fields without throwing away a draft after pause, conflict or retry.
-    setName(value=>changedOrganization||value===before.name?next.name:value);
-    setDescription(value=>changedOrganization||value===before.description?next.description:value);
-    setPlan(value=>changedOrganization||value===before.plan?next.plan:value);
-    setLimit(value=>changedOrganization||value===before.limit?next.limit:value);
-    setCustomLimit(value=>changedOrganization||value===before.customLimit?next.customLimit:value);
-    setOwner(value=>changedOrganization||value===before.owner?next.owner:value);
-    if(changedOrganization)setReason('');
-    serverDraft.current=next;
-  },[org.id,org.name,org.description,org.plan,org.owner?.id,detail.policy.projects,detail.policy.projectOverride]);
+    setDraft(previous=>reconcileOrganizationDraft(previous,detail,confirmedChange));
+  },[detail,confirmedChange]);
+  useLayoutEffect(()=>{onDirtyChange?.(dirty);},[dirty,onDirtyChange]);
   useEffect(()=>{errorCallback.current?.(error);},[error]);
   useEffect(()=>()=>{errorCallback.current?.('');},[]);
   const seq=useRef(0),moreController=useRef<AbortController|null>(null);
@@ -153,10 +162,10 @@ export function OrganizationEditor({detail,tab,onTab,onSubmit,onPeople,onDocumen
   function change(payload:Record<string,unknown>){onSubmit({kind:'change',items:[{id:org.id,version:org.version,reason,...payload}]});}
   return <><nav className="aog-tabs" aria-label="Gestão da organização">{[['general','Dados gerais'],['people','Pessoas'],['policy','Plano e limites'],['documents','Documentos'],['activity','Histórico']].map(([key,label])=><button type="button" key={key} className={tab===key?'is-active':''} aria-current={tab===key?'page':undefined} disabled={busy} onClick={()=>onTab(key)}>{label}</button>)}</nav>
     <p><strong>{org.name}</strong> · {org.active?'Ativa':'Pausada'} · Armazenamento: {storageLabel(org.storageStatus)}</p><Notice message={onError?'':error}/>{loading&&<p role="status">Carregando dados da organização…</p>}
-    {tab==='general'&&<form className="aog-form" onSubmit={e=>{e.preventDefault();change({name,description});}}><label>Nome<input required maxLength={160} value={name} disabled={busy} onChange={e=>setName(e.target.value)}/></label><label>Identificador<input readOnly value={org.slug}/></label><label><span id={descriptionLabel}>Descrição</span><textarea aria-labelledby={descriptionLabel} value={description} maxLength={3000} disabled={busy} onChange={e=>setDescription(e.target.value)}/></label><label>Justificativa<input required minLength={5} maxLength={500} value={reason} disabled={busy} onChange={e=>setReason(e.target.value)}/></label><small>Renomear não move arquivos.{!cleanReports&&` Versão de edição: ${org.version}.`}</small><button type="submit" className="aog-primary" disabled={busy}>Salvar dados</button></form>}
-    {tab==='people'&&<><p>O responsável deve ser um proprietário ativo desta organização.</p><ul className="aog-records">{people.map(p=><li key={p.id}><strong>{p.name||p.email}</strong><span>{p.email} · {cleanReports?({owner:'Proprietário',admin:'Administrador',editor:'Editor',viewer:'Visualizador'} as Record<string,string>)[p.accessLevel]||'Vínculo personalizado':p.accessLevel} · {p.active?'Ativo':'Inativo'}</span></li>)}</ul><form className="aog-form" onSubmit={e=>{e.preventDefault();change({ownerId:Number(owner)});}}><label>Responsável principal<MaonoSelect value={owner} onChange={e=>setOwner(e.target.value)} disabled={busy||loading}><option value="">Selecione um proprietário</option>{people.filter(p=>p.active&&p.accessLevel==='owner').map(p=><option key={p.id} value={p.id}>{p.name||p.email}</option>)}</MaonoSelect></label><label>Justificativa<input required minLength={5} maxLength={500} value={reason} onChange={e=>setReason(e.target.value)} disabled={busy}/></label><button type="submit" disabled={busy||!owner}>Designar responsável</button></form><button type="button" onClick={onPeople} disabled={busy}>Gerenciar vínculos e permissões</button></>}
+    {tab==='general'&&<form className="aog-form" onSubmit={e=>{e.preventDefault();change({name,description});}}><label>Nome<input required maxLength={160} value={name} disabled={busy} onChange={e=>edit('name',e.target.value)}/></label><label>Identificador<input readOnly value={org.slug}/></label><label><span id={descriptionLabel}>Descrição</span><textarea aria-labelledby={descriptionLabel} value={description} maxLength={3000} disabled={busy} onChange={e=>edit('description',e.target.value)}/></label><label>Justificativa<input required minLength={5} maxLength={500} value={reason} disabled={busy} onChange={e=>setReason(e.target.value)}/></label><small>Renomear não move arquivos.{!cleanReports&&` Versão de edição: ${org.version}.`}</small><button type="submit" className="aog-primary" disabled={busy}>Salvar dados</button></form>}
+    {tab==='people'&&<><p>O responsável deve ser um proprietário ativo desta organização.</p><ul className="aog-records">{people.map(p=><li key={p.id}><strong>{p.name||p.email}</strong><span>{p.email} · {cleanReports?({owner:'Proprietário',admin:'Administrador',editor:'Editor',viewer:'Visualizador'} as Record<string,string>)[p.accessLevel]||'Vínculo personalizado':p.accessLevel} · {p.active?'Ativo':'Inativo'}</span></li>)}</ul><form className="aog-form" onSubmit={e=>{e.preventDefault();change({ownerId:Number(owner)});}}><label>Responsável principal<MaonoSelect value={owner} onChange={e=>edit('owner',e.target.value)} disabled={busy||loading}><option value="">Selecione um proprietário</option>{people.filter(p=>p.active&&p.accessLevel==='owner').map(p=><option key={p.id} value={p.id}>{p.name||p.email}</option>)}</MaonoSelect></label><label>Justificativa<input required minLength={5} maxLength={500} value={reason} onChange={e=>setReason(e.target.value)} disabled={busy}/></label><button type="submit" disabled={busy||!owner}>Designar responsável</button></form><button type="button" onClick={onPeople} disabled={busy}>Gerenciar vínculos e permissões</button></>}
     {tab==='policy'&&<form className="aog-form" onSubmit={e=>{e.preventDefault();change({...(plan!==org.plan?{plan}:{}),...(quotaChanged?{projectLimit:customLimit?Number(limit):null}:{})});}}><div className="aog-policy-summary"><span>Projetos em uso <strong>{detail.policy.used}</strong></span><span>Reservas ativas <strong>{detail.policy.reserved}</strong></span><span>Restantes <strong>{detail.policy.remaining}</strong></span></div>
-      <p>A quota de projetos é operacional quando habilitada. Armazenamento, usuários e exportações não são editáveis aqui; não há cobrança automática.</p><label>Plano<MaonoSelect value={plan} onChange={e=>setPlan(e.target.value as Plan)} disabled={busy||!detail.policy.projectQuotaEnforced}>{Object.entries(PLAN_LABELS).map(([key,label])=><option value={key} key={key}>{label}</option>)}</MaonoSelect></label><p>Quota atual: {detail.policy.projects} projetos. Origem: {quotaSource}.</p><label className="aog-check"><input type="checkbox" checked={customLimit} disabled={busy||!detail.policy.projectQuotaEnforced} onChange={e=>setCustomLimit(e.target.checked)}/>Definir limite específico para esta organização</label><label>Limite específico de projetos<input type="number" min={1} max={1000000} required={customLimit} value={limit} onChange={e=>setLimit(e.target.value)} disabled={busy||!detail.policy.projectQuotaEnforced||!customLimit}/></label><small>Sem limite específico, segue a política herdada do plano, ambiente ou configuração legada. Trocar o plano preserva overrides existentes. Reduções abaixo do uso e reservas são bloqueadas.</small><label>Justificativa<input minLength={5} maxLength={500} required value={reason} onChange={e=>setReason(e.target.value)} disabled={busy}/></label><button type="submit" disabled={busy||!detail.policy.projectQuotaEnforced||!policyChanged}>Salvar plano e quota</button>{!detail.policy.projectQuotaEnforced&&<p role="status">Quota de projetos não habilitada neste ambiente.</p>}<p>Armazenamento informativo: {detail.policy.storageUsedMb.toFixed(1)} / {detail.policy.storageMb} MiB.</p></form>}
+      <p>A quota de projetos é operacional quando habilitada. Armazenamento, usuários e exportações não são editáveis aqui; não há cobrança automática.</p><label>Plano<MaonoSelect value={plan} onChange={e=>edit('plan',e.target.value as Plan)} disabled={busy||!detail.policy.projectQuotaEnforced}>{Object.entries(PLAN_LABELS).map(([key,label])=><option value={key} key={key}>{label}</option>)}</MaonoSelect></label><p>Quota atual: {detail.policy.projects} projetos. Origem: {quotaSource}.</p><label className="aog-check"><input type="checkbox" checked={customLimit} disabled={busy||!detail.policy.projectQuotaEnforced} onChange={e=>edit('customLimit',e.target.checked)}/>Definir limite específico para esta organização</label><label>Limite específico de projetos<input type="number" min={1} max={1000000} required={customLimit} value={limit} onChange={e=>edit('limit',e.target.value)} disabled={busy||!detail.policy.projectQuotaEnforced||!customLimit}/></label><small>Sem limite específico, segue a política herdada do plano, ambiente ou configuração legada. Trocar o plano preserva overrides existentes. Reduções abaixo do uso e reservas são bloqueadas.</small><label>Justificativa<input minLength={5} maxLength={500} required value={reason} onChange={e=>setReason(e.target.value)} disabled={busy}/></label><button type="submit" disabled={busy||!detail.policy.projectQuotaEnforced||!policyChanged}>Salvar plano e quota</button>{!detail.policy.projectQuotaEnforced&&<p role="status">Quota de projetos não habilitada neste ambiente.</p>}<p>Armazenamento informativo: {detail.policy.storageUsedMb.toFixed(1)} / {detail.policy.storageMb} MiB.</p></form>}
     {tab==='documents'&&<><p>Consulta por organização, sem alterar a organização ativa da sua sessão.</p><ul className="aog-records">{files.map(f=><li key={f.id}><strong>{f.name}</strong><span>{f.fileType} · {(f.sizeBytes/1024).toFixed(1)} KiB {f.isProject?'· configuração de projeto':''}</span></li>)}</ul>{!loading&&!files.length&&<p>Nenhum arquivo ativo.</p>}{more&&<button type="button" disabled={loading} onClick={()=>void moreRows()}>Carregar mais documentos</button>}<button type="button" disabled={busy||!org.active} onClick={onDocuments}>Abrir esta organização em Projetos</button><small>Uma confirmação precede a mudança de contexto. Em Projetos, use Arquivos e Documentos para pastas, envio e lixeira.</small></>}
     {tab==='activity'&&cleanReports&&<><p>Consulte as operações registradas e seus detalhes na Auditoria.</p><button type="button" disabled={busy} onClick={onAudit}>Abrir Auditoria da organização</button></>}
     {tab==='activity'&&!cleanReports&&<><p>Eventos reais desta gestão. Ações anteriores ao módulo permanecem na auditoria legada e não são inventadas aqui.</p><ul className="aog-records">{events.map(e=><li key={e.id}><strong>{e.action}</strong>{e.reason&&<p>{e.reason}</p>}<span>{dateLabel(e.createdAt)} · {e.actorName||'Operação legada'} · versão {e.version}</span></li>)}</ul>{!loading&&!events.length&&<p>Sem registro nesta gestão.</p>}{cursor&&<button type="button" disabled={loading} onClick={()=>void moreRows()}>Carregar mais eventos</button>}</>}

@@ -1,16 +1,19 @@
-import {useEffect, useId, useRef, useState} from 'react';
+import {useEffect, useId, useLayoutEffect, useRef, useState} from 'react';
 import {MaonoSelect} from '../../../components/selection/MaonoSelect';
 import {api} from './organizations-api';
 import {PLAN_LABELS, type Plan} from './organizations-types';
+import {creationDraftIsDirty} from './organization-drafts';
 
 type Candidate = {id:number; name:string; email:string};
 type Lookup = 'idle'|'checking'|'available'|'duplicate'|'error';
-export function CreateForm({onSubmit,busy}:{onSubmit:(value:Record<string,unknown>)=>void;busy:boolean}) {
+export function CreateForm({onSubmit,busy,onDirtyChange}:{onSubmit:(value:Record<string,unknown>)=>void;busy:boolean;onDirtyChange?:(dirty:boolean)=>void}) {
   const [name,setName]=useState(''), [description,setDescription]=useState(''), [plan,setPlan]=useState<Plan>('free');
   const [email,setEmail]=useState(''), [confirmed,setConfirmed]=useState(false), [nameState,setNameState]=useState<Lookup>('idle');
   const [nameRetry,setNameRetry]=useState(0), [ownerRetry,setOwnerRetry]=useState(0), [users,setUsers]=useState<Candidate[]>([]);
   const [owner,setOwner]=useState<Candidate|null>(null), [ownerState,setOwnerState]=useState<Lookup>('idle');
   const [open,setOpen]=useState(false), [active,setActive]=useState(-1);
+  const dirty=creationDraftIsDirty({name,description,plan,email,ownerId:owner?.id??null,confirmed});
+  useLayoutEffect(()=>{onDirtyChange?.(dirty);},[dirty,onDirtyChange]);
   const listId=useId(), nameHelp=useId(), ownerHelp=useId(), ownerQuery=useRef(0), nameQuery=useRef(0);
   useEffect(()=>{
     const c=new AbortController(), seq=++nameQuery.current;

@@ -34,7 +34,7 @@ async function setup(page:Page,scenario:Scenario='success'){
       return route.fulfill({json:operation});
     }
     if(path.endsWith('/operations/synthetic-operation'))return route.fulfill({json:operation});
-    if(path.endsWith('/organizations/9'))return route.fulfill({json:{ok:true,organization:org,policy:{plan:'free'},creationConfirmed:scenario!=='unconfirmed',creationOperationId:operation.id}});
+    if(path.endsWith('/organizations/9'))return route.fulfill({json:{ok:true,organization:org,policy:{plan:'free',projects:5,storageMb:500,projectOverride:null,used:0,reserved:0,remaining:5,storageUsedMb:0,projectQuotaEnforced:true,informational:[]},creationConfirmed:scenario!=='unconfirmed',creationOperationId:operation.id}});
     if(path.endsWith('/organizations')){
       if(scenario==='refresh-failed'&&created)return route.fulfill({status:503,json:{ok:false}});
       return route.fulfill({json:{ok:true,organizations:[],pagination:{total:0,page:1,size:10,pages:1},summary:{organizations:created?1:0,active:created?1:0,users:0,files:0,requests:0},capabilities:{projectQuotaEnforced:true}}});
@@ -84,11 +84,11 @@ for(const width of [1280,390])test(`criação ${width}px mantém centro e permit
   await expect(dialog).toHaveCount(0);await expect(trigger).toBeFocused();
   await expect(page).not.toHaveURL(/org_mode=/);await expect(page).toHaveURL(/org_q=filtro-preservado/);
   await trigger.click();await expect(dialog).toBeVisible();await expectCenteredDialog(page);
-  page.once('dialog',async confirmation=>{
-    expect(confirmation.message()).toBe('Descartar as alterações não salvas?');await confirmation.accept();
-  });
+  const confirmations:string[]=[];
+  page.on('dialog',async confirmation=>{confirmations.push(confirmation.message());await confirmation.dismiss();});
   await dialog.getByRole('button',{name:'Fechar painel',exact:true}).click();
   await expect(dialog).toHaveCount(0);await expect(trigger).toBeFocused();
+  expect(confirmations).toEqual([]);
   await expect(page).not.toHaveURL(/org_mode=/);await expect(page).toHaveURL(/org_q=filtro-preservado/);
   expect(state.starts).toBe(0);expect(state.steps).toBe(0);
   expect(state.requests.filter(request=>request.startsWith('POST '))).toEqual([]);
