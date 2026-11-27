@@ -178,7 +178,7 @@ jobs:
   b1-evidence-producer:
     needs: b1-evidence-pin
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 35
     environment: maono-b1-ensaios
     permissions:
       contents: read
@@ -197,7 +197,11 @@ jobs:
           ref: ${{ needs.b1-evidence-pin.outputs.product }}
           path: observed-product
           persist-credentials: false
-      - name: Produce the two permitted synthetic observations
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Confirm reviewed inputs before observing the local product
         env:
           GH_TOKEN: ${{ github.token }}
           PRODUCT: ${{ needs.b1-evidence-pin.outputs.product }}
@@ -206,11 +210,29 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git -C observed-product rev-parse HEAD)" = "$PRODUCT"
           test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/306" --jq 'select(.state == "open") | .head.sha')" = "$GITHUB_SHA"
-          for kind in update pause; do
-            mkdir -m 700 "$RUNNER_TEMP/$kind"
-            python3 scripts/acceptance/produce-organization-artifact.py --directory "$RUNNER_TEMP/$kind" \
-              --case "synthetic-organization-$kind" --workflow-sha "$GITHUB_SHA" --sha "$PRODUCT" --run "$GITHUB_RUN_ID"
+      - name: Build the pinned product and observe editing and pausing on loopback
+        env:
+          B1_PRODUCT: ${{ needs.b1-evidence-pin.outputs.product }}
+          B1_CASE_OUTPUT: ${{ runner.temp }}
+          VITE_ADMIN_AUDIT_OPERATIONS_V1: 'true'
+          VITE_ORGANIZATION_MANAGEMENT_V1: 'true'
+          VITE_MAONO_MAP_SHELL_V1: 'true'
+          VITE_MAONO_LAYER_MANAGER_V1: 'true'
+          VITE_MAONO_MAP_OVERLAY_V1: 'true'
+        run: |
+          set -euo pipefail
+          cd observed-product
+          npm install --legacy-peer-deps --no-audit --no-fund
+          npm run build
+          node scripts/install-ci-browsers.mjs chromium
+          # Only reviewed test instrumentation is overlaid on the independent product checkout.
+          for file in playwright.organization-observed.config.ts playwright.organization-evidence.config.ts \
+            tests/acceptance-browser/organization-observed.spec.ts tests/helpers/organization-management-browser-server.mjs \
+            scripts/acceptance/organization-functional-evidence.js scripts/acceptance/organization-functional-evidence.mjs \
+            scripts/acceptance/organization-observed-case.mjs; do
+            cp "../$file" "$file"
           done
+          npx --no-install playwright test --config=playwright.organization-observed.config.ts --reporter=list
       - id: update
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

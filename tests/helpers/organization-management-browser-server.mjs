@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {onRequest as management} from '../../functions/api/admin/organization-management/[[path]].js';
+import {onRequest as auditList} from '../../functions/api/admin/audit/index.js';
+import {onRequest as auditDetail} from '../../functions/api/admin/audit/[eventId].js';
 import {onRequest as session} from '../../functions/api/session.js';
 
 // The persistence fixture replaces global fetch for its synthetic provider.
@@ -11,7 +13,7 @@ const fetchAssets=globalThis.fetch.bind(globalThis);
 // Windows WebKit the interception event precedes curl adding its Cookie header;
 // constructing a Request from that event can incorrectly erase authentication.
 // Only compiled assets are proxied, and their origin must also be loopback.
-export async function organizationManagementBrowserServer(env, assetOrigin) {
+export async function organizationManagementBrowserServer(env, assetOrigin, observeResponse) {
   const assets=new URL(assetOrigin);
   assert.equal(assets.protocol,'http:');
   assert.ok(['127.0.0.1','localhost'].includes(assets.hostname));
@@ -32,13 +34,20 @@ export async function organizationManagementBrowserServer(env, assetOrigin) {
         for await(const chunk of incoming)chunks.push(Buffer.from(chunk));
         const body=Buffer.concat(chunks).toString('utf8');
         const request=new Request(url,{method:incoming.method,headers,...(body?{body}:{})});
+        const observedRequest=observeResponse ? request.clone() : null;
         if(url.pathname==='/api/session'||url.pathname.startsWith('/api/admin/organization-management/')){
           response=await (url.pathname==='/api/session'?session:management)({env,request});
+        }else if(incoming.method==='GET' && url.pathname==='/api/admin/audit'){
+          response=await auditList({env,request});
+        }else if(incoming.method==='GET' && /^\/api\/admin\/audit\/(?:frame|legacy)(?::|%3A)\d+$/i.test(url.pathname)){
+          const eventId=decodeURIComponent(url.pathname.split('/').pop());
+          response=await auditDetail({env,request,params:{eventId}});
         }else if(incoming.method==='GET'){
           response=Response.json({ok:true,enabled:false,notifications:[],unreadCount:0});
         }else{
           throw new Error(`Unexpected browser mutation: ${incoming.method} ${url.pathname}`);
         }
+        if(observeResponse) await observeResponse(observedRequest,response.clone());
       }else{
         response=await fetchAssets(new URL(url.pathname+url.search,assets),{redirect:'manual'});
       }

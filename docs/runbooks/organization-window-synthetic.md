@@ -82,10 +82,26 @@ e organização `sandbox`. Informe na confirmação `B1-evidence-` seguido do HE
 completo revisado da PR. Deixe os campos opcionais vazios. A revisão humana
 do Environment `maono-b1-ensaios` libera apenas o produtor de arquivos
 sintéticos. Esses jobs não recebem token Cloudflare nem credenciais do Admin.
-O produtor verifica o checkout do produto e publica um ZIP por caso permitido.
-O consumidor compara os ZIPs originais aos metadados, recusa a troca dos casos
-e executa `accept` e `finish` para cada observação. Os ZIPs originais, os
-recibos e os relatórios sintéticos permanecem separados em Actions.
+O produtor compila o checkout do produto fixado, executa edição e pausa pelo navegador
+em loopback, com sessão sintética, handlers do produto e SQLite descartável. Cada ZIP
+v3 contém um sucesso e um conflito medidos, com respostas HTTP, amostras da tela,
+estado relido e evento da operação. O consumidor exige `--sandbox --observed` e verifica
+o ZIP original, versão, observações e troca de caso. O recibo traz o digest dos cenários;
+o diário preserva esse vínculo nas fases de ingestão e encerramento. O formato v2 do
+#133 continua verificável com `--sandbox`. A execução protegida atual exige v3.
+O resultado comprova exclusivamente as observações no ambiente de teste.
+
+Para reproduzir em um checkout local, a partir da raiz, com Node 22 ou 24 e npm:
+
+```sh
+set -eu
+npm install --legacy-peer-deps --no-audit --no-fund
+VITE_ADMIN_AUDIT_OPERATIONS_V1=true VITE_ORGANIZATION_MANAGEMENT_V1=true \
+  VITE_MAONO_MAP_SHELL_V1=true VITE_MAONO_LAYER_MANAGER_V1=true VITE_MAONO_MAP_OVERLAY_V1=true npm run build
+node scripts/install-ci-browsers.mjs chromium
+npx --no-install playwright test --config=playwright.organization-observed.config.ts --reporter=list
+```
+
 
 ### Verificação em duas leituras
 

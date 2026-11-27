@@ -13,6 +13,8 @@ on:
       - 'tests/helpers/organization-functional-evidence-fixture.mjs'
       - 'tests/acceptance-browser/**'
       - 'playwright.organization-evidence.config.ts'
+      - 'playwright.organization-observed.config.ts'
+      - 'tests/helpers/organization-management-browser-server.mjs'
       - '.github/workflows/organization-functional-evidence.yml'
       - 'package.json'
       - 'package-lock.json'
@@ -52,6 +54,8 @@ jobs:
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/organization-functional-evidence/results.json
         run: npx playwright test --config=playwright.organization-evidence.config.ts --reporter=list,json
+      - name: Observe product handlers, compiled UI and persisted effects on loopback
+        run: npx --no-install playwright test --config=playwright.organization-observed.config.ts --reporter=list
       - name: Preserve local-fixture evidence
         if: always()
         uses: actions/upload-artifact@v4

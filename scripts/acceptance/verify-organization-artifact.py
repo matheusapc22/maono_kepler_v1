@@ -6,12 +6,15 @@ import io
 import json
 import os
 import re
+import shutil
+import subprocess
 import stat
 import sys
 import urllib.error
 import urllib.request
 import zipfile
 import zlib
+from datetime import datetime
 from pathlib import Path
 
 from organization_case_fixture import CASES, PRODUCT_BRANCH, WORKFLOW_BRANCH, case_files
@@ -24,6 +27,8 @@ API_ROOT = f"https://api.github.com/repos/{REPO}/actions"
 NAME = "organization-evidence.json"
 MAX_ARCHIVE = 128 * 1024
 MAX_EVIDENCE = 32 * 1024
+MAX_OBSERVED_ARCHIVE = 1024 * 1024
+MAX_OBSERVED_EVIDENCE = 4 * 1024 * 1024
 MAX_API = 256 * 1024
 
 
@@ -103,9 +108,11 @@ def matches_fields(actual, expected):
                                             for k, v in expected.items())
 
 
-def verify(archive, run, artifact, sha, case, *, workflow_sha, get, sandbox=False, window_directory=None):
+def verify(archive, run, artifact, sha, case, *, workflow_sha, get, sandbox=False, window_directory=None, observed=False):
     validate_target(run, artifact, sha, case)
-    require(0 < len(archive) <= MAX_ARCHIVE, "ARCHIVE_SIZE")
+    require(not observed or sandbox, "OBSERVED_SCOPE")
+    require(0 < len(archive) <= (MAX_OBSERVED_ARCHIVE if observed else MAX_ARCHIVE), "ARCHIVE_SIZE")
+    max_evidence = MAX_OBSERVED_EVIDENCE if observed else MAX_EVIDENCE
     require(bool(re.fullmatch(r"[0-9a-f]{40}", workflow_sha)), "WORKFLOW_SHA")
     require(window_directory is None or sandbox, "WINDOW_SCOPE")
     branch = WORKFLOW_BRANCH if sandbox else BRANCH
@@ -123,10 +130,12 @@ def verify(archive, run, artifact, sha, case, *, workflow_sha, get, sandbox=Fals
         # The consumer runs after the protected producer, while this same run is still in progress.
         require(completed or matches_fields(record, {"status": "in_progress", "conclusion": None}), "RUN_SCOPE")
         jobs = get(f"/runs/{run}/attempts/1/jobs").get("jobs")
-        require(isinstance(jobs, list) and any(matches_fields(job, {
+        require(isinstance(jobs, list), "PRODUCER_SCOPE")
+        producers = [job for job in jobs if matches_fields(job, {
             "name": "b1-evidence-producer", "run_id": run, "head_sha": workflow_sha,
             "status": "completed", "conclusion": "success",
-        }) for job in jobs), "PRODUCER_SCOPE")
+        })]
+        require(len(producers) == 1, "PRODUCER_SCOPE")
     else:
         require(completed, "RUN_SCOPE")
     metadata = get(f"/artifacts/{artifact}")
@@ -147,27 +156,53 @@ def verify(archive, run, artifact, sha, case, *, workflow_sha, get, sandbox=Fals
             # No extraction, filesystem paths, extra entries, symlinks or unbounded decompression.
             file_type = stat.S_IFMT(entry.external_attr >> 16)
             require(entry.orig_filename == NAME and entry.filename == NAME and
-                    file_type in (0, stat.S_IFREG) and 0 < entry.file_size <= MAX_EVIDENCE and
+                    file_type in (0, stat.S_IFREG) and 0 < entry.file_size <= max_evidence and
                     entry.compress_type in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED) and
                     not (entry.flag_bits & 1), "ARCHIVE_LAYOUT")
             with bundle.open(entry) as item:
-                data = item.read(MAX_EVIDENCE + 1)
-            require(len(data) == entry.file_size and len(data) <= MAX_EVIDENCE, "EVIDENCE_SIZE")
+                data = item.read(max_evidence + 1)
+            require(len(data) == entry.file_size and len(data) <= max_evidence, "EVIDENCE_SIZE")
     except (zipfile.BadZipFile, NotImplementedError, RuntimeError, OSError, EOFError, zlib.error):
         raise Rejected("ARCHIVE_INVALID") from None
     evidence = json_object(data)
     identity = {"run": run, "attempt": 1, "sha": sha, "caseId": case, "workflowSha": workflow_sha,
-                "productBranch": PRODUCT_BRANCH, "version": 2}
+                "productBranch": PRODUCT_BRANCH, "version": 3 if observed else 2}
     require(matches_fields(evidence, identity), "EVIDENCE_SCOPE")
-    require(evidence.get("kind") == ("organization-sandbox-case" if sandbox else "organization-case"),
+    require(evidence.get("kind") == ("organization-observed-loopback" if observed else "organization-sandbox-case" if sandbox else "organization-case"),
             "EVIDENCE_KIND")
     observation_digest = None
     if sandbox:
         scenario, expected = case_files(run, sha, case)
-        require(set(evidence) == set(identity) | {"kind", "observation"} and
-                json.dumps(evidence.get("observation"), sort_keys=True) == json.dumps(expected, sort_keys=True),
-                "SANDBOX_OBSERVATION")
-        observation_bytes = json.dumps(evidence["observation"], sort_keys=True, separators=(",", ":")).encode()
+        if observed:
+            # The subprocess receives only the sanitized file and public identifiers.
+            node = shutil.which("node")
+            require(node is not None, "OBSERVED_RUNTIME")
+            try:
+                check = subprocess.run([node, str(Path(__file__).with_name("check-organization-observed.mjs")),
+                                        str(run), workflow_sha, sha, case], input=data, capture_output=True,
+                                       env={}, timeout=20, check=False)
+            except subprocess.TimeoutExpired:
+                raise Rejected("OBSERVED_TIMEOUT") from None
+            require(check.returncode == 0, "OBSERVED_PROOF")
+            proof = json_object(check.stdout)
+            try:
+                start, end = (datetime.fromisoformat(producers[0][key].replace("Z", "+00:00")).timestamp() * 1000
+                              for key in ("started_at", "completed_at"))
+            except (AttributeError, KeyError, OverflowError, ValueError):
+                raise Rejected("OBSERVED_JOB_TIME") from None
+            # Actions job timestamps have second precision.
+            require(start <= proof["openedAt"] <= proof["finishedAt"] < end + 1000, "OBSERVED_JOB_TIME")
+            scenario["clock"] = proof["openedAt"]
+            scenario["ingestAt"] = proof["finishedAt"]
+            scenario["manifest"]["expiresAt"] = proof["openedAt"] + 3600000
+            observation = {**expected, "observedAt": proof["finishedAt"],
+                           "scenariosSha256": proof["scenariosSha256"]}
+        else:
+            observation = evidence.get("observation")
+            require(set(evidence) == set(identity) | {"kind", "observation"} and
+                    json.dumps(observation, sort_keys=True) == json.dumps(expected, sort_keys=True),
+                    "SANDBOX_OBSERVATION")
+        observation_bytes = json.dumps(observation, sort_keys=True, separators=(",", ":")).encode()
         observation_digest = sha256(observation_bytes)
         if window_directory is not None:
             # The original ZIP remains intact. Only verified input reaches the synthetic window.
@@ -182,15 +217,16 @@ def verify(archive, run, artifact, sha, case, *, workflow_sha, get, sandbox=Fals
         "workflowSha": workflow_sha, "workflowBranch": branch, "productBranch": PRODUCT_BRANCH,
         "scope": "sandbox" if sandbox else "production", "observationSha256": observation_digest,
         "functionalAcceptanceVerified": False,
+        **({"scenariosSha256": proof["scenariosSha256"], "browserEvidenceVerified": True} if observed else {}),
     }
 
 
-def read_archive(path):
+def read_archive(path, limit=MAX_ARCHIVE):
     fd = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0))
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
-        require(stat.S_ISREG(info.st_mode) and 0 < info.st_size <= MAX_ARCHIVE, "ARCHIVE_SIZE")
-        return stream.read(MAX_ARCHIVE + 1)
+        require(stat.S_ISREG(info.st_mode) and 0 < info.st_size <= limit, "ARCHIVE_SIZE")
+        return stream.read(limit + 1)
 
 
 def main():
@@ -199,14 +235,15 @@ def main():
     parser.add_argument("--artifact", required=True, type=int)
     parser.add_argument("--sha", required=True)
     parser.add_argument("--workflow-sha", required=True)
+    parser.add_argument("--observed", action="store_true")
     parser.add_argument("--sandbox", action="store_true")
     parser.add_argument("--window-directory")
     parser.add_argument("--case", required=True)
     parser.add_argument("--archive", required=True)
     args = parser.parse_args()
     try:
-        result = verify(read_archive(args.archive), args.run, args.artifact, args.sha, args.case,
-                        workflow_sha=args.workflow_sha, sandbox=args.sandbox, window_directory=args.window_directory,
+        result = verify(read_archive(args.archive, MAX_OBSERVED_ARCHIVE if args.observed else MAX_ARCHIVE), args.run, args.artifact, args.sha, args.case,
+                        workflow_sha=args.workflow_sha, sandbox=args.sandbox, observed=args.observed, window_directory=args.window_directory,
                         get=github_client(os.environ.get("MAONO_EVIDENCE_GITHUB_TOKEN")))
     except Rejected as error:
         print(str(error), file=sys.stderr)

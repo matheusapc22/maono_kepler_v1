@@ -96,6 +96,10 @@ class ProvenanceTests(unittest.TestCase):
                     self.verify()
                 with patch.dict(self.artifact["workflow_run"], {"id": self.RUN+1}), self.assertRaisesRegex(v.Rejected, "ARTIFACT_SCOPE"):
                     verify()
+                # A legacy fixture can still verify as v2, but never as an observed browser case.
+                with self.assertRaisesRegex(v.Rejected, "EVIDENCE_SCOPE"):
+                    v.verify(self.archive, self.RUN, self.ARTIFACT, self.SHA, case,
+                             workflow_sha=self.WORKFLOW_SHA, sandbox=True, observed=True, get=get)
                 target = Path(directory) / "window"
                 receipt = verify(output=target)
                 self.assertEqual(receipt["evidenceSha256"], v.sha256(raw))

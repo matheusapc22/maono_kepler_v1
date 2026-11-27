@@ -12,7 +12,7 @@ for kind in update pause; do
   [[ "$artifact" =~ ^[1-9][0-9]{0,15}$ ]]
   archive="$RUNNER_TEMP/$kind.zip"
   gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact/zip" > "$archive"
-  verifier=(python3 scripts/acceptance/verify-organization-artifact.py --sandbox --workflow-sha "$GITHUB_SHA"
+  verifier=(python3 scripts/acceptance/verify-organization-artifact.py --sandbox --observed --workflow-sha "$GITHUB_SHA"
             --artifact "$artifact" --sha "$B1_PRODUCT" --archive "$archive" --run "$GITHUB_RUN_ID")
   window="$RUNNER_TEMP/window-$kind"
   "${verifier[@]}" --case "$case_id" --window-directory "$window" > "$receipts/$kind-transport.json"
@@ -23,6 +23,7 @@ for kind in update pause; do
     node scripts/acceptance/operator.mjs organization-window-synthetic \
       "$window/scenario.json" "$window/evidence.json" "$window/journal" "$phase" > "$receipts/$kind-$phase.json"
   done
+  jq -e '.browserEvidenceVerified == true and .functionalAcceptanceVerified == false and (.scenariosSha256|length == 64)' "$receipts/$kind-transport.json" > /dev/null
   verified=$(jq -er '.observationSha256' "$receipts/$kind-transport.json")
   jq -e --arg digest "$verified" '.evidenceDigest == $digest and .state == "cleanup"' "$receipts/$kind-accept.json" > /dev/null
   jq -e --arg digest "$verified" '.evidenceDigest == $digest and .state == "closed" and .protocolComplete == true and .acceptanceExecuted == false and .complete == false' \

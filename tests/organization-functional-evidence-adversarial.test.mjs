@@ -44,6 +44,10 @@ for (const caseId of CONTRACT.cases) test(`offline ${caseId} observations do not
   assert.deepEqual(evidence, original, 'verification must never rewrite supplied evidence');
 });
 
+for (const caseId of CONTRACT.sandboxCases) test(`reject sandbox case ${caseId} on the product origin`, () => {
+  rejects(fixture(caseId), 'ORG_SANDBOX_ONLY');
+});
+
 test('GET snapshots and caller-supplied commit/deployment do not substitute for an external artifact', () => {
   const certificate = verify(fixture('snapshot'), null);
   assert.equal(certificate.observationsComplete, true);

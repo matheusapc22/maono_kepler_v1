@@ -7,6 +7,7 @@ export const CONTRACT = Object.freeze({
   id: 'organization-functional-evidence', version: 1, phase: 'AU-AC01-A',
   registeredProductionSuite: false,
   cases: Object.freeze(['snapshot', 'save_success', 'save_error', 'recovery_query', 'deletion_observed']),
+  sandboxCases: Object.freeze(['edit_conflict', 'pause_success', 'pause_conflict']),
   maxEvidenceBytes: 2 * 1024 * 1024, maxResponseBytes: 256 * 1024,
   maxCaptures: 12, maxUiRuns: 4, maxSamples: 1300, maxRunMs: 30 * 60_000,
   maxUiRunMs: 120_000, maxEvidenceAgeMs: 24 * 60 * 60_000, maxEnvironmentAgeMs: 15 * 60_000,
@@ -148,8 +149,11 @@ export function validateOrganizationEvidence(value, { now = Date.now() } = {}) {
     COMMIT.test(value.expectedCommit) && UUID.test(value.expectedDeploymentId) && timestamp(value.startedAt) && timestamp(value.capturedAt));
   check(time(value.startedAt) <= time(value.capturedAt) && time(value.capturedAt) <= now + 60_000 && time(value.capturedAt) >= now - CONTRACT.maxEvidenceAgeMs &&
     time(value.capturedAt) - time(value.startedAt) <= CONTRACT.maxRunMs, 'ORG_EVIDENCE_TIME_INVALID');
-  check(Array.isArray(value.requestedCases) && value.requestedCases.length > 0 && value.requestedCases.length <= CONTRACT.cases.length &&
-    value.requestedCases.every(id => CONTRACT.cases.includes(id)) && new Set(value.requestedCases).size === value.requestedCases.length);
+  check(Array.isArray(value.requestedCases) && value.requestedCases.length > 0 && value.requestedCases.length <= CONTRACT.cases.length + CONTRACT.sandboxCases.length &&
+    value.requestedCases.every(id => CONTRACT.cases.includes(id) || CONTRACT.sandboxCases.includes(id)) && new Set(value.requestedCases).size === value.requestedCases.length);
+  if (value.requestedCases.some(id => CONTRACT.sandboxCases.includes(id))) {
+    check(['localhost', '127.0.0.1'].includes(new URL(value.origin).hostname), 'ORG_SANDBOX_ONLY');
+  }
   if (value.mode === 'diagnostic') check(value.requestedCases.length === 1 && value.requestedCases[0] === 'snapshot', 'ORG_DIAGNOSTIC_MUTATION_CASE');
   check(Array.isArray(value.captures) && value.captures.length > 0 && value.captures.length <= CONTRACT.maxCaptures && Array.isArray(value.uiRuns) && value.uiRuns.length <= CONTRACT.maxUiRuns);
   for (const capture of value.captures) {
@@ -161,7 +165,7 @@ export function validateOrganizationEvidence(value, { now = Date.now() } = {}) {
   for (const run of value.uiRuns) {
     check(object(run) && run.sampling === 'animation_frame', 'ORG_UI_SAMPLING_UNCONFIRMED');
     check(exact(run, ['id', 'caseId', 'sampling', 'startedAt', 'endedAt', 'beforeCaptureId', 'afterCaptureId', 'samples', 'stopReason']) && UUID.test(run.id) &&
-      ['save_success', 'save_error', 'recovery_query'].includes(run.caseId) && value.requestedCases.includes(run.caseId) && timestamp(run.startedAt) && timestamp(run.endedAt) &&
+      ['save_success', 'save_error', 'edit_conflict', 'pause_success', 'pause_conflict', 'recovery_query'].includes(run.caseId) && value.requestedCases.includes(run.caseId) && timestamp(run.startedAt) && timestamp(run.endedAt) &&
       UUID.test(run.beforeCaptureId) && nullable(run.afterCaptureId, id => UUID.test(id)) && ['finished', 'timeout', 'stopped', 'session_changed'].includes(run.stopReason));
     const before = value.captures.find(row => row.id === run.beforeCaptureId), after = value.captures.find(row => row.id === run.afterCaptureId);
     const maxUiMs = CONTRACT.maxUiRunMs + (run.stopReason === 'finished' ? 0 : CONTRACT.maxIncompleteUiOverrunMs);
@@ -250,8 +254,8 @@ function caseResult(id, evidence) {
         ['organization_deletion', 'organization_deletion_audit'].includes(row.source))) failures.push('DELETION_DOMAIN_EVIDENCE_INCOMPLETE');
   } else {
     const run = evidence.uiRuns.find(row => row.caseId === id), before = evidence.captures.find(row => row.id === run?.beforeCaptureId), after = evidence.captures.find(row => row.id === run?.afterCaptureId);
-    failures = uiChecks(run, id === 'save_error' ? 'error' : 'success');
-    const kind = id === 'save_error' ? 'error' : 'success';
+    const kind = id === 'save_error' || id.endsWith('_conflict') ? 'error' : 'success';
+    failures = uiChecks(run, kind);
     const firstNotice = run?.samples.find(row => row.toasts.some(toast => toast.kind === kind));
     // D1 event timestamps have second precision. This bounds correlation to
     // the first notice without pretending to have millisecond server evidence.
@@ -262,6 +266,15 @@ function caseResult(id, evidence) {
         after.detail.organization.descriptionDigest === before.detail.organization.descriptionDigest ||
         !details.some(row => row.result === 'succeeded' && (row.action === 'organization.update' && row.source === 'organization_operation' && row.version === before.detail.organization.version ||
           row.action === 'organization.updated' && row.source === 'organization_management_events' && row.version === after.detail.organization.version))) failures.push('SAVE_EFFECT_NOT_CORRELATED');
+    } else if (id === 'pause_success' || id.endsWith('_conflict')) {
+      const a = before?.detail.organization, b = after?.detail.organization;
+      const paused = id === 'pause_success', action = id === 'edit_conflict' ? 'organization.update' : 'organization.pause';
+      if (!a || !b || !a.active || b.active !== !paused || b.version !== a.version + Number(paused) ||
+          a.descriptionDigest !== b.descriptionDigest || a.userCount !== b.userCount ||
+          !details.some(row => row.source === 'organization_operation' && row.action === action &&
+            row.version === a.version - Number(!paused) && (paused ? row.result === 'succeeded' : ['failed','blocked'].includes(row.result)))) {
+        failures.push('LOCAL_LIFECYCLE_NOT_CORRELATED');
+      }
     } else if (id === 'save_error') {
       if (!before?.detail.organization || !after?.detail.organization || before.detail.organization.version !== after.detail.organization.version ||
         before.detail.organization.descriptionDigest !== after.detail.organization.descriptionDigest ||

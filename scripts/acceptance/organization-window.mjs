@@ -83,7 +83,9 @@ export function createOrganizationWindow(manifest, { now = Date.now } = {}) {
     requireCondition(state() === 'awaiting-evidence', 'EVIDENCE_STATE');
     requireCondition(Buffer.isBuffer(raw) && raw.length > 0 && raw.length <= MAX_BYTES, 'EVIDENCE_SIZE');
     const evidence = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
-    exact(evidence, ['version', 'kind', ...identityKeys, 'observedAt', 'operation', 'httpStatus', 'effect', 'ui'],
+    const extra = Object.hasOwn(evidence, 'scenariosSha256') ? ['scenariosSha256'] : [];
+    if (extra.length) requireCondition(match(evidence.scenariosSha256, /^[0-9a-f]{64}$/), 'EVIDENCE_DIGEST');
+    exact(evidence, ['version', 'kind', ...identityKeys, 'observedAt', 'operation', 'httpStatus', 'effect', 'ui', ...extra],
       'EVIDENCE_FIELDS');
     requireCondition(evidence.version === approved.version && evidence.kind === approved.kind &&
       identityKeys.every((key) => evidence[key] === approved[key]), 'EVIDENCE_SCOPE');

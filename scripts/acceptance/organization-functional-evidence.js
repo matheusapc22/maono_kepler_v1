@@ -12,7 +12,7 @@
   const SHA = strictPattern(/^[0-9a-f]{40}$/);
   const BLOCKER_CODE = strictPattern(/^[A-Z][A-Z0-9_]{0,100}$/), SOURCE = strictPattern(/^[a-z][a-z0-9_]{0,79}$/);
   const CONTENT_LENGTH = strictPattern(/^\d+$/), controlledErrors = new WeakSet();
-  const CASES = ['snapshot', 'save_success', 'save_error', 'recovery_query', 'deletion_observed'];
+  const CASES = ['snapshot', 'save_success', 'save_error', 'edit_conflict', 'pause_success', 'pause_conflict', 'recovery_query', 'deletion_observed'];
   const RESULTS = new Set(['requested', 'authorized', 'denied', 'running', 'succeeded', 'failed', 'blocked', 'partial', 'unknown', 'noop', 'legacy_unproven']);
   const ACTIONS = new Set(['organization.create', 'organization.created', 'organization.update', 'organization.updated', 'organization.legacy_updated',
     'organization.policy_updated', 'organization.configured', 'organization.pause', 'organization.paused', 'organization.resume', 'organization.resumed',
@@ -156,7 +156,9 @@
         audit = { status: 200, truncated: data.nextBefore !== null, entries, details: [] };
         const owned = entries.filter(row => !row.legacy && row.actorId === s.administratorUserId);
         const recent = owned.filter(row => row.createdAt && Date.parse(row.createdAt) >= Date.parse(s.startedAt) - 1000);
-        const candidates = [...recent.filter(row => ['organization.update', 'organization.updated', 'organization.reconcile', 'organization.permanent_delete'].includes(row.action)),
+        const actions = ['organization.update', 'organization.updated', 'organization.reconcile', 'organization.permanent_delete'];
+        if (s.requestedCases.some(id => id.startsWith('pause_'))) actions.push('organization.pause', 'organization.paused');
+        const candidates = [...recent.filter(row => actions.includes(row.action)),
           ...recent, ...owned].filter((row, index, values) => values.findIndex(value => value.id === row.id) === index).slice(0, 3);
         for (const candidate of candidates) {
           const response = await get('audit-detail', requests, candidate.id), body = response.payload;
@@ -305,6 +307,7 @@
         ['diagnostic', 'functional'].includes(input.mode) && Array.isArray(input.requestedCases) && input.requestedCases.length > 0 && input.requestedCases.length <= CASES.length &&
         input.requestedCases.every(id => CASES.includes(id)) && new Set(input.requestedCases).size === input.requestedCases.length, 'ORG_COLLECTOR_OPTIONS_INVALID');
       requireValue(input.mode !== 'diagnostic' || input.requestedCases.length === 1 && input.requestedCases[0] === 'snapshot', 'ORG_DIAGNOSTIC_MUTATION_CASE');
+      requireValue(!input.requestedCases.some(id => ['edit_conflict','pause_success','pause_conflict'].includes(id)) || ['localhost','127.0.0.1'].includes(location.hostname), 'ORG_SANDBOX_ONLY');
       const at = new Date().toISOString();
       state = { schemaVersion: 1, kind: 'organization-functional-evidence', contractVersion: VERSION, origin: location.origin, mode: input.mode, runId: input.runId,
         organizationId: input.organizationId, administratorUserId: null, expectedCommit: input.expectedCommit, expectedDeploymentId: input.expectedDeploymentId,
@@ -314,7 +317,7 @@
     }),
     capture: safe(async () => { const value = await captureInternal(); return { captureId: value.id, capturedAt: value.capturedAt }; }),
     begin: safe(async caseId => {
-      const s = current(); requireValue(!recorder && !captureInFlight && s.mode === 'functional' && ['save_success', 'save_error', 'recovery_query'].includes(caseId) &&
+      const s = current(); requireValue(!recorder && !captureInFlight && s.mode === 'functional' && ['save_success', 'save_error', 'edit_conflict', 'pause_success', 'pause_conflict', 'recovery_query'].includes(caseId) &&
         s.requestedCases.includes(caseId) && !s.uiRuns.some(row => row.caseId === caseId) && s.uiRuns.length < 4, 'ORG_RECORDING_CASE_INVALID');
       const before = await captureInternal(); requireValue(dialog(), 'ORG_FORM_NOT_OPEN'); requireValue(dialogMatchesScope(dialog()), 'ORG_UI_SCOPE_CHANGED');
       const startedAt = new Date().toISOString(), r = { output: { id: crypto.randomUUID(), caseId, sampling: 'animation_frame', startedAt, endedAt: null, beforeCaptureId: before.id,
