@@ -21,13 +21,8 @@ Worker de exclusão e Worker de recuperação, e o protocolo compara o readback
 de cada um ao baseline. A falha parcial impede o fechamento e permite repetir
 a restauração na mesma instância. O relatório conserva o caráter sintético.
 
-O ensaio ainda usa um caso e adaptadores em memória. O diário abaixo retoma
-as etapas sintéticas. Ainda falta estabelecer a procedência do canal
-autenticado e vincular deploy, binding, autoria, HTTP,
-UI e histórico a observações independentes. O adaptador remoto precisa usar
-baseline por executor, configuração efetiva e confirmação pós-restauração.
-O recorte operacional e tokens permanecem no ambiente protegido existente.
-A suíte de readiness conserva seu contrato read-only.
+O ensaio protegido transporta dois casos sintéticos e exercita o mesmo CLI.
+A autoria no Admin, o HTTP real, os efeitos de negócio e o histórico pertencem à janela B2.
 
 ### Retomada em outro processo
 
@@ -56,34 +51,41 @@ Contém hashes dos arquivos e o relatório sintético, não as entradas originai
 Conserve os dois arquivos e a pasta até verificar o resultado. Nunca use
 credenciais, dados de produção ou adaptadores reais neste comando.
 
+O campo `clock` do cenário fixa a abertura. O campo opcional `ingestAt`
+fixa a ingestão e conserva a compatibilidade com cenários antigos. No caminho
+POSIX, um quinto argumento após o subcomando permite informar o instante
+simulado do processo, em milissegundos Unix. O operador recusa ingestão
+expirada e registra o instante aceito. Na retomada, a limpeza de evidência já
+aceita pode terminar após o vencimento. O teste de regressão executa cada fase
+em um processo separado.
+
 ### Transporte de evidências pelo GitHub
 
-A prova de transporte é separada do diário sintético. A partir de um plano
-revisado, fixe o identificador da execução, o SHA, o caso e o identificador
-do artefato esperado. O formato proposto para o produtor é
-`organization-evidence-<run>-1-<caso>`, com um único
-`organization-evidence.json` contendo `run`, `attempt`, `sha` e `caseId`.
-A rotina abaixo recebe o ZIP original do GitHub, não uma cópia recompactada.
-O produtor protegido **ainda não publica esse formato**; não dispare uma
-janela em produção para testar o verificador.
+O contrato v2 distingue o SHA do workflow, conferido no run e no artefato
+do GitHub, do SHA do produto, fixado independentemente antes da publicação
+e confrontado com o JSON. O verificador de produção exige a referência
+`main` do workflow, produto em `mano_kepler_v1`, primeira tentativa concluída
+com sucesso e o nome `organization-evidence-<run>-1-<caso>`. O argumento
+`--workflow-sha` fixa a revisão auditada do workflow e `--sha` a revisão do
+produto. O produtor de casos administrativos de produção continua fora do
+escopo do ensaio. O recibo declara apenas a procedência do transporte.
 
-```sh
-python3 scripts/acceptance/verify-organization-artifact.py \
-  --run "$RUN_ID" --artifact "$ARTIFACT_ID" --sha "$PRODUCT_SHA" \
-  --case "$CASE_ID" --archive "$ORIGINAL_ZIP"
-python3 -m unittest discover -s tests -p test_organization_artifact_provenance.py
-```
+O perfil de teste exige a branch `au-ac01-b1-capacidade`, a execução manual,
+a primeira tentativa, o job protegido `b1-evidence-producer` concluído com
+sucesso e o nome próprio `b1-test-case-<run>-1-<caso>`. O consumidor pode
+verificar esse job durante a mesma execução. O resultado global exige também
+que o consumidor termine com sucesso.
 
-Configure `MAONO_EVIDENCE_GITHUB_TOKEN` como segredo de ambiente, só com
-Actions: read no repositório. Não passe o token na linha de comando. O
-verificador consulta apenas metadados do GitHub por GET, sem seguir
-redirecionamentos. Exige a primeira tentativa bem-sucedida do workflow
-esperado, no repositório e na branch de produto esperados. Compara o hash do
-ZIP com o digest do provedor, o nome do artefato com o caso esperado e a
-identidade do JSON com o run/SHA/caso. Não extrai arquivos no disco e não
-imprime o JSON original. Um resultado aprovado prova o transporte e o
-vínculo, não comprova interação do usuário, autoria da sessão, efeito no D1
-ou aceite funcional. Os testes usam metadados e ZIPs de teste.
+Em **Actions → Production Acceptance Operator → Run workflow**, selecione
+`au-ac01-b1-capacidade`, modo `preflight`, suíte `organization-b1-evidence-test`
+e organização `sandbox`. Informe na confirmação `B1-evidence-` seguido do HEAD
+completo revisado da PR. Deixe os campos opcionais vazios. A revisão humana
+do Environment `maono-b1-ensaios` libera apenas o produtor de arquivos
+sintéticos. Esses jobs não recebem token Cloudflare nem credenciais do Admin.
+O produtor verifica o checkout do produto e publica um ZIP por caso permitido.
+O consumidor compara os ZIPs originais aos metadados, recusa a troca dos casos
+e executa `accept` e `finish` para cada observação. Os ZIPs originais, os
+recibos e os relatórios sintéticos permanecem separados em Actions.
 
 ### Verificação em duas leituras
 
@@ -103,20 +105,11 @@ autorizado.
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p test_organization_artifact_provenance.py
 ```
 
-O teste invoca o produtor por CLI, empacota a saída original e passa o ZIP
-pelo verificador com metadados de GitHub simulados. O produtor só emite
-identidade da execução e caso sintético fixo. Não recebe payload de sessão,
-HTTP, DOM ou D1. A validação exige que o digest do arquivo observado seja o
-mesmo do produtor e conserva o aceite funcional como falso.
-
-O job de contratos da PR publica o JSON como
-`synthetic-organization-transport-<run>-<attempt>` na primeira tentativa.
-Esse artefato usa o SHA do checkout sintético e fica separado da convenção
-protegida de produção. O verificador de produção continua exigindo o mesmo
-workflow, a branch de produto e o nome protegido. O E2E offline não demonstra
-a publicação do ZIP protegido. A publicação pelo job sintético, o vínculo
-do ZIP verificado, a autoria da sessão e o efeito real de negócio são
-evidências distintas.
+A matriz offline usa as duas observações permitidas e metadados de teste,
+confere o SHA do produto e do workflow e chama o CLI da janela. O CI da PR
+também conserva seu artefato histórico `synthetic-organization-transport-<run>-<attempt>`.
+A prova publicada do canal protegido deve identificar o run e seus dois
+artefatos, além do recibo e do estado final de cada caso.
 
 ### Requisitos mínimos do ensaio Cloudflare
 
@@ -172,12 +165,20 @@ o SHA com a PR aberta depois da aprovação do Environment.
    Pages não fornece uma troca condicional atômica. Sem a reserva externa,
    encerre no preflight. O executor muda apenas os três IDs fixados, observa
    as três respostas B e restaura A. Confira a fase `final` e os três estados.
-3. Se houver interrupção, preserve o artefato e os intentos de escrita. Para
-   retomar a recuperação use `closure`, com o mesmo SHA e digest, após
-   conferir que as operações pendentes na Cloudflare terminaram. A recuperação
-   relê os três componentes, restaura só quem está em B e exige leitura final
-   do provedor e do endpoint público de cada um. Alterações desconhecidas
-   interrompem a operação.
+3. Se um ensaio desta revisão falhar ou for cancelado após iniciar a etapa
+   Cloudflare, verifique que as operações pendentes terminaram e reserve de
+   novo os três alvos. Na **execução original** do GitHub, escolha **Re-run
+   jobs → Re-run all jobs**. O GitHub mantém o SHA e a referência daquela
+   execução. A revisão humana do Environment continua obrigatória.
+   A repetição verifica a primeira tentativa, as tentativas intermediárias,
+   o job, a execução e o SHA. Ela usa somente o modo de recuperação com o
+   digest original, inclusive se a PR tiver avançado ou sido encerrada.
+   Uma tentativa anterior bem-sucedida bloqueia esse caminho. As três leituras
+   finais da API e dos endpoints públicos são obrigatórias. Um novo dispatch
+   de `closure` continua disponível sobre o mesmo HEAD aberto e aprovado.
+   Para execuções de código anterior, inclusive #131, vale o procedimento
+   da revisão original. O GitHub limita reexecuções a 30 dias. Fora desse
+   prazo, registrar o estado e preparar uma recuperação específica revisada.
 
 A prova externa só vale com o run protegido e seu relatório. Um teste offline
 ou o CI de contratos prova o caminho simulado. Autoria de uma sessão Admin,

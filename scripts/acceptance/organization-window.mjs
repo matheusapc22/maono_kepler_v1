@@ -64,6 +64,7 @@ export function createOrganizationWindow(manifest, { now = Date.now } = {}) {
   const history = ['awaiting-evidence'];
   let disposition = 'pending';
   let evidenceDigest = null;
+  let ingestedAt = null;
   let results = null;
   const state = () => history.at(-1);
   const transition = (next) => history.push(next);
@@ -94,6 +95,7 @@ export function createOrganizationWindow(manifest, { now = Date.now } = {}) {
       evidence.httpStatus === 200 && evidence.effect === 'synthetic-effect-confirmed' &&
       UI_CHECKS.every((check) => evidence.ui[check] === true), 'CASE_INCOMPLETE');
 
+    ingestedAt = now();
     transition('verified');
     evidenceDigest = createHash('sha256').update(raw).digest('hex');
     disposition = 'synthetic-case-verified';
@@ -169,7 +171,7 @@ export function createOrganizationWindow(manifest, { now = Date.now } = {}) {
     ingest, interrupt, verifyCleanup, verifyRestoration, restore,
     report: () => ({
       version: 1, kind: 'synthetic', state: state(), history: [...history], disposition,
-      evidenceDigest, executors: results && { ...results }, restorationErrors: [...restorationErrors],
+      evidenceDigest, ingestedAt, executors: results && { ...results }, restorationErrors: [...restorationErrors],
       restorationReadErrors: { before: [...restorationReadErrors.before], after: [...restorationReadErrors.after] },
       protocolComplete: state() === 'closed' && disposition === 'synthetic-case-verified',
       acceptanceExecuted: false, complete: false,
@@ -197,14 +199,27 @@ async function readBounded(path) {
 }
 
 export async function runOrganizationWindow(args) {
-  const [manifestPath, evidencePath, checkpointDirectory, phase] = args;
-  requireCondition(args.length === 2 || (args.length === 4 &&
+  const [manifestPath, evidencePath, checkpointDirectory, phase, processTime] = args;
+  requireCondition(args.length === 2 || ([4, 5].includes(args.length) &&
     ['accept', 'finish'].includes(phase)), 'EXPECTED_MANIFEST_AND_EVIDENCE');
   const scenarioBytes = await readBounded(manifestPath);
   const scenario = JSON.parse(scenarioBytes);
-  exact(scenario, ['clock', 'manifest', 'cleanup', 'beforeRestore'], 'SCENARIO_FIELDS');
+  const timingKeys = Object.hasOwn(scenario, 'ingestAt') ? ['ingestAt'] : [];
+  exact(scenario, ['clock', ...timingKeys, 'manifest', 'cleanup', 'beforeRestore'], 'SCENARIO_FIELDS');
   requireCondition(Number.isSafeInteger(scenario.clock) && scenario.clock > 0, 'SCENARIO_CLOCK');
-  const window = createOrganizationWindow(scenario.manifest, { now: () => scenario.clock });
+  let clock = scenario.clock;
+  const window = createOrganizationWindow(scenario.manifest, { now: () => clock });
+  if (timingKeys.length) {
+    requireCondition(Number.isSafeInteger(scenario.ingestAt) && scenario.ingestAt >= clock, 'SCENARIO_CLOCK');
+    clock = scenario.ingestAt;
+  }
+  if (processTime !== undefined) {
+    const time = Number(processTime);
+    requireCondition(/^[1-9][0-9]*$/.test(processTime) && Number.isSafeInteger(time) && time >= clock,
+      'SCENARIO_CLOCK');
+    clock = time;
+  }
+  const processingAt = clock;
   const evidence = await readBounded(evidencePath);
   let checkpoint;
   if (phase) {
@@ -217,12 +232,17 @@ export async function runOrganizationWindow(args) {
     if (phase === 'accept' && accepted) return accepted;
     if (phase === 'finish') {
       requireCondition(accepted, 'CHECKPOINT_NOT_ACCEPTED');
+      // Replay an already accepted input at its recorded instant, including legacy journals.
+      clock = accepted.ingestedAt ?? scenario.ingestAt ?? scenario.clock;
+      requireCondition(Number.isSafeInteger(clock) && clock >= scenario.clock &&
+        (processTime === undefined || processingAt >= clock), 'SCENARIO_CLOCK');
       const closed = await checkpoint.read('closed');
       if (closed) return closed;
     }
   }
   window.ingest(evidence);
   if (phase === 'accept') return checkpoint.commit('accepted', window.report());
+  clock = Math.max(processingAt, clock);
   window.verifyCleanup(scenario.cleanup);
   const syntheticState = snapshot(scenario.beforeRestore);
   await window.restore({

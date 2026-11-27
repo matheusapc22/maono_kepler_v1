@@ -300,3 +300,30 @@ test('a missing readback blocks closure until fresh observations match without r
   assert.equal(window.report().protocolComplete, true);
   assert.equal(window.report().acceptanceExecuted, false);
 });
+
+test('separate processes ingest delayed observations, refuse expired input and finish accepted cleanup', posix, async t => {
+  const { clock, manifest, baseline, evidence, cleanup } = fixture();
+  const dir = await mkdtemp(join(tmpdir(), 'window-delay-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const scenario = join(dir, 'scenario.json');
+  const input = join(dir, 'evidence.json');
+  const journal = join(dir, 'journal');
+  await mkdir(journal, { mode: 0o700 });
+  await writeFile(scenario, encode({ clock, manifest, ingestAt: clock + 1000, cleanup, beforeRestore: baseline }));
+  await writeFile(input, encode({ ...evidence, observedAt: clock + 5000 }));
+  function invoke(phase, time) {
+    return spawnSync(process.execPath, ['scripts/acceptance/operator.mjs', 'organization-window-synthetic',
+      scenario, input, journal, phase, String(time)], { encoding: 'utf8' });
+  }
+  assert.match(invoke('accept', clock + 3000).stderr, /EVIDENCE_TIME/);
+  assert.match(invoke('accept', manifest.expiresAt).stderr, /EVIDENCE_STATE/);
+  assert.deepEqual(await readdir(journal), []);
+  const accepted = invoke('accept', clock + 10000);
+  assert.equal(accepted.status, 0, accepted.stderr);
+  assert.equal(JSON.parse(accepted.stdout).ingestedAt, clock + 10000);
+  assert.match(invoke('finish', clock + 9000).stderr, /SCENARIO_CLOCK/);
+  const completed = invoke('finish', manifest.expiresAt + 5000);
+  assert.equal(completed.status, 0, completed.stderr);
+  assert.equal(JSON.parse(completed.stdout).protocolComplete, true);
+  assert.equal(JSON.parse(completed.stdout).acceptanceExecuted, false);
+});

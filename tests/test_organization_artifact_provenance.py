@@ -11,6 +11,7 @@ from unittest.mock import patch
 import zipfile
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/acceptance/verify-organization-artifact.py"
+sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("artifact_verifier", SCRIPT)
 v = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(v)
@@ -20,20 +21,23 @@ class ProvenanceTests(unittest.TestCase):
     RUN = 71
     ARTIFACT = 92
     SHA = "a" * 40
+    WORKFLOW_SHA = "c" * 40
     CASE = "organization-update"
 
     def setUp(self):
         source = {"id": v.REPO_ID, "full_name": v.REPO}
-        self.content = {"run": self.RUN, "attempt": 1, "sha": self.SHA, "caseId": self.CASE}
+        self.content = {"run": self.RUN, "attempt": 1, "sha": self.SHA, "caseId": self.CASE,
+                        "workflowSha": self.WORKFLOW_SHA, "version": 2, "kind": "organization-case",
+                        "productBranch": v.PRODUCT_BRANCH}
         self.run = {
-            "id": self.RUN, "run_attempt": 1, "head_sha": self.SHA, "head_branch": v.BRANCH,
+            "id": self.RUN, "run_attempt": 1, "head_sha": self.WORKFLOW_SHA, "head_branch": v.BRANCH,
             "event": "workflow_dispatch", "status": "completed", "conclusion": "success",
             "path": v.WORKFLOW_PATH, "repository": source, "head_repository": source,
         }
         self.artifact = {
             "id": self.ARTIFACT, "name": f"organization-evidence-{self.RUN}-1-{self.CASE}", "expired": False,
             "workflow_run": {"id": self.RUN, "repository_id": v.REPO_ID,
-                             "head_repository_id": v.REPO_ID, "head_sha": self.SHA, "head_branch": v.BRANCH},
+                             "head_repository_id": v.REPO_ID, "head_sha": self.WORKFLOW_SHA, "head_branch": v.BRANCH},
         }
         self.archive = self.bundle(self.content)
         self.pin()
@@ -53,7 +57,7 @@ class ProvenanceTests(unittest.TestCase):
         return copy.deepcopy({f"/runs/{self.RUN}": self.run, f"/artifacts/{self.ARTIFACT}": self.artifact}[endpoint])
 
     def verify(self):
-        return v.verify(self.archive, self.RUN, self.ARTIFACT, self.SHA, self.CASE, get=self.get)
+        return v.verify(self.archive, self.RUN, self.ARTIFACT, self.SHA, self.CASE, workflow_sha=self.WORKFLOW_SHA, get=self.get)
 
     def test_transport_proof_does_not_promote_functional_acceptance(self):
         result = self.verify()
@@ -61,28 +65,71 @@ class ProvenanceTests(unittest.TestCase):
         self.assertFalse(result["functionalAcceptanceVerified"])
         self.assertEqual(result["evidenceSha256"], v.sha256(json.dumps(self.content).encode()))
 
-    def test_producer_cli_to_zip_to_transport_verifier(self):
-        case = "synthetic-organization-update"
-        producer = SCRIPT.with_name("produce-organization-artifact.py")
+    def test_sandbox_cli_to_two_original_archives_and_normal_window(self):
+        for case in v.CASES:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                argv = [sys.executable, str(SCRIPT.with_name("produce-organization-artifact.py")),
+                        "--directory", directory, "--run", str(self.RUN), "--sha", self.SHA,
+                        "--workflow-sha", self.WORKFLOW_SHA, "--case", case]
+                subprocess.run(argv, check=True, capture_output=True)
+                self.assertNotEqual(subprocess.run(argv, capture_output=True).returncode, 0)
+                raw = (Path(directory) / v.NAME).read_bytes()
+                self.archive = self.bundle(raw)
+                self.pin()
+                self.artifact["name"] = f"b1-test-case-{self.RUN}-1-{case}"
+                self.run.update(head_branch=v.WORKFLOW_BRANCH, status="in_progress", conclusion=None)
+                self.artifact["workflow_run"]["head_branch"] = v.WORKFLOW_BRANCH
+                job = {"name": "b1-evidence-producer", "status": "completed", "conclusion": "success",
+                       "run_id": self.RUN, "head_sha": self.WORKFLOW_SHA}
+                def get(endpoint):
+                    if endpoint == f"/runs/{self.RUN}/attempts/1/jobs":
+                        return {"jobs": [job]}
+                    return self.get(endpoint)
+                def verify(c=case, output=None):
+                    return v.verify(self.archive, self.RUN, self.ARTIFACT, self.SHA, c,
+                                    workflow_sha=self.WORKFLOW_SHA, sandbox=True, get=get, window_directory=output)
+                with patch.dict(job, {"conclusion": "failure"}), self.assertRaisesRegex(v.Rejected, "PRODUCER_SCOPE"):
+                    verify()
+                with self.assertRaisesRegex(v.Rejected, "ARTIFACT_SCOPE"):
+                    verify(next(c for c in v.CASES if c != case))
+                with self.assertRaisesRegex(v.Rejected, "RUN_SCOPE"):
+                    self.verify()
+                with patch.dict(self.artifact["workflow_run"], {"id": self.RUN+1}), self.assertRaisesRegex(v.Rejected, "ARTIFACT_SCOPE"):
+                    verify()
+                target = Path(directory) / "window"
+                receipt = verify(output=target)
+                self.assertEqual(receipt["evidenceSha256"], v.sha256(raw))
+                self.assertEqual(receipt["observationSha256"], v.sha256((target / "evidence.json").read_bytes()))
+                self.assertFalse(receipt["functionalAcceptanceVerified"])
+                consumer = SCRIPT.with_name("operator.mjs")
+                result = subprocess.run(["node", str(consumer), "organization-window-synthetic",
+                                         str(target/"scenario.json"), str(target/"evidence.json")],
+                                        check=True, capture_output=True)
+                self.assertTrue(json.loads(result.stdout)["protocolComplete"])
+                self.assertFalse(json.loads(result.stdout)["acceptanceExecuted"])
+                payload = json.loads(raw)
+                for field, value, rejection in (("run", self.RUN+1, "EVIDENCE_SCOPE"),
+                                                ("attempt", 2, "EVIDENCE_SCOPE"),
+                                                ("sha", "b"*40, "EVIDENCE_SCOPE"),
+                                                ("workflowSha", "e"*40, "EVIDENCE_SCOPE"),
+                                                ("productBranch", "main", "EVIDENCE_SCOPE"),
+                                                ("observation", {}, "SANDBOX_OBSERVATION")):
+                    with self.subTest(field=field):
+                        self.archive = self.bundle({**payload, field: value})
+                        self.pin()
+                        with self.assertRaisesRegex(v.Rejected, rejection):
+                            verify()
+
+    def test_legacy_synthetic_producer_still_emits_only_original_fixture(self):
         with tempfile.TemporaryDirectory() as directory:
-            argv = [sys.executable, str(producer), "--directory", directory,
-                    "--run", str(self.RUN), "--sha", self.SHA]
+            argv = [sys.executable, str(SCRIPT.with_name("produce-organization-artifact.py")),
+                    "--run", str(self.RUN), "--sha", self.SHA, "--directory", directory]
             subprocess.run(argv, check=True, capture_output=True)
-            self.assertNotEqual(subprocess.run(argv, capture_output=True).returncode, 0)
-            with self.assertRaises(subprocess.CalledProcessError):
-                subprocess.run(argv + ["--session", "synthetic-secret"], check=True, capture_output=True)
-            raw = (Path(directory) / v.NAME).read_bytes()
-        self.assertEqual(json.loads(raw), {
-            **self.content, "caseId": case, "version": 1,
-            "kind": "organization-synthetic-transport-fixture",
-        })
-        self.archive = self.bundle(raw)
-        self.pin()
-        self.artifact["name"] = f"organization-evidence-{self.RUN}-1-{case}"
-        receipt = v.verify(self.archive, self.RUN, self.ARTIFACT, self.SHA, case, get=self.get)
-        self.assertEqual(receipt["evidenceSha256"], v.sha256(raw))
-        self.assertTrue(receipt["transportVerified"])
-        self.assertFalse(receipt["functionalAcceptanceVerified"])
+            raw = json.loads((Path(directory) / v.NAME).read_bytes())
+            self.assertEqual(raw, {"version": 1, "kind": "organization-synthetic-transport-fixture",
+                                   "run": self.RUN, "attempt": 1, "sha": self.SHA,
+                                   "caseId": "synthetic-organization-update"})
+            self.assertNotEqual(subprocess.run(argv + ["--session", "fixture"], capture_output=True).returncode, 0)
 
     def test_wrong_attempt_ref_sha_workflow_event_conclusion_or_repository_refused(self):
         for field, mismatch in {
@@ -92,6 +139,19 @@ class ProvenanceTests(unittest.TestCase):
         }.items():
             with self.subTest(field=field), patch.dict(self.run, {field: mismatch}):
                 with self.assertRaisesRegex(v.Rejected, "RUN_SCOPE"):
+                    self.verify()
+
+    def test_independent_pins_refuse_product_or_workflow_drift(self):
+        self.assertNotEqual(self.WORKFLOW_SHA, self.SHA)
+        self.assertEqual(self.verify()["workflowBranch"], "main")
+        with patch.dict(self.run, {"head_sha": self.SHA}), self.assertRaisesRegex(v.Rejected, "RUN_SCOPE"):
+            self.verify()
+        for key, wrong in (("sha", self.WORKFLOW_SHA), ("workflowSha", self.SHA),
+                           ("productBranch", v.BRANCH), ("run", self.RUN + 1), ("attempt", 2)):
+            with self.subTest(key=key):
+                self.archive = self.bundle({**self.content, key: wrong})
+                self.pin()
+                with self.assertRaisesRegex(v.Rejected, "EVIDENCE_SCOPE"):
                     self.verify()
 
     def test_expired_or_unlinked_artifact_refused(self):
@@ -150,11 +210,27 @@ class ProvenanceTests(unittest.TestCase):
             path = Path(directory) / "evidence.zip"
             path.write_bytes(self.archive)
             argv = [str(SCRIPT), "--run", str(self.RUN), "--artifact", str(self.ARTIFACT),
-                    "--sha", self.SHA, "--case", self.CASE, "--archive", str(path)]
+                    "--sha", self.SHA, "--workflow-sha", self.WORKFLOW_SHA, "--case", self.CASE, "--archive", str(path)]
             with patch("sys.argv", argv), patch.object(v, "github_client", return_value=self.get), \
                     patch("sys.stdout", io.StringIO()) as output:
                 self.assertEqual(v.main(), 0)
                 self.assertEqual(json.loads(output.getvalue())["artifact"], self.ARTIFACT)
+
+
+class RecoveryTests(unittest.TestCase):
+    def test_only_interrupted_original_gate_can_recover_and_success_ends_recovery(self):
+        spec = importlib.util.spec_from_file_location("recovery", SCRIPT.with_name("b1-recovery-guard.py"))
+        recovery = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(recovery)
+        sha = "1" * 40
+        job = {"run_id": 71, "name": "b1-cloudflare", "head_sha": sha, "status": "completed",
+               "conclusion": "cancelled", "steps": [{"name": recovery.CHECK, "conclusion": "success"},
+               {"name": recovery.MUTATION, "conclusion": "cancelled", "started_at": "2026-01-01T01:00:00Z"}]}
+        self.assertTrue(recovery.recovery_allowed([[job]], sha, 71))
+        self.assertTrue(recovery.recovery_allowed([[job], [job]], sha, 71))
+        for history in ([], [[]], [[dict(job, run_id=72)]], [[dict(job, steps=[])]],
+                        [[dict(job, head_sha="2"*40)]], [[job], [dict(job, conclusion="success")]]):
+            self.assertFalse(recovery.recovery_allowed(history, sha, 71))
 
 
 if __name__ == "__main__":
