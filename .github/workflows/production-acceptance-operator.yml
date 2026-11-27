@@ -7,6 +7,7 @@ on:
       - '.github/scripts/acceptance-browser/**'
       - 'scripts/acceptance/**'
       - 'tests/production-acceptance-operator*.test.mjs'
+      - 'tests/test_organization_artifact_provenance.py'
       - 'docs/runbooks/production-acceptance-operator.md'
       - 'AGENTS.md'
       - 'package.json'
@@ -25,7 +26,7 @@ on:
         required: true
         type: string
       organization_id:
-        description: "Dedicated QA organization id"
+        description: "Dedicated QA organization id (B1 sandbox only: sandbox)"
         required: true
         type: string
       qa_user_ids:
@@ -48,6 +49,10 @@ on:
         required: false
         default: ""
         type: string
+      b1_baseline:
+        description: "B1 sandbox only: SHA-256 from the preflight on this commit"
+        required: false
+        type: string
       confirmation:
         description: "preflight=PREPARE_PRODUCTION_ACCEPTANCE | run=RUN_PRODUCTION_ACCEPTANCE | closure=RESTORE_PRODUCTION_ACCEPTANCE_SAFE_STATE"
         required: true
@@ -57,19 +62,232 @@ permissions:
   contents: read
 
 concurrency:
-  group: maono-production-acceptance
+  group: maono-production-acceptance${{ (inputs.suite == 'organization-b1-cloudflare-test' || inputs.suite == 'organization-b1-evidence-test') && '-b1-sandbox' || '' }}
   cancel-in-progress: false
 
 env:
   PRODUCT_BRANCH: mano_kepler_v1
 
 jobs:
+  b1-validate:
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'organization-b1-cloudflare-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Bind explicit sandbox request to owner, branch and SHA
+        env:
+          MODE: ${{ inputs.mode }}
+          BASELINE: ${{ inputs.b1_baseline }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          SCOPE: ${{ inputs.organization_id }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "matheusapc22/maono_kepler_v1"
+          test "$GITHUB_ACTOR" = "matheusapc22"
+          test "$GITHUB_REF" = "refs/heads/au-ac01-b1-capacidade"
+          test "$GITHUB_TRIGGERING_ACTOR" = "matheusapc22"
+          if [[ "$GITHUB_RUN_ATTEMPT" != 1 ]]; then test "$MODE" != preflight; fi
+          test "$SCOPE" = sandbox
+          test "$CONFIRMATION" = "B1-$MODE-$GITHUB_SHA"
+          case "$MODE" in
+            preflight) test -z "$BASELINE" ;;
+            run|closure) [[ "$BASELINE" =~ ^[a-f0-9]{64}$ ]] ;;
+            *) exit 2 ;;
+          esac
+
+  b1-cloudflare:
+    needs: b1-validate
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: maono-b1-ensaios
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Verify reviewed PR is still open at the dispatched commit
+        if: github.run_attempt == 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/pulls/306" --jq 'select(.state == "open" and .head.ref == "au-ac01-b1-capacidade" and .head.repo.full_name == "matheusapc22/maono_kepler_v1") | .head.sha')"
+          test "$actual" = "$GITHUB_SHA"
+      - name: Bind recovery to the original interrupted attempt
+        if: github.run_attempt != 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          B1_ORIGINAL_MODE: ${{ inputs.mode }}
+        run: python3 scripts/acceptance/b1-recovery-guard.py
+      - name: Observe or restore the three B1 sandbox fixtures
+        env:
+          B1_CF_TOKEN: ${{ secrets.MAONO_B1_CF_TOKEN }}
+          B1_MODE: ${{ github.run_attempt != 1 && 'closure' || inputs.mode }}
+          B1_BASELINE: ${{ inputs.b1_baseline }}
+          B1_REPORT: ${{ runner.temp }}/b1-cloudflare.json
+        run: node scripts/acceptance/organization-cloudflare-sandbox.mjs
+      - name: Preserve sanitized observations even on partial failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: b1-cloudflare-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/b1-cloudflare.json
+          if-no-files-found: error
+          retention-days: 7
+
+  b1-evidence-pin:
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'organization-b1-evidence-test'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      product: ${{ steps.pin.outputs.product }}
+    steps:
+      - id: pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+          SCOPE: ${{ inputs.organization_id }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = matheusapc22/maono_kepler_v1
+          test "$GITHUB_ACTOR" = matheusapc22
+          test "$GITHUB_TRIGGERING_ACTOR" = matheusapc22
+          test "$GITHUB_REF" = refs/heads/au-ac01-b1-capacidade
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$MODE" = preflight
+          test "$SCOPE" = sandbox
+          test "$CONFIRMATION" = "B1-evidence-$GITHUB_SHA"
+          reviewed=$(gh api "repos/$GITHUB_REPOSITORY/pulls/306" --jq 'select(.state == "open" and .head.ref == "au-ac01-b1-capacidade" and .head.repo.full_name == "matheusapc22/maono_kepler_v1") | .head.sha')
+          test "$reviewed" = "$GITHUB_SHA"
+          product=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/mano_kepler_v1" --jq '.object.sha')
+          [[ "$product" =~ ^[a-f0-9]{40}$ ]]
+          echo "product=$product" >> "$GITHUB_OUTPUT"
+
+  b1-evidence-producer:
+    needs: b1-evidence-pin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: maono-b1-ensaios
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      update: ${{ steps.update.outputs.artifact-id }}
+      pause: ${{ steps.pause.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Checkout product independently
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.b1-evidence-pin.outputs.product }}
+          path: observed-product
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Confirm reviewed inputs before observing the local product
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT: ${{ needs.b1-evidence-pin.outputs.product }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C observed-product rev-parse HEAD)" = "$PRODUCT"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/306" --jq 'select(.state == "open") | .head.sha')" = "$GITHUB_SHA"
+      - name: Build the pinned product and observe editing and pausing on loopback
+        env:
+          B1_PRODUCT: ${{ needs.b1-evidence-pin.outputs.product }}
+          B1_CASE_OUTPUT: ${{ runner.temp }}
+          VITE_ADMIN_AUDIT_OPERATIONS_V1: 'true'
+          VITE_ORGANIZATION_MANAGEMENT_V1: 'true'
+          VITE_MAONO_MAP_SHELL_V1: 'true'
+          VITE_MAONO_LAYER_MANAGER_V1: 'true'
+          VITE_MAONO_MAP_OVERLAY_V1: 'true'
+        run: |
+          set -euo pipefail
+          cd observed-product
+          npm install --legacy-peer-deps --no-audit --no-fund
+          npm run build
+          node scripts/install-ci-browsers.mjs chromium
+          # Only reviewed test instrumentation is overlaid on the independent product checkout.
+          for file in playwright.organization-observed.config.ts playwright.organization-evidence.config.ts \
+            tests/acceptance-browser/organization-observed.spec.ts tests/helpers/organization-management-browser-server.mjs \
+            scripts/acceptance/organization-functional-evidence.js scripts/acceptance/organization-functional-evidence.mjs \
+            scripts/acceptance/organization-observed-case.mjs; do
+            cp "../$file" "$file"
+          done
+          npx --no-install playwright test --config=playwright.organization-observed.config.ts --reporter=list
+      - id: update
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: b1-test-case-${{ github.run_id }}-1-synthetic-organization-update
+          path: ${{ runner.temp }}/update/organization-evidence.json
+          if-no-files-found: error
+          retention-days: 7
+      - id: pause
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: b1-test-case-${{ github.run_id }}-1-synthetic-organization-pause
+          path: ${{ runner.temp }}/pause/organization-evidence.json
+          if-no-files-found: error
+          retention-days: 7
+
+  b1-evidence-consumer:
+    needs: [b1-evidence-pin, b1-evidence-producer]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Verify original archives and exercise case windows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAONO_EVIDENCE_GITHUB_TOKEN: ${{ github.token }}
+          B1_PRODUCT: ${{ needs.b1-evidence-pin.outputs.product }}
+          B1_UPDATE_ID: ${{ needs.b1-evidence-producer.outputs.update }}
+          B1_PAUSE_ID: ${{ needs.b1-evidence-producer.outputs.pause }}
+        run: bash scripts/acceptance/consume-organization-test-cases.sh
+      - name: Preserve receipts separately from original archives
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: b1-test-case-receipts-${{ github.run_id }}-1
+          path: ${{ runner.temp }}/b1-case-receipts/*.json
+          if-no-files-found: error
+          retention-days: 7
+
   contracts:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
@@ -84,6 +302,25 @@ jobs:
           node --check .github/scripts/acceptance-browser/smoke.mjs
       - name: Validate acceptance operator contracts
         run: node --test tests/production-acceptance-operator*.test.mjs
+      - name: Verify organization artifact transport using offline fixtures
+        run: python3 -m unittest discover -s tests -p test_organization_artifact_provenance.py
+
+      - name: Produce sanitized synthetic artifact
+        id: synthetic-evidence
+        if: github.run_attempt == 1
+        run: |
+          evidence_dir="$(mktemp -d)"
+          evidence_file="$(python3 scripts/acceptance/produce-organization-artifact.py \
+            --run "$GITHUB_RUN_ID" --sha "$GITHUB_SHA" --directory "$evidence_dir")"
+          echo "path=$evidence_file" >> "$GITHUB_OUTPUT"
+      - name: Upload synthetic fixture
+        if: github.run_attempt == 1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: synthetic-organization-transport-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.synthetic-evidence.outputs.path }}
+          if-no-files-found: error
+          retention-days: 3
 
   browser-setup-smoke:
     if: github.event_name == 'pull_request'
@@ -106,7 +343,7 @@ jobs:
           test -z "$(git status --porcelain --untracked-files=no)"
 
   validate:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.suite != 'organization-b1-cloudflare-test' && inputs.suite != 'organization-b1-evidence-test'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     outputs:
@@ -178,7 +415,7 @@ jobs:
           node --test tests/production-acceptance-operator*.test.mjs
 
   protected:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.suite != 'organization-b1-cloudflare-test' && inputs.suite != 'organization-b1-evidence-test'
     needs: validate
     runs-on: ubuntu-24.04
     # Bounded steps: setup11 + operator192 + summary/artifacts3 =206 minutes.
